@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+#MISE description="Copies the native executable to its release asset name"
+set -euo pipefail
+
+extension=""
+if [[ "$EXECUTABLE" == *.exe ]]; then
+  extension=".exe"
+fi
+
+mkdir -p artifacts/release
+cp "artifacts/native/$EXECUTABLE" "artifacts/release/roslyn-bridge-mcp-$RUNTIME_ID$extension"

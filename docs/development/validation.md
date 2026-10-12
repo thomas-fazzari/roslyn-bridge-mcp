@@ -1,0 +1,25 @@
+# Validation
+
+Run the checks for the areas you changed before reporting work as done. `mise tasks` lists every task, and `mise.toml` defines them.
+
+| Change                                         | Command                     |
+| ---------------------------------------------- | --------------------------- |
+| C#, build files or tooling                     | `mise run check`            |
+| Roslyn session, tools or workspace edits       | `mise run test-integration` |
+| Documentation, `README.md` or `AGENTS.md` only | `mise run docs:check`       |
+
+`mise run check` runs every formatting, analyzer, documentation and unit test check. `mise run format` fixes C#, MSBuild, Markdown, JSON, YAML and TOML formatting.
+
+## Running a subset of tests
+
+Arguments after `--` go to the test runner:
+
+```sh
+mise run test -- --filter-class RoslynBridge.Tests.Unit.Symbols.SymbolNameTests
+```
+
+## Integration tests
+
+Integration tests launch the bridge through the MCP client SDK and start the installed `roslyn-language-server`. Set `ROSLYN_BRIDGE_TEST_SERVER` to the server executable when it is not on `PATH`. To test a published executable instead of the build output, see [releases](releases.md).
+
+See the [testing conventions](conventions/testing.md) for how tests are written.

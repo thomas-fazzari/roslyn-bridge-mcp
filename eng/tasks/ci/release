@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+#MISE description="Publishes the tested release archives to GitHub"
+set -euo pipefail
+
+cd artifacts
+sha256sum roslyn-bridge-mcp-* > SHA256SUMS
+
+gh release create "$RELEASE_TAG" roslyn-bridge-mcp-* SHA256SUMS --verify-tag --generate-notes

@@ -1,0 +1,65 @@
+min_version = "2026.9.0"
+
+[tools]
+dotnet = "10.0.400"
+"dotnet:csharpier" = "1.3.0"
+bun = "1.4.2"
+lefthook = "2.2.1"
+
+[task_config]
+includes = ["eng/tasks"]
+
+[tasks.install]
+description = "Restores the .NET and Bun dependencies"
+run = ["dotnet restore RoslynBridge.slnx", "bun install --frozen-lockfile"]
+
+[tasks.build]
+description = "Builds the solution with analyzers (CONFIGURATION defaults to Debug)"
+run = 'dotnet build RoslynBridge.slnx --configuration "${CONFIGURATION:-Debug}"'
+
+[tasks.test]
+description = "Runs the unit tests, with extra arguments passed to dotnet test"
+depends = ["build"]
+run = 'dotnet test --solution RoslynBridge.slnx --configuration "${CONFIGURATION:-Debug}" --no-build --no-restore -- --explicit off'
+
+[tasks.test-integration]
+description = "Runs the explicit tests against the real Roslyn server"
+depends = ["build"]
+run = 'dotnet test --solution RoslynBridge.slnx --configuration "${CONFIGURATION:-Debug}" --no-build --no-restore -- --explicit only --filter-class RoslynBridge.Tests.Integration.Roslyn.RoslynMcpTests'
+
+[tasks.format]
+description = "Formats C#, MSBuild, Markdown, JSON, YAML and TOML files"
+run = ["csharpier format .", "bunx --bun oxfmt --write ."]
+
+[tasks.lint]
+description = "Checks formatting, Markdown, the documentation build, Git hooks and build analyzers"
+depends = ["docs:check", "build"]
+run = ["csharpier check .", "lefthook validate"]
+
+[tasks.check]
+description = "Runs lint and the unit tests"
+depends = ["lint", "test"]
+
+[tasks.publish]
+description = "Publishes the native bridge for RUNTIME_ID (APP_VERSION and NATIVE_OUTPUT are optional)"
+run = """
+test -n "${RUNTIME_ID:-}" || { echo 'Set RUNTIME_ID, for example osx-arm64.' >&2; exit 1; }
+dotnet publish src/RoslynBridge/RoslynBridge.csproj --configuration Release --runtime "$RUNTIME_ID" -p:Version="${APP_VERSION:-0.0.0-dev}" --output "${NATIVE_OUTPUT:-artifacts/native}"
+"""
+
+[tasks."hooks:install"]
+description = "Installs the Git hooks"
+run = "lefthook install"
+
+[tasks."docs:dev"]
+description = "Serves the documentation with live updates"
+run = "bunx --bun vitepress dev docs --host 127.0.0.1 --port 5174 --strictPort"
+
+[tasks."docs:build"]
+description = "Builds the documentation site"
+run = "bunx --bun vitepress build docs"
+
+[tasks."docs:check"]
+description = "Lints Markdown, checks Markdown, JSON, YAML and TOML formatting, and builds the documentation"
+depends = ["docs:build"]
+run = ["bunx --bun markdownlint-cli2", "bunx --bun oxfmt --check ."]

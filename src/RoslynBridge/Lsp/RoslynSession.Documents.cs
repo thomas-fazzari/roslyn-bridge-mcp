@@ -1,0 +1,420 @@
+// Copyright (C) RoslynBridge contributors
+// SPDX-License-Identifier: GPL-3.0-only
+
+using System.Collections.Concurrent;
+using System.Text;
+using System.Text.Json.Nodes;
+using StreamJsonRpc;
+
+namespace RoslynBridge.Lsp;
+
+internal sealed partial class RoslynSession
+{
+    internal const int MaximumOpenDocuments = 128;
+    private const int MaximumDocumentCharacters = 1024 * 1024;
+    private const int DocumentReadBufferCharacters = 4096;
+    private const int InitialDocumentVersion = 1;
+    private const int FileCreated = 1;
+    private const int FileChanged = 2;
+    private const int FileDeleted = 3;
+
+    private readonly Dictionary<string, OpenDocument> _documents = new(StringComparer.Ordinal);
+    private readonly LinkedList<string> _openedOrder = [];
+    private readonly ConcurrentDictionary<string, byte> _watchRegistrations = new(
+        StringComparer.Ordinal
+    );
+    private readonly ConcurrentDictionary<string, byte> _pendingFiles = new(StringComparer.Ordinal);
+    private Dictionary<string, FileStamp> _workspaceFiles = new(StringComparer.Ordinal);
+
+    // Fingerprints of the file contents Roslyn received at the last snapshot synchronization
+    private readonly Dictionary<string, string> _snapshotFingerprints = new(StringComparer.Ordinal);
+    private bool _snapshotBaselined;
+
+    private FileSystemWatcher? _watcher;
+    private int _scanRequested;
+
+    public Dictionary<string, int> CopyDocumentVersions() =>
+        _documents.ToDictionary(
+            document => document.Key,
+            document => document.Value.Version,
+            StringComparer.Ordinal
+        );
+
+    public async Task<string> OpenDocumentAsync(string file, CancellationToken cancellationToken)
+    {
+        var path = paths.Resolve(file);
+        var uri = new Uri(path).AbsoluteUri;
+        if (_documents.TryGetValue(path, out var open))
+        {
+            // Least recently used documents close first, so callers can keep a batch open
+            _openedOrder.Remove(open.Node);
+            _openedOrder.AddLast(open.Node);
+            return uri;
+        }
+
+        if (_documents.Count >= MaximumOpenDocuments)
+        {
+            var oldest =
+                _openedOrder.First
+                ?? throw new InvalidOperationException("The open document order is empty.");
+            await CloseDocumentAsync(oldest.Value, cancellationToken).ConfigureAwait(false);
+        }
+
+        var text = await ReadDocumentAsync(path, cancellationToken).ConfigureAwait(false);
+        await NotifyAsync(
+                LspMethods.TextDocumentDidOpen,
+                new JsonObject
+                {
+                    ["textDocument"] = new JsonObject
+                    {
+                        ["uri"] = uri,
+                        ["languageId"] = "csharp",
+                        ["version"] = InitialDocumentVersion,
+                        ["text"] = text,
+                    },
+                },
+                cancellationToken
+            )
+            .ConfigureAwait(false);
+
+        _documents.Add(
+            path,
+            new OpenDocument(text, InitialDocumentVersion, _openedOrder.AddLast(path))
+        );
+
+        return uri;
+    }
+
+    /// <summary>
+    /// Returns the project contexts of an open document, or none when the server lacks the extension.
+    /// </summary>
+    public async Task<JsonArray> ProjectContextsAsync(
+        string uri,
+        CancellationToken cancellationToken
+    )
+    {
+        JsonNode? result;
+        try
+        {
+            result = await RequestAsync(
+                    LspMethods.TextDocumentGetProjectContexts,
+                    new JsonObject { ["_vs_textDocument"] = new JsonObject { ["uri"] = uri } },
+                    cancellationToken
+                )
+                .ConfigureAwait(false);
+        }
+        catch (RemoteInvocationException)
+        {
+            return [];
+        }
+
+        return result?["_vs_projectContexts"] as JsonArray ?? [];
+    }
+
+    public async Task SynchronizeAsync(CancellationToken cancellationToken)
+    {
+        foreach (var path in _documents.Keys.ToArray())
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            await SynchronizeDocumentAsync(path, cancellationToken).ConfigureAwait(false);
+        }
+
+        await SynchronizeWatchedFilesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Announces requested files that the file watcher has not reported yet.
+    /// Without the creation notice, Roslyn keeps a new file outside its project.
+    /// </summary>
+    public async Task SynchronizeNewFilesAsync(
+        IEnumerable<string> files,
+        CancellationToken cancellationToken
+    )
+    {
+        foreach (var file in files.Where(file => !_workspaceFiles.ContainsKey(file)))
+        {
+            QueueFile(file);
+        }
+
+        await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Resends snapshot files whose content changed since the last snapshot sync.
+    /// Compares content fingerprints, not metadata, so an edit that keeps the size and timestamp is still sent.
+    /// </summary>
+    public async Task SynchronizeSnapshotAsync(
+        IReadOnlyDictionary<string, string> fingerprints,
+        CancellationToken cancellationToken
+    )
+    {
+        foreach (
+            var file in StaleSnapshotFiles(fingerprints, _snapshotFingerprints, _snapshotBaselined)
+        )
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            QueueFile(file);
+        }
+
+        // Snapshot files existed when hashed, so only the other known files need a disk check
+        foreach (var path in _workspaceFiles.Keys)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!fingerprints.ContainsKey(path) && !File.Exists(path))
+            {
+                QueueFile(path);
+            }
+        }
+
+        await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        foreach (var (file, fingerprint) in fingerprints)
+        {
+            _snapshotFingerprints[file] = fingerprint;
+        }
+
+        _snapshotBaselined = true;
+    }
+
+    /// <summary>
+    /// Returns the snapshot files whose fingerprint differs from the one Roslyn received.
+    /// </summary>
+    internal static List<string> StaleSnapshotFiles(
+        IReadOnlyDictionary<string, string> fingerprints,
+        IReadOnlyDictionary<string, string> synchronized,
+        bool baselined
+    )
+    {
+        var stale = new List<string>();
+        foreach (var (file, fingerprint) in fingerprints)
+        {
+            if (synchronized.TryGetValue(file, out var current))
+            {
+                if (!string.Equals(current, fingerprint, StringComparison.Ordinal))
+                {
+                    stale.Add(file);
+                }
+            }
+            else if (baselined)
+            {
+                // Roslyn loaded the first snapshot from disk itself, later removals come from watched changes
+                stale.Add(file);
+            }
+        }
+
+        return stale;
+    }
+
+    internal void RegisterCapabilities(JsonObject parameters)
+    {
+        if (parameters["registrations"] is not JsonArray registrations)
+        {
+            return;
+        }
+
+        foreach (var registration in registrations.OfType<JsonObject>())
+        {
+            if (
+                string.Equals(
+                    registration["method"]?.GetValue<string>(),
+                    LspMethods.WorkspaceDidChangeWatchedFiles,
+                    StringComparison.Ordinal
+                ) && registration["id"]?.GetValue<string>() is { } id
+            )
+            {
+                _watchRegistrations[id] = 0;
+            }
+        }
+    }
+
+    internal void UnregisterCapabilities(JsonObject parameters)
+    {
+        // The misspelling is part of the LSP 3.17 protocol contract :D
+        if (parameters["unregisterations"] is not JsonArray registrations)
+        {
+            return;
+        }
+
+        foreach (var registration in registrations.OfType<JsonObject>())
+        {
+            if (registration["id"]?.GetValue<string>() is { } id)
+            {
+                _watchRegistrations.TryRemove(id, out _);
+            }
+        }
+    }
+
+    private static async Task<string> ReadDocumentAsync(
+        string path,
+        CancellationToken cancellationToken
+    )
+    {
+        await using var stream = new FileStream(
+            path,
+            new FileStreamOptions
+            {
+                Access = FileAccess.Read,
+                Mode = FileMode.Open,
+                Share = FileShare.ReadWrite | FileShare.Delete,
+                Options = FileOptions.Asynchronous | FileOptions.SequentialScan,
+            }
+        );
+        using var reader = new StreamReader(
+            stream,
+            Encoding.UTF8,
+            detectEncodingFromByteOrderMarks: true
+        );
+        var builder = new StringBuilder();
+        var buffer = new char[DocumentReadBufferCharacters];
+        while (true)
+        {
+            var count = await reader.ReadAsync(buffer, cancellationToken).ConfigureAwait(false);
+            if (count == 0)
+            {
+                return builder.ToString();
+            }
+
+            if (builder.Length + count > MaximumDocumentCharacters)
+            {
+                throw new InvalidDataException(
+                    "The document exceeded the one million UTF-16 code unit limit."
+                );
+            }
+
+            builder.Append(buffer, 0, count);
+        }
+    }
+
+    private async Task SynchronizeDocumentAsync(string path, CancellationToken cancellationToken)
+    {
+        var uri = paths.ToUri(path);
+        if (!File.Exists(path))
+        {
+            await CloseDocumentAsync(path, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        string text;
+        try
+        {
+            text = await ReadDocumentAsync(path, cancellationToken).ConfigureAwait(false);
+        }
+        catch (InvalidDataException)
+        {
+            // Roslyn reads the file from disk once the document closes
+            LogOversizedDocument(logger, path);
+            await CloseDocumentAsync(path, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        var document = _documents[path];
+        if (string.Equals(document.Text, text, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        var version = document.Version + 1;
+        await NotifyAsync(
+                LspMethods.TextDocumentDidChange,
+                new JsonObject
+                {
+                    ["textDocument"] = new JsonObject { ["uri"] = uri, ["version"] = version },
+                    // A change without a range replaces the whole document
+                    ["contentChanges"] = new JsonArray(new JsonObject { ["text"] = text }),
+                },
+                cancellationToken
+            )
+            .ConfigureAwait(false);
+        _documents[path] = document with { Text = text, Version = version };
+    }
+
+    // The path comes from the workspace walk or the watcher. Opening it runs the symlink check
+    private async Task SynchronizeClosedDocumentAsync(
+        string path,
+        CancellationToken cancellationToken
+    )
+    {
+        if (_documents.ContainsKey(path) || !IsCSharpFile(path))
+        {
+            return;
+        }
+
+        // Watched-file notifications update Roslyn asynchronously
+        // Opening/closing the document sends its saved text through the serialized document sync queue
+        try
+        {
+            await OpenDocumentAsync(path, cancellationToken).ConfigureAwait(false);
+        }
+        catch (InvalidDataException)
+        {
+            LogOversizedDocument(logger, path);
+            return;
+        }
+
+        await CloseDocumentAsync(path, cancellationToken).ConfigureAwait(false);
+    }
+
+    private static bool IsCSharpFile(string path) =>
+        path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)
+        || path.EndsWith(".csx", StringComparison.OrdinalIgnoreCase);
+
+    private async Task CloseDocumentAsync(string path, CancellationToken cancellationToken)
+    {
+        await NotifyAsync(
+                LspMethods.TextDocumentDidClose,
+                new JsonObject
+                {
+                    ["textDocument"] = new JsonObject { ["uri"] = new Uri(path).AbsoluteUri },
+                },
+                cancellationToken
+            )
+            .ConfigureAwait(false);
+        if (_documents.Remove(path, out var document))
+        {
+            _openedOrder.Remove(document.Node);
+        }
+    }
+
+    private Dictionary<string, FileStamp> ScanWorkspace(CancellationToken cancellationToken)
+    {
+        var files = new Dictionary<string, FileStamp>(StringComparer.Ordinal);
+        foreach (var file in paths.EnumerateWatchedFiles())
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            files.Add(file.Path, new FileStamp(file.Length, file.LastWriteTimeUtc));
+        }
+
+        return files;
+    }
+
+    private async Task NotifyFileChangesAsync(
+        Dictionary<string, FileStamp> current,
+        HashSet<string> changedPaths,
+        bool forceAllChanges,
+        CancellationToken cancellationToken
+    )
+    {
+        var changes = new List<FileChange>();
+        foreach (var (path, stamp) in current)
+        {
+            if (!_workspaceFiles.TryGetValue(path, out var previous))
+            {
+                changes.Add(new FileChange(path, FileCreated));
+            }
+            else if (forceAllChanges || changedPaths.Contains(path) || stamp != previous)
+            {
+                changes.Add(new FileChange(path, FileChanged));
+            }
+        }
+
+        foreach (var path in _workspaceFiles.Keys.Where(path => !current.ContainsKey(path)))
+        {
+            changes.Add(new FileChange(path, FileDeleted));
+        }
+
+        await SendFileChangesAsync(changes, cancellationToken).ConfigureAwait(false);
+    }
+
+    private readonly record struct FileStamp(long Length, DateTime ModifiedUtc);
+
+    private sealed record OpenDocument(string Text, int Version, LinkedListNode<string> Node);
+}

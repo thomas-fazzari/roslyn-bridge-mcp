@@ -1,0 +1,13 @@
+# Releases
+
+The bridge ships as a native ahead-of-time (AOT) executable for each platform. Tests run on the .NET runtime, and the build workflow in `.github/workflows/ci.yml` also tests each native executable against Roslyn.
+
+## Native builds
+
+Publish with `RUNTIME_ID=osx-arm64 mise run publish`, using the runtime identifier for your platform. Output goes to `artifacts/native`. Native compilation requires the [platform build tools](https://learn.microsoft.com/dotnet/core/deploying/native-aot/#prerequisites).
+
+Set `ROSLYN_BRIDGE_TEST_EXECUTABLE` to the absolute path of the published executable, then run `mise run test-integration` to test it against Roslyn.
+
+## Publishing
+
+Push a tag such as `v0.1.0` to publish a release after every check passes. Each release contains one archive per platform and `SHA256SUMS`. The CI scripts live in `eng/tasks/ci`.
