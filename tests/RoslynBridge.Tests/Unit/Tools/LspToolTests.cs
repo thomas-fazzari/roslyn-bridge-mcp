@@ -33,6 +33,24 @@ public sealed class LspToolTests : IDisposable
         Task Execute() => tool.ExecuteAsync(new LspRequest { Action = LspAction.Symbols }, TestCt);
     }
 
+    [Fact]
+    public async Task ErrorTextCarriesTheStructuredErrorAsync()
+    {
+        await using var session = CreateSession(FakeServer());
+        using var tool = CreateTool(session);
+
+        var response = await tool.ExecuteAsync(
+            new LspRequest { Action = LspAction.Symbols, Limit = 0 },
+            TestCt
+        );
+
+        var text = response.Content.OfType<TextContentBlock>().Single().Text;
+        JsonNode.Parse(text)!["error"]!["code"]!
+            .GetValue<string>()
+            .Should()
+            .Be(LspTool.InvalidRequestErrorCode);
+    }
+
     [Theory]
     [InlineData(LspMethods.Initialize)]
     [InlineData(LspMethods.TextDocumentDidOpen)]

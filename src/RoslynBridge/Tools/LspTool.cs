@@ -357,19 +357,14 @@ internal sealed partial class LspTool(
             );
         }
 
-        var isError = error is not null;
         return new CallToolResult
         {
-            IsError = isError,
+            IsError = error is not null,
             StructuredContent = element,
             Content =
             [
-                new TextContentBlock
-                {
-                    Text = isError
-                        ? "LSP operation failed. See the structured error and any applied changes."
-                        : "LSP operation completed. See the structured result.",
-                },
+                // Some clients show the model only the text, so it carries the structured result
+                new TextContentBlock { Text = element.GetRawText() },
             ],
         };
     }

@@ -55,6 +55,7 @@ internal static class ClientCapabilities
         return new JsonObject
         {
             ["processId"] = Environment.ProcessId,
+            ["locale"] = "en",
             ["rootUri"] = paths.RootUri,
             ["workspaceFolders"] = WorkspaceFolders(paths),
             ["clientInfo"] = new JsonObject

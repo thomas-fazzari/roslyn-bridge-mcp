@@ -95,7 +95,7 @@ internal sealed class RoslynLocator(
         // A shim on PATH, such as a version manager's, resolves the install only when it runs
         return RootFromListedSdks()
             ?? throw new DirectoryNotFoundException(
-                $"No .NET install with a 10.0 runtime and an SDK was found in {string.Join(", ", candidates.Concat(fixedRoots))}. Pass --dotnet-root."
+                $"No .NET install with a 10.0 runtime and an SDK was found in {string.Join(", ", candidates.Concat(fixedRoots).Distinct(StringComparer.Ordinal))}. Pass --dotnet-root."
             );
     }
 
