@@ -1,0 +1,12 @@
+{
+  "name": "roslyn-bridge-mcp",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "markdownlint": "0.41.1",
+    "markdownlint-cli2": "0.23.3",
+    "oxfmt": "0.72.0",
+    "vitepress": "1.6.4"
+  },
+  "packageManager": "bun@1.4.2"
+}

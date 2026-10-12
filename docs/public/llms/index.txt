@@ -1,0 +1,42 @@
+ROSLYN CODEX LSP: AGENT REFERENCE
+===============================
+
+MCP server: roslyn
+MCP tools: diagnostics, navigate, symbols (read-only), edit, lsp
+Purpose: C# compiler diagnostics, symbol navigation and semantic edits.
+Workspace: the agent session's working directory unless configured otherwise.
+Source: saved files on disk. Unsaved editor buffers are not available.
+
+CALL FORMAT
+-----------
+Each tool takes flat arguments. Examples in these files name the tool first:
+diagnostics {"file":"src/Calculator.cs"}
+
+Paths are workspace-relative. Inputs and results use one-based lines and
+one-based UTF-16 characters, so returned positions can be reused as inputs.
+Raw LSP requests keep zero-based coordinates.
+
+Read the MCP structured result. Successful calls contain action and result
+fields. Failed calls contain an error field and set isError.
+An error, incomplete report or truncated result does not establish success.
+
+REFERENCE FILES
+---------------
+Fetch only the file needed for the task. URLs share this index's directory.
+
+diagnostics.txt - File and glob scans, result fields, limits and verification.
+navigation.txt - Definitions, references, call and type hierarchies, hover, symbols.
+edits.txt - Rename and code action preview/apply sequences, stale proposals.
+session.txt - Status, capabilities, reload and raw requests.
+
+Full URLs:
+https://thomas-fazzari.github.io/roslyn-bridge-mcp/llms/diagnostics.txt
+https://thomas-fazzari.github.io/roslyn-bridge-mcp/llms/navigation.txt
+https://thomas-fazzari.github.io/roslyn-bridge-mcp/llms/edits.txt
+https://thomas-fazzari.github.io/roslyn-bridge-mcp/llms/session.txt
+
+SETUP
+-----
+If roslyn is absent from the available MCP tools, follow the installation guide:
+https://thomas-fazzari.github.io/roslyn-bridge-mcp/getting-started.html
+This reference describes the tool API.

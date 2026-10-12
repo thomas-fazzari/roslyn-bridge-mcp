@@ -1,0 +1,124 @@
+name: Build and release
+
+on:
+  push:
+    branches: [master, feature/**, chore/**, fix/**, hotfix/**]
+    tags: [v*]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref_type != 'tag' }}
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: 1
+  DOTNET_NOLOGO: 1
+
+jobs:
+  formatting:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: jdx/mise-action@v5.1.1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+      - run: mise run install
+      - run: mise run lint
+
+  native:
+    name: Native AOT (${{ matrix.rid }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            rid: linux-x64
+            executable: RoslynBridge
+          - os: ubuntu-24.04-arm
+            rid: linux-arm64
+            executable: RoslynBridge
+          - os: macos-26-intel
+            rid: osx-x64
+            executable: RoslynBridge
+          - os: macos-latest
+            rid: osx-arm64
+            executable: RoslynBridge
+          - os: windows-latest
+            rid: win-x64
+            executable: RoslynBridge.exe
+    defaults:
+      run:
+        shell: bash
+    env:
+      RUNTIME_ID: ${{ matrix.rid }}
+      EXECUTABLE: ${{ matrix.executable }}
+      CONFIGURATION: Release
+      # Tasks are written for Bash. Git Bash is preinstalled on Windows runners.
+      MISE_WINDOWS_DEFAULT_INLINE_SHELL_ARGS: bash -c
+      MISE_WINDOWS_DEFAULT_FILE_SHELL_ARGS: bash
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: jdx/mise-action@v5.1.1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          install_args: dotnet
+      - name: Install native build tools
+        run: mise run ci:setup
+      - name: Set binary version
+        run: mise run ci:version
+      - name: Run unit tests
+        run: mise run test
+      - name: Publish native executable
+        run: mise run publish
+      - name: Install Roslyn for integration tests
+        run: mise run ci:roslyn
+      - name: Test native executable against Roslyn
+        env:
+          ROSLYN_BRIDGE_TEST_EXECUTABLE: ${{ github.workspace }}/artifacts/native/${{ matrix.executable }}
+        run: mise run test-integration
+      - name: Upload hang dumps
+        if: failure()
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: hang-dumps-${{ matrix.rid }}
+          path: TestResults/*.dmp
+          if-no-files-found: ignore
+      - name: Package native executable
+        run: mise run ci:package
+      - uses: actions/upload-artifact@v7.0.2
+        with:
+          name: native-${{ matrix.rid }}
+          path: artifacts/release/*
+          if-no-files-found: error
+          compression-level: 0
+
+  release:
+    name: Publish GitHub release
+    if: github.ref_type == 'tag'
+    needs: [formatting, native]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: jdx/mise-action@v5.1.1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          install: false
+      - uses: actions/download-artifact@v8.0.2
+        with:
+          pattern: native-*
+          path: artifacts
+          merge-multiple: true
+      - name: Publish tested archives
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: mise run ci:release

@@ -1,0 +1,470 @@
+// Copyright (C) RoslynBridge contributors
+// SPDX-License-Identifier: GPL-3.0-only
+
+using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
+using System.IO.Pipelines;
+using System.Text;
+using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
+using Microsoft.Extensions.Logging;
+using StreamJsonRpc;
+
+namespace RoslynBridge.Lsp;
+
+/// <summary>
+/// Owns one Roslyn process and its workspace for the lifetime of the MCP host.
+/// </summary>
+[DebuggerDisplay("running = {IsRunning}, open documents = {_documents.Count}")]
+internal sealed partial class RoslynSession(
+    BridgeOptions options,
+    WorkspacePaths paths,
+    RoslynLauncher launcher,
+    ILogger<RoslynSession> logger
+) : IAsyncDisposable
+{
+    internal const int MaximumProtocolBytes = 16 * 1024 * 1024;
+
+    private const int StderrBufferCharacters = 2048;
+    private const int StderrTailCharacters = 4096;
+    private readonly StringBuilder _stderrTail = new();
+    private static readonly TimeSpan _shutdownTimeout = TimeSpan.FromSeconds(3);
+    private IRoslynServer? _server;
+    private JsonRpc? _rpc;
+    private SystemTextJsonFormatter? _formatter;
+    private HeaderDelimitedMessageHandler? _messageHandler;
+    private Task? _stderrTask;
+    private CancellationTokenSource? _processLifetime;
+    private TaskCompletionSource _initialized = NewCompletionSource();
+
+    private bool _disposed;
+    private bool _restartRequired;
+
+    public JsonObject? Capabilities { get; private set; }
+
+    public bool IsRunning =>
+        !_restartRequired
+        && _server is { HasExited: false }
+        && _rpc is { IsDisposed: false, Completion.IsCompleted: false };
+
+    public void RequireReload() => _restartRequired = true;
+
+    public Func<
+        JsonObject,
+        CancellationToken,
+        Task<JsonObject>
+    >? ApplyWorkspaceEditAsync { get; set; }
+
+    public async Task EnsureStartedAsync(CancellationToken cancellationToken)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (IsRunning && _initialized.Task.IsCompletedSuccessfully)
+        {
+            return;
+        }
+
+        await StopAsync().ConfigureAwait(false);
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(options.StartupTimeout);
+        try
+        {
+            StartServer();
+            await InitializeAsync(timeout.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException exception)
+            when (!cancellationToken.IsCancellationRequested)
+        {
+            await StopAsync().ConfigureAwait(false);
+            throw new TimeoutException(
+                "Roslyn did not finish loading the workspace before the startup timeout.",
+                exception
+            );
+        }
+        catch
+        {
+            await StopAsync().ConfigureAwait(false);
+            throw;
+        }
+    }
+
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2026",
+        Justification = "Parameters are JsonNode values serialized through the generated JSON context, not reflected CLR objects."
+    )]
+    public async Task<JsonNode?> RequestAsync(
+        string method,
+        JsonNode? parameters,
+        CancellationToken cancellationToken
+    )
+    {
+        var rpc = _rpc ?? throw new InvalidOperationException("The Roslyn session is not started.");
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(options.RequestTimeout);
+        try
+        {
+            return await rpc.InvokeWithParameterObjectAsync<JsonNode>(
+                    method,
+                    parameters,
+                    timeout.Token
+                )
+                .ConfigureAwait(false);
+        }
+        catch (OperationCanceledException exception)
+            when (!cancellationToken.IsCancellationRequested)
+        {
+            throw new TimeoutException(
+                $"Roslyn request '{method}' exceeded the request timeout.",
+                exception
+            );
+        }
+        catch (Exception exception) when (exception is ConnectionLostException or IOException)
+        {
+            // A write to a dead process fails with a broken pipe before the connection loss is noticed
+            _restartRequired = true;
+            throw new IOException(
+                await WithStderrAsync($"Roslyn exited during '{method}'.", cancellationToken)
+                    .ConfigureAwait(false),
+                exception
+            );
+        }
+    }
+
+    private async Task<string> WithStderrAsync(string message, CancellationToken cancellationToken)
+    {
+        if (_stderrTask is { } stderr)
+        {
+            // The pipe closes when Roslyn exits, so its last lines arrive shortly after
+            try
+            {
+                await stderr.WaitAsync(_shutdownTimeout, cancellationToken).ConfigureAwait(false);
+            }
+            catch (TimeoutException)
+            {
+                // Report what arrived so far
+            }
+        }
+
+        string tail;
+        lock (_stderrTail)
+        {
+            tail = _stderrTail.ToString().Trim();
+        }
+
+        return tail.Length == 0 ? message : $"{message} Roslyn stderr: {tail}";
+    }
+
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2026",
+        Justification = "Parameters are JsonNode values serialized through the generated JSON context, not reflected CLR objects."
+    )]
+    public async Task NotifyAsync(
+        string method,
+        JsonNode? parameters,
+        CancellationToken cancellationToken
+    )
+    {
+        var rpc = _rpc ?? throw new InvalidOperationException("The Roslyn session is not started.");
+        cancellationToken.ThrowIfCancellationRequested();
+        try
+        {
+            await rpc.NotifyWithParameterObjectAsync(method, parameters)
+                .WaitAsync(cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch
+        {
+            // A canceled write may still reach Roslyn
+            // Reloading is necessary before trusting document versions
+            _restartRequired = true;
+            throw;
+        }
+    }
+
+    public async Task ReloadAsync(CancellationToken cancellationToken)
+    {
+        await StopAsync().ConfigureAwait(false);
+        await EnsureStartedAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
+        await StopAsync().ConfigureAwait(false);
+    }
+
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2026",
+        Justification = "The formatter uses generated JSON metadata. No RPC-marshaled objects are exchanged."
+    )]
+    [UnconditionalSuppressMessage(
+        "AOT",
+        "IL3050",
+        Justification = "The formatter uses generated JSON metadata. No RPC-marshaled objects are exchanged."
+    )]
+    internal static SystemTextJsonFormatter CreateFormatter()
+    {
+        var formatter = new SystemTextJsonFormatter();
+        var serializerOptions = formatter.JsonSerializerOptions;
+        var requestIdConverter = serializerOptions
+            .Converters.OfType<JsonConverter<RequestId>>()
+            .Single();
+        serializerOptions.TypeInfoResolver = JsonTypeInfoResolver.Combine(
+            new RequestIdResolver(requestIdConverter),
+            BridgeJsonContext.Default
+        );
+        return formatter;
+    }
+
+    private static TaskCompletionSource NewCompletionSource() =>
+        new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    private void StartServer()
+    {
+        _restartRequired = false;
+        _server = launcher(options, paths);
+        _processLifetime = new CancellationTokenSource();
+
+        lock (_stderrTail)
+        {
+            _stderrTail.Clear();
+        }
+
+        _stderrTask = ReadStderrAsync(_server.Error, _processLifetime.Token);
+        StartRpc(_server);
+        StartWatching();
+    }
+
+    private void StartRpc(IRoslynServer server)
+    {
+        var reader = new BoundedPipeReader(PipeReader.Create(server.Output), MaximumProtocolBytes);
+        _formatter = CreateFormatter();
+        var writer = PipeWriter.Create(server.Input);
+        _messageHandler = new HeaderDelimitedMessageHandler(writer, reader, _formatter);
+        _rpc = new JsonRpc(_messageHandler);
+        var callbackMetadata = RpcTargetMetadata.FromShape<ClientCallbacks>();
+        var callbacks = new ClientCallbacks(this, paths, logger, _initialized);
+        _rpc.AddLocalRpcTarget(callbackMetadata, callbacks, options: null);
+        _rpc.StartListening();
+    }
+
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2026",
+        Justification = "The initialization payload is a JsonObject serialized through the generated JSON context."
+    )]
+    private async Task InitializeAsync(CancellationToken cancellationToken)
+    {
+        var rpc =
+            _rpc ?? throw new InvalidOperationException("The Roslyn transport is not started.");
+
+        var initialize = ClientCapabilities.Create(paths);
+        JsonObject? result;
+        try
+        {
+            result = await rpc.InvokeWithParameterObjectAsync<JsonObject>(
+                    LspMethods.Initialize,
+                    initialize,
+                    cancellationToken
+                )
+                .ConfigureAwait(false);
+        }
+        catch (Exception exception) when (exception is ConnectionLostException or IOException)
+        {
+            throw new IOException(
+                await WithStderrAsync("Roslyn exited during initialization.", cancellationToken)
+                    .ConfigureAwait(false),
+                exception
+            );
+        }
+
+        Capabilities = result?["capabilities"]?.AsObject();
+
+        await NotifyAsync(LspMethods.Initialized, new JsonObject(), cancellationToken)
+            .ConfigureAwait(false);
+
+        var initializationOrDisconnect = Task.WhenAny(_initialized.Task, rpc.Completion);
+
+        var completed = await initializationOrDisconnect
+            .WaitAsync(cancellationToken)
+            .ConfigureAwait(false);
+        await completed.ConfigureAwait(false);
+        if (completed != _initialized.Task)
+        {
+            throw new IOException(
+                await WithStderrAsync(
+                        "Roslyn disconnected while loading the workspace.",
+                        cancellationToken
+                    )
+                    .ConfigureAwait(false)
+            );
+        }
+
+        _workspaceFiles = ScanWorkspace(cancellationToken);
+    }
+
+    private async Task StopAsync()
+    {
+        var server = _server;
+        var rpc = _rpc;
+        _rpc = null;
+        _server = null;
+
+        ClearWorkspace();
+
+        if (server is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await ShutdownAsync(rpc, server).ConfigureAwait(false);
+        }
+        finally
+        {
+            await DisposeProcessResourcesAsync(rpc, server).ConfigureAwait(false);
+        }
+    }
+
+    private void ClearWorkspace()
+    {
+        Capabilities = null;
+        _initialized = NewCompletionSource();
+        _documents.Clear();
+        _openedOrder.Clear();
+        _workspaceFiles.Clear();
+        _snapshotFingerprints.Clear();
+        _snapshotBaselined = false;
+        _watchRegistrations.Clear();
+        _watcher?.Dispose();
+        _watcher = null;
+        _pendingFiles.Clear();
+        _scanRequested = 0;
+    }
+
+    private async Task DisposeProcessResourcesAsync(JsonRpc? rpc, IRoslynServer server)
+    {
+        rpc?.Dispose();
+        if (_messageHandler is not null)
+        {
+            await _messageHandler.DisposeAsync().ConfigureAwait(false);
+        }
+
+        _messageHandler = null;
+        _formatter?.Dispose();
+        _formatter = null;
+        if (_processLifetime is not null)
+        {
+            await _processLifetime.CancelAsync().ConfigureAwait(false);
+            _processLifetime.Dispose();
+            _processLifetime = null;
+        }
+
+        if (_stderrTask is not null)
+        {
+            await _stderrTask.ConfigureAwait(false);
+            _stderrTask = null;
+        }
+
+        server.Dispose();
+    }
+
+    private async Task ShutdownAsync(JsonRpc? rpc, IRoslynServer server)
+    {
+        if (server.HasExited)
+        {
+            return;
+        }
+
+        using var timeout = new CancellationTokenSource(_shutdownTimeout);
+        try
+        {
+            if (rpc is { IsDisposed: false })
+            {
+                await rpc.InvokeWithCancellationAsync(
+                        LspMethods.Shutdown,
+                        cancellationToken: timeout.Token
+                    )
+                    .ConfigureAwait(false);
+            }
+        }
+        catch (Exception exception)
+            when (exception
+                    is OperationCanceledException
+                        or IOException
+                        or ConnectionLostException
+                        or RemoteInvocationException
+                        or ObjectDisposedException
+            )
+        {
+            LogShutdownFailure(logger, exception);
+        }
+
+        if (!server.HasExited)
+        {
+            server.Kill();
+        }
+
+        await server.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false);
+    }
+
+    private async Task ReadStderrAsync(StreamReader reader, CancellationToken cancellationToken)
+    {
+        var buffer = new char[StderrBufferCharacters];
+        try
+        {
+            while (true)
+            {
+                var count = await reader.ReadAsync(buffer, cancellationToken).ConfigureAwait(false);
+                if (count == 0)
+                {
+                    return;
+                }
+
+                var message = new string(buffer, 0, count);
+                lock (_stderrTail)
+                {
+                    _stderrTail.Append(message);
+                    if (_stderrTail.Length > StderrTailCharacters)
+                    {
+                        _stderrTail.Remove(0, _stderrTail.Length - StderrTailCharacters);
+                    }
+                }
+
+                if (logger.IsEnabled(LogLevel.Debug))
+                {
+                    LogStderr(logger, message);
+                }
+            }
+        }
+        catch (Exception exception)
+            when (exception is OperationCanceledException or IOException or ObjectDisposedException)
+        {
+            LogStderrClosed(logger);
+        }
+    }
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Roslyn did not shut down cleanly.")]
+    private static partial void LogShutdownFailure(ILogger logger, Exception exception);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Roslyn stderr: {Message}")]
+    private static partial void LogStderr(ILogger logger, string message);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Roslyn stderr stream closed.")]
+    private static partial void LogStderrClosed(ILogger logger);
+
+    [LoggerMessage(
+        Level = LogLevel.Warning,
+        Message = "Skipped {Path}: the document exceeds the one million UTF-16 code unit limit."
+    )]
+    private static partial void LogOversizedDocument(ILogger logger, string path);
+}

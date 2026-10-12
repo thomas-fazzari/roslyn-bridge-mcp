@@ -1,0 +1,72 @@
+# Get started
+
+## Install
+
+Prerequisites: the .NET 10 SDK, and an MCP client such as Claude Code, Codex, GitHub Copilot CLI, pi or Antigravity.
+
+macOS and Linux:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/thomas-fazzari/roslyn-bridge-mcp/master/install.sh | bash
+```
+
+Windows x64, in PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/thomas-fazzari/roslyn-bridge-mcp/master/install.ps1 | iex
+```
+
+The script downloads the latest release for your platform, verifies its SHA-256 checksum and installs `roslyn-bridge-mcp` in `~/.local/bin`, or `%LOCALAPPDATA%\Programs\roslyn-bridge-mcp` on Windows. Set `ROSLYN_BRIDGE_INSTALL_DIR` to choose another directory. It then runs `roslyn-bridge-mcp setup`.
+
+Setup installs the official Roslyn language server as a global .NET tool when it is missing. It then prints the command that registers the bridge in each agent it detects, for example:
+
+```sh
+claude mcp add --scope user roslyn -- ~/.local/bin/roslyn-bridge-mcp
+```
+
+Run the printed command once per agent. To update, run the install command again. It replaces the binary in place, so the registrations keep working.
+
+Releases target macOS x64 and ARM64, Linux x64 and ARM64 with glibc, and Windows x64. Your C# project can target a different .NET version. Keep its required SDK and workloads installed, including any SDK pinned in its `global.json`.
+
+## Use it
+
+Restore your C# solution with `dotnet restore`, then open a new agent session in that project.
+In the CLI, use `/mcp` to check that `roslyn` is connected.
+
+```text
+Use the Roslyn MCP to report diagnostics for a C# file, find definitions and
+implementations, then preview a rename and a suggested fix. Do not apply changes.
+```
+
+Approve the tool call if prompted. The bridge uses the session's working directory as its workspace.
+Save editor changes before requesting diagnostics.
+
+## Configuration
+
+Codex stores the global registration in `~/.codex/config.toml`, or under `CODEX_HOME` when set.
+A project-level `.codex/config.toml` can override it.
+See [Codex MCP configuration](https://developers.openai.com/codex/mcp/) for client settings and tool approvals.
+
+Claude Code stores the user-scope registration in `~/.claude.json`, or under `CLAUDE_CONFIG_DIR` when set.
+Allow the tools without prompts by adding `mcp__roslyn__*` to `permissions.allow` in `~/.claude/settings.json`.
+See [Claude Code MCP](https://docs.claude.com/en/docs/claude-code/mcp) for client settings.
+
+Roslyn loads the solution on the first language request.
+For large projects, set `tool_timeout_sec = 200` under `[mcp_servers.roslyn]` in Codex.
+In Claude Code, set the `MCP_TOOL_TIMEOUT` environment variable in milliseconds, for example `200000`.
+
+| Bridge argument     | Default                                                       |
+| ------------------- | ------------------------------------------------------------- |
+| `--workspace`       | Current working directory                                     |
+| `--server`          | `roslyn-language-server` on `PATH`, then in `~/.dotnet/tools` |
+| `--dotnet-root`     | The .NET install found as described below                     |
+| `--startup-timeout` | 120 seconds                                                   |
+| `--request-timeout` | 60 seconds                                                    |
+
+Timeout arguments accept 1 to 600 seconds. Keep the client's tool timeout above the startup and request timeout sum when increasing these limits.
+
+MCP clients often start the bridge without your shell environment. The bridge therefore finds the .NET install that runs Roslyn itself. It uses the first directory that holds a .NET 10 runtime and an SDK, checking `DOTNET_ROOT`, the `dotnet` on `PATH`, the location registered by the .NET installer, the default install location, then `~/.dotnet`, mise and Homebrew. Pass `--dotnet-root` when your install is elsewhere.
+
+## Remove
+
+Remove the `roslyn` entry from each agent with its `mcp remove` command, for example `claude mcp remove roslyn --scope user`. Then delete `roslyn-bridge-mcp` from the installation directory.

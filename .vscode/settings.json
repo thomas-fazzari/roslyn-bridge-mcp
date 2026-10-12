@@ -1,0 +1,53 @@
+{
+  "csharp.debug.justMyCode": false,
+  "dotnet.defaultSolution": "RoslynBridge.slnx",
+  "oxc.enable.oxlint": false,
+  "oxc.fmt.configPath": ".oxfmtrc.json",
+  "oxc.useExecPath": true,
+  "oxc.path.oxfmt": "node_modules/oxfmt/bin/oxfmt",
+  "editor.formatOnSave": true,
+  "editor.formatOnSaveMode": "file",
+  "files.associations": {
+    "bun.lock": "plaintext",
+    "LICENSE": "plaintext",
+    "*.globalconfig": "properties",
+    "*.csproj": "xml",
+    "*.props": "xml",
+    "*.slnx": "xml"
+  },
+  "files.exclude": {
+    "**/artifacts": true,
+    "**/bin": true,
+    "**/node_modules": true,
+    "**/obj": true,
+    "**/TestResults": true
+  },
+  "files.watcherExclude": {
+    "**/.git/**": true,
+    "**/artifacts/**": true,
+    "**/bin/**": true,
+    "**/node_modules/**": true,
+    "**/obj/**": true,
+    "**/TestResults/**": true,
+    "docs/.vitepress/cache/**": true,
+    "docs/.vitepress/dist/**": true
+  },
+  "search.exclude": {
+    "**/artifacts/**": true,
+    "**/bin/**": true,
+    "**/node_modules/**": true,
+    "**/obj/**": true,
+    "**/TestResults/**": true,
+    "docs/.vitepress/cache/**": true,
+    "docs/.vitepress/dist/**": true
+  },
+  "[csharp][xml]": {
+    "editor.defaultFormatter": "csharpier.csharpier-vscode"
+  },
+  "[javascript][typescript][markdown][json][jsonc][yaml]": {
+    "editor.defaultFormatter": "oxc.oxc-vscode"
+  },
+  "[markdown]": {
+    "editor.wordWrap": "on"
+  }
+}

@@ -1,0 +1,31 @@
+# Testing conventions
+
+Add a test only when its failure would show that behavior is broken: a bug, a broken requirement or a violated contract. Prefer a few focused tests, one per distinct failure mode, over many variations of the same case. For a bug fix, add a regression test that fails before the fix when practical.
+
+## What to test
+
+- Behavior through the most stable boundary that proves the risk. Prefer a tool call over a call into its internals.
+- The result fields and error codes that clients rely on.
+- The guards that keep edits inside the workspace and keep the workspace consistent with Roslyn.
+
+## What not to test
+
+- Record or property passthrough and trivial argument guards.
+- Framework behavior, generated code and configuration values.
+- Private state, internal structure and log output.
+- The same behavior at two levels. Keep the test at the more stable boundary.
+- Wiring alone, such as a tool reaching its handler.
+
+## Layout
+
+Tests live in `tests/RoslynBridge.Tests`, under `Unit` or `Integration`, grouped by subject. Fixtures live under `Fixtures` as `.txt` files, so their deliberate errors do not affect the test build. Hand-written fakes live under `Fakes`. Do not add a mocking library. Replace a dependency with a small fake at a real seam, such as the Roslyn server process.
+
+Unit tests simulate the protocol. Integration tests are explicit and run the bridge against the real Roslyn language server in temporary workspaces copied from the fixtures. Never run them against a real project.
+
+## Writing tests
+
+Assert error codes and structured results, not message text, because messages may change. Refer to values clients see, such as error codes and limits, through the constants the code defines. Tests reach them through `internal` access.
+
+Unit tests pass `TestCt` from `TestHelpers` as the test cancellation token. A test with a `Timeout` reads `TestContext.Current.CancellationToken` directly (as the xUnit1069 analyzer rule requires). When a test asserts on a call that throws, declare that call as a local function at the end of the test, after an explicit `return;`, instead of a lambda in a local variable.
+
+When a test waits for concurrent work, wait for an effect the test can observe, such as a returned task or a file on disk. Do not synchronize with sleeps, arbitrary delays or blocking waits. A test session that runs for 10 minutes is stopped, and its hang dump names the tests that were running.
