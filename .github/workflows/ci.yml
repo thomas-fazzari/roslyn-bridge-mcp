@@ -27,7 +27,7 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
       - run: mise run install
-      - run: mise run lint
+      - run: "mise run hooks:check ::: dotnet:fmt ::: tooling:fmt ::: docs:check ::: build"
 
   native:
     name: Native AOT (${{ matrix.rid }})

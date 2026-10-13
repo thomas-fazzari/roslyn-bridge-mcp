@@ -19,6 +19,8 @@
 !/install.sh
 !/install.ps1
 !/bun.lock
+!/bunfig.toml
+!/nuget.config
 !/lefthook.yml
 
 !/.github/
@@ -50,6 +52,10 @@
 **/node_modules/
 /docs/.vitepress/cache/
 /docs/.vitepress/dist/
+/docs/.obsidian/*
+!/docs/.obsidian/app.json
+!/docs/.obsidian/types.json
+/docs/.trash/
 **/TestResults/
 **/.DS_Store
 **/*.user

@@ -20,4 +20,8 @@ pre-commit:
 pre-push:
   jobs:
     - name: check
-      run: mise run check
+      run: "mise run hooks:check ::: dotnet:fmt ::: tooling:fmt ::: build"
+
+    - name: docs-check
+      glob: "{docs/**,README.md,AGENTS.md}"
+      run: mise run docs:check

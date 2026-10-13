@@ -7,8 +7,8 @@ globs:
   - AGENTS.md
   - "docs/**/*.md"
 ignores:
-  - "**/LICENSE"
   - "**/node_modules/**"
   - "docs/.vitepress/cache/**"
   - "docs/.vitepress/dist/**"
+  - "docs/.trash/**"
 fix: false

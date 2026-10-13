@@ -1,3 +1,8 @@
+---
+description: "Describes the RoslynBridge MCP tools, their inputs and how to preview and apply edits."
+tags: [kind/reference, area/user]
+---
+
 # Usage
 
 Ask your agent to use the `roslyn` Model Context Protocol (MCP) server.

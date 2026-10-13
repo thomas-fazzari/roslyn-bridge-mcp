@@ -27,18 +27,13 @@ description = "Runs the explicit tests against the real Roslyn server"
 depends = ["build"]
 run = 'dotnet test --solution RoslynBridge.slnx --configuration "${CONFIGURATION:-Debug}" --no-build --no-restore -- --explicit only --filter-class RoslynBridge.Tests.Integration.Roslyn.RoslynMcpTests'
 
-[tasks.format]
+[tasks.check]
+description = "Runs every formatting, analyzer, documentation and unit test check"
+run = [{ tasks = ["hooks:check", "dotnet:fmt", "tooling:fmt", "docs:check"] }, { task = "test" }]
+
+[tasks.fix]
 description = "Formats C#, MSBuild, Markdown, JSON, YAML and TOML files"
 run = ["csharpier format .", "bunx --bun oxfmt --write ."]
-
-[tasks.lint]
-description = "Checks formatting, Markdown, the documentation build, Git hooks and build analyzers"
-depends = ["docs:check", "build"]
-run = ["csharpier check .", "lefthook validate"]
-
-[tasks.check]
-description = "Runs lint and the unit tests"
-depends = ["lint", "test"]
 
 [tasks.publish]
 description = "Publishes the native bridge for RUNTIME_ID (APP_VERSION and NATIVE_OUTPUT are optional)"
@@ -51,6 +46,18 @@ dotnet publish src/RoslynBridge/RoslynBridge.csproj --configuration Release --ru
 description = "Installs the Git hooks"
 run = "lefthook install"
 
+[tasks."hooks:check"]
+description = "Validates the Git hook configuration"
+run = "lefthook validate"
+
+[tasks."dotnet:fmt"]
+description = "Checks C# and MSBuild formatting"
+run = "csharpier check ."
+
+[tasks."tooling:fmt"]
+description = "Checks Markdown, JSON, YAML and TOML formatting"
+run = "bunx --bun oxfmt --check ."
+
 [tasks."docs:dev"]
 description = "Serves the documentation with live updates"
 run = "bunx --bun vitepress dev docs --host 127.0.0.1 --port 5174 --strictPort"
@@ -60,6 +67,9 @@ description = "Builds the documentation site"
 run = "bunx --bun vitepress build docs"
 
 [tasks."docs:check"]
-description = "Lints Markdown, checks Markdown, JSON, YAML and TOML formatting, and builds the documentation"
+description = "Lints Markdown, checks its formatting and builds the documentation"
 depends = ["docs:build"]
-run = ["bunx --bun markdownlint-cli2", "bunx --bun oxfmt --check ."]
+run = [
+  "bunx --bun markdownlint-cli2",
+  'bunx --bun oxfmt --check README.md AGENTS.md "docs/**/*.md"',
+]

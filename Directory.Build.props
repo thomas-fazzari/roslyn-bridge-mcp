@@ -11,21 +11,22 @@
     <MeziantouAnalysisMode>Default</MeziantouAnalysisMode>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);CS1573;CS1591</NoWarn>
+    <IsPackable>false</IsPackable>
+    <IsTestProject Condition="$(MSBuildProjectName.StartsWith('RoslynBridge.Tests'))"
+      >true</IsTestProject>
   </PropertyGroup>
 
   <ItemGroup>
     <GlobalAnalyzerConfigFiles Include="$(MSBuildThisFileDirectory)eng/Analyzers.globalconfig" />
   </ItemGroup>
 
-  <PropertyGroup Condition="$(MSBuildProjectName.StartsWith('RoslynBridge.Tests'))">
+  <PropertyGroup Condition="'$(IsTestProject)' == 'true'">
     <OutputType>Exe</OutputType>
     <IsPublishable>false</IsPublishable>
-    <IsPackable>false</IsPackable>
-    <IsTestProject>true</IsTestProject>
     <TestingPlatformCommandLineArguments>$(TestingPlatformCommandLineArguments) --hangdump --hangdump-timeout 10m --hangdump-type Mini</TestingPlatformCommandLineArguments>
   </PropertyGroup>
 
-  <ItemGroup Condition="$(MSBuildProjectName.StartsWith('RoslynBridge.Tests'))">
+  <ItemGroup Condition="'$(IsTestProject)' == 'true'">
     <Using Include="AwesomeAssertions" />
     <Using Include="Xunit" />
     <PackageReference Include="AwesomeAssertions" />

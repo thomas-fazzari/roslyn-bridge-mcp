@@ -1,3 +1,8 @@
+---
+description: "Installs RoslynBridge and registers it in an MCP client."
+tags: [kind/guide, area/user]
+---
+
 # Get started
 
 ## Install

@@ -1,3 +1,8 @@
+---
+description: "Lists the tools needed to build RoslynBridge and the one-time repository setup."
+tags: [kind/guide, area/project]
+---
+
 # Setup
 
 Prerequisites: Git, Bash and [mise](https://mise.jdx.dev). mise installs the .NET SDK, Bun, CSharpier and lefthook at the versions pinned in `mise.toml`. On Windows, use Git Bash. Run commands from the repository root.
@@ -8,7 +13,7 @@ mise run install
 mise run hooks:install
 ```
 
-The Git hooks format staged files on commit and run `mise run check` before a push.
+The pre-commit hook formats staged files. The pre-push hook validates the hook configuration, checks formatting and builds the solution. It also runs `mise run docs:check` when the push changes the documentation, `README.md` or `AGENTS.md`. `lefthook.yml` defines both hooks.
 
 ## Local settings
 

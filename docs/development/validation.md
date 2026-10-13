@@ -1,6 +1,11 @@
+---
+description: "Lists the checks to run for each kind of change and how to run a subset of tests."
+tags: [kind/reference, area/project]
+---
+
 # Validation
 
-Run the checks for the areas you changed before reporting work as done. `mise tasks` lists every task, and `mise.toml` defines them.
+Run the checks for the areas you changed before reporting work as done. Tasks are named `<area>:<action>` when they cover one area. `mise tasks` lists every task, and `mise.toml` defines them.
 
 | Change                                         | Command                     |
 | ---------------------------------------------- | --------------------------- |
@@ -8,7 +13,7 @@ Run the checks for the areas you changed before reporting work as done. `mise ta
 | Roslyn session, tools or workspace edits       | `mise run test-integration` |
 | Documentation, `README.md` or `AGENTS.md` only | `mise run docs:check`       |
 
-`mise run check` runs every formatting, analyzer, documentation and unit test check. `mise run format` fixes C#, MSBuild, Markdown, JSON, YAML and TOML formatting.
+`mise run check` runs every formatting, analyzer, documentation and unit test check. `mise run fix` fixes C#, MSBuild, Markdown, JSON, YAML and TOML formatting.
 
 ## Running a subset of tests
 

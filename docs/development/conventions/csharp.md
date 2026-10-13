@@ -1,3 +1,8 @@
+---
+description: "States the C# rules that analyzers and formatters cannot check."
+tags: [kind/reference, area/code]
+---
+
 # C# conventions
 
 These rules apply to every .NET project, including tests. They cover what the analyzers and formatters cannot check.

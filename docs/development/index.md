@@ -1,3 +1,8 @@
+---
+description: "Introduces the developer guide, its design rules and the page to read for each common change."
+tags: [kind/index, area/project]
+---
+
 # Developer guide
 
 RoslynBridge is a native executable that serves C# tools over the Model Context Protocol (MCP). It starts the official Roslyn language server, keeps it in sync with the workspace files and turns tool calls into Language Server Protocol (LSP) requests.

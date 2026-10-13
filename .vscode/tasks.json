@@ -27,10 +27,10 @@
       "problemMatcher": "$msCompile"
     },
     {
-      "label": "format",
+      "label": "fix",
       "type": "process",
       "command": "mise",
-      "args": ["run", "format"],
+      "args": ["run", "fix"],
       "options": {
         "cwd": "${workspaceFolder}"
       },

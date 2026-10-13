@@ -1,3 +1,8 @@
+---
+description: "C# diagnostics, navigation and refactoring for coding agents through the official Roslyn language server."
+tags: [kind/index, area/user]
+---
+
 # RoslynBridge
 
 C# diagnostics, navigation and refactoring for coding agents, backed by the official Roslyn language server.
