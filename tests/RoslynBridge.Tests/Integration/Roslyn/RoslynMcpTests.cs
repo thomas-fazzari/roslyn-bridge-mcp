@@ -1,12 +1,13 @@
 // Copyright (C) RoslynBridge contributors
 // SPDX-License-Identifier: GPL-3.0-only
 
-using System.Text.Json;
+using System.Globalization;
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 using ModelContextProtocol.Protocol;
 using RoslynBridge.Lsp;
-using RoslynBridge.Symbols;
-using RoslynBridge.Tools;
+using RoslynBridge.Requests;
+using static RoslynBridge.Tests.Unit.TestHelpers;
 
 namespace RoslynBridge.Tests.Integration.Roslyn;
 
@@ -27,9 +28,10 @@ namespace RoslynBridge.Tests.Integration.Roslyn;
 /// ROSLYN_BRIDGE_TEST_EXECUTABLE=/absolute/path/RoslynBridge mise run test-integration
 /// </code>
 /// </remarks>
-public sealed class RoslynMcpTests
+public sealed partial class RoslynMcpTests
 {
     private const int TestTimeoutMilliseconds = 300_000;
+    private const int RegexTimeoutMilliseconds = 1_000;
     private const string ContractFile = "Contracts/IGreeter.cs";
     private const string ImplementationFile = "Application/Greeter.cs";
     private const string ConsumerFile = "Application/Consumer.cs";
@@ -41,23 +43,15 @@ public sealed class RoslynMcpTests
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         await using var workspace = await RoslynTestWorkspace.CreateAsync(cancellationToken);
-        var capabilities = await workspace.CallAsync(
-            new LspRequest { Action = LspAction.Capabilities }
-        );
-        capabilities["result"]!["definitionProvider"]!.GetValue<bool>().Should().BeTrue();
-        capabilities["result"]!["typeDefinitionProvider"]!.GetValue<bool>().Should().BeTrue();
+        var capabilities = JsonNode.Parse(
+            await workspace.CallAsync(new LspRequest { Action = LspAction.Capabilities })
+        )!;
+        capabilities["definitionProvider"]!.GetValue<bool>().Should().BeTrue();
+        capabilities["typeDefinitionProvider"]!.GetValue<bool>().Should().BeTrue();
 
         var diagnostics = await DiagnosticsAsync(workspace);
-        diagnostics
-            .Should()
-            .Contain(item =>
-                Code(item) == "CS0246" && item["severity"]!.GetValue<string>() == "error"
-            );
-        diagnostics
-            .Should()
-            .Contain(item =>
-                Code(item) == "CS8603" && item["severity"]!.GetValue<string>() == "warning"
-            );
+        diagnostics.Should().Contain(new Diagnostic("error", "CS0246"));
+        diagnostics.Should().Contain(new Diagnostic("warning", "CS8603"));
 
         var definitionRequest = await workspace.AtAsync(
             LspAction.Definition,
@@ -67,29 +61,29 @@ public sealed class RoslynMcpTests
         var definition = await workspace.CallAsync(definitionRequest);
         AssertSingleLocation(definition, ContractFile);
         var target = await workspace.AtAsync(LspAction.Definition, ContractFile, "Greet(");
-        var position = definition["result"]!["items"]![0]!["positions"]![0]!;
-        position[0]!.GetValue<int>().Should().Be(target.Line);
-        position[1]!.GetValue<int>().Should().Be(target.Character);
-        var raw = await workspace.CallAsync(
-            new LspRequest
-            {
-                Action = LspAction.Request,
-                Method = LspMethods.TextDocumentDefinition,
-                Parameters = new JsonObject
+        definition.Should().Be($"{ContractFile} {target.Line}:{target.Character}");
+        var raw = JsonNode.Parse(
+            await workspace.CallAsync(
+                new LspRequest
                 {
-                    ["textDocument"] = new JsonObject
+                    Action = LspAction.Request,
+                    Method = LspMethods.TextDocumentDefinition,
+                    Parameters = new JsonObject
                     {
-                        ["uri"] = new Uri(workspace.FilePath(ConsumerFile)).AbsoluteUri,
+                        ["textDocument"] = new JsonObject
+                        {
+                            ["uri"] = new Uri(workspace.FilePath(ConsumerFile)).AbsoluteUri,
+                        },
+                        ["position"] = new JsonObject
+                        {
+                            ["line"] = definitionRequest.Line - 1,
+                            ["character"] = definitionRequest.Character - 1,
+                        },
                     },
-                    ["position"] = new JsonObject
-                    {
-                        ["line"] = definitionRequest.Line - 1,
-                        ["character"] = definitionRequest.Character - 1,
-                    },
-                },
-            }
-        );
-        var rawLocation = raw["result"]!.AsArray().Should().ContainSingle().Which!;
+                }
+            )
+        )!;
+        var rawLocation = raw.AsArray().Should().ContainSingle().Which!;
         var rawUri = (rawLocation["uri"] ?? rawLocation["targetUri"])!.GetValue<string>();
         new WorkspacePaths(workspace.FilePath("."))
             .TryGetWorkspaceFile(rawUri)
@@ -118,77 +112,67 @@ public sealed class RoslynMcpTests
         var hover = await workspace.CallAsync(
             await workspace.AtAsync(LspAction.Hover, ConsumerFile, "Greet(")
         );
-        hover["result"]!["text"]!.GetValue<string>().Should().Contain("Greet");
+        hover.Should().Contain("Greet");
 
-        var callers = await workspace.CallAsync(
-            await workspace.AtAsync(LspAction.Callers, ContractFile, "Greet(")
+        var callers = Lines(
+            await workspace.CallAsync(
+                await workspace.AtAsync(LspAction.Callers, ContractFile, "Greet(")
+            )
         );
-        var caller = callers["result"]!["items"]!.AsArray().Should().ContainSingle().Which!;
-        caller["file"]!.GetValue<string>().Should().Be(ConsumerFile);
-        caller["calls"]!.AsArray().Should().ContainSingle();
+        callers.Should().HaveCount(2);
+        callers[0].Should().StartWith(ConsumerFile + ":");
+        callers[1].Should().MatchRegex(@"^  calls \d+:\d+$");
 
         // A returned symbol name resolves back to its declaration
-        var callerSymbol = caller["symbol"]!.GetValue<string>();
         AssertSingleLocation(
             await workspace.CallAsync(
-                new LspRequest { Action = LspAction.Definition, Symbol = callerSymbol }
+                new LspRequest { Action = LspAction.Definition, Symbol = SymbolName(callers[0]) }
             ),
             ConsumerFile
         );
 
-        var withContext = await workspace.CallAsync(
-            new LspRequest
-            {
-                Action = LspAction.References,
-                Symbol = "IGreeter.Greet",
-                Context = true,
-            }
+        var withContext = Lines(
+            await workspace.CallAsync(
+                new LspRequest
+                {
+                    Action = LspAction.References,
+                    Symbol = "IGreeter.Greet",
+                    Context = true,
+                }
+            )
         );
-        withContext["result"]!["items"]!
-            .AsArray()
-            .Single(item =>
-                string.Equals(
-                    item!["file"]!.GetValue<string>(),
-                    ConsumerFile,
-                    StringComparison.Ordinal
-                )
-            )!["lines"]!
-            .AsObject()
-            .Select(line => line.Value!.GetValue<string>())
-            .Should()
-            .ContainSingle(line => line.Contains("greeter.Greet(", StringComparison.Ordinal));
+        var consumer = Array.IndexOf(withContext, ConsumerFile);
+        consumer.Should().BeGreaterThanOrEqualTo(0);
+        withContext[consumer + 1].Should().Contain("greeter.Greet(");
 
         var subtypes = await workspace.CallAsync(
             await workspace.AtAsync(LspAction.Subtypes, ContractFile, "IGreeter")
         );
-        subtypes["result"]!["items"]!
-            .AsArray()
-            .Select(item => item!["file"]!.GetValue<string>())
-            .Should()
-            .Equal(ImplementationFile);
+        Lines(subtypes).Select(FileOf).Should().Equal(ImplementationFile);
 
         var symbols = await workspace.CallAsync(
             new LspRequest { Action = LspAction.Symbols, Query = "IGreeter" }
         );
-        symbols["result"]!["items"]!
-            .AsArray()
-            .Should()
-            .Contain(symbol => symbol!["name"]!.GetValue<string>() == "IGreeter");
+        Lines(symbols).Should().Contain(line => line.Contains(" interface IGreeter"));
 
-        var documentSymbols = await workspace.CallAsync(
-            new LspRequest { Action = LspAction.Symbols, File = ContractFile }
-        );
-        var symbolNames = DocumentSymbolNames(documentSymbols["result"]!["items"]!.AsArray())
+        var documentSymbols = Lines(
+                await workspace.CallAsync(
+                    new LspRequest { Action = LspAction.Symbols, File = ContractFile }
+                )
+            )
+            .Select(SymbolName)
             .ToArray();
-        symbolNames.Should().Contain("IGreeter");
-        symbolNames.Should().Contain(name => name.StartsWith("Greet(", StringComparison.Ordinal));
+        documentSymbols.Should().Contain("IGreeter");
+        documentSymbols
+            .Should()
+            .Contain(name => name.StartsWith("Greet(", StringComparison.Ordinal));
 
         var text = await workspace.ReadFileAsync(ProblemsFile);
         await workspace.WriteFileAsync(ProblemsFile, "using System.Collections.Generic;\n" + text);
 
         var refreshed = await DiagnosticsAsync(workspace);
-        refreshed.Should().NotContain(item => Code(item) == "CS0246");
-        refreshed.Should().Contain(item => Code(item) == "CS8603");
+        refreshed.Should().NotContain(item => item.Code == "CS0246");
+        refreshed.Should().Contain(item => item.Code == "CS8603");
 
         (await workspace.StopAsync()).Should().Be(0);
     }
@@ -205,13 +189,7 @@ public sealed class RoslynMcpTests
         var clean = await workspace.CallAsync(
             new LspRequest { Action = LspAction.Diagnostics, File = cleanFile }
         );
-        var cleanResult = clean["result"]!;
-        cleanResult["filesChecked"]!.GetValue<int>().Should().Be(1);
-        cleanResult["filesWithDiagnostics"]!.GetValue<int>().Should().Be(0);
-        cleanResult["diagnostics"]!.AsArray().Should().BeEmpty();
-        cleanResult["total"]!.GetValue<int>().Should().Be(0);
-        cleanResult["complete"]!.GetValue<bool>().Should().BeTrue();
-        cleanResult["truncated"]!.GetValue<bool>().Should().BeFalse();
+        clean.Should().Be("1 file checked, no diagnostics");
 
         var request = new LspRequest
         {
@@ -219,39 +197,29 @@ public sealed class RoslynMcpTests
             File = "Application/*.cs",
             Limit = LspRequest.MaximumResultLimit,
         };
-        var full = (await workspace.CallAsync(request))["result"]!;
-        var limited = (await workspace.CallAsync(request with { Limit = 1 }))["result"]!;
+        var full = await workspace.CallAsync(request);
+        var limited = await workspace.CallAsync(request with { Limit = 1 });
+        var fullSummary = Summary(full);
 
-        full["filesChecked"]!.GetValue<int>().Should().Be(4);
-        full["truncated"]!.GetValue<bool>().Should().BeFalse();
-        full["filesWithDiagnostics"]!
-            .GetValue<int>()
+        fullSummary.FilesChecked.Should().Be(4);
+        full.Should().NotContain("truncated:");
+        fullSummary.FilesWithDiagnostics.Should().Be(Lines(full).Count(IsFileLine));
+        Summary(limited).Should().Be(fullSummary);
+
+        var withSuggestions = await workspace.CallAsync(
+            request with
+            {
+                Severity = DiagnosticSeverity.Hint,
+            }
+        );
+        Diagnostics(full)
             .Should()
-            .Be(full["diagnostics"]!.AsArray().Count);
+            .OnlyContain(item => item.Severity == "error" || item.Severity == "warning");
+        Summary(withSuggestions).Total.Should().Be(fullSummary.Total + fullSummary.BelowSeverity);
 
-        foreach (var field in new[] { "filesChecked", "filesWithDiagnostics", "total" })
-        {
-            limited[field]!.GetValue<int>().Should().Be(full[field]!.GetValue<int>());
-        }
-
-        var withSuggestions = (
-            await workspace.CallAsync(request with { Severity = DiagnosticSeverity.Hint })
-        )["result"]!;
-        full["diagnostics"]!
-            .AsArray()
-            .SelectMany(file => file!["diagnostics"]!.AsArray())
-            .Select(item => item!["severity"]!.GetValue<string>())
-            .Should()
-            .OnlyContain(severity => severity == "error" || severity == "warning");
-        withSuggestions["total"]!
-            .GetValue<int>()
-            .Should()
-            .Be(full["total"]!.GetValue<int>() + full["belowSeverity"]!.GetValue<int>());
-
-        limited["complete"]!.GetValue<bool>().Should().BeTrue();
-        limited["truncated"]!.GetValue<bool>().Should().BeTrue();
-        limited["diagnostics"]!.AsArray().Should().ContainSingle();
-        limited["diagnostics"]![0]!["diagnostics"]!.AsArray().Should().ContainSingle();
+        limited.Should().Contain("truncated:").And.NotContain("incomplete:");
+        Lines(limited).Count(IsFileLine).Should().Be(1);
+        Diagnostics(limited).Should().ContainSingle();
     }
 
     [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
@@ -267,18 +235,12 @@ public sealed class RoslynMcpTests
             newFile,
             "namespace Sample.Application;\n\npublic static class NewFile\n{\n    public static int Wrong() => \"text\";\n}\n"
         );
-        var result = (
-            await workspace.CallAsync(
-                new LspRequest { Action = LspAction.Diagnostics, File = newFile }
-            )
-        )["result"]!;
+        var result = await workspace.CallAsync(
+            new LspRequest { Action = LspAction.Diagnostics, File = newFile }
+        );
 
-        result["complete"]!.GetValue<bool>().Should().BeTrue(result.ToJsonString());
-        result["diagnostics"]!
-            .AsArray()
-            .SelectMany(file => file!["diagnostics"]!.AsArray())
-            .Should()
-            .Contain(item => Code(item!.AsObject()) == "CS0029");
+        result.Should().NotContain("incomplete:");
+        Diagnostics(result).Should().Contain(item => item.Code == "CS0029");
     }
 
     [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
@@ -302,7 +264,7 @@ public sealed class RoslynMcpTests
         var diagnostics = await workspace.CallAsync(
             new LspRequest { Action = LspAction.Diagnostics, File = ConsumerFile }
         );
-        diagnostics["result"]!["complete"]!.GetValue<bool>().Should().BeTrue();
+        diagnostics.Should().NotContain("incomplete:");
     }
 
     [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
@@ -384,7 +346,7 @@ public sealed class RoslynMcpTests
 
         var reload = await workspace.CallAsync(new LspRequest { Action = LspAction.Reload });
 
-        reload["result"]!["running"]!.GetValue<bool>().Should().BeTrue();
+        reload.Should().Be("running: true");
     }
 
     [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
@@ -409,13 +371,11 @@ public sealed class RoslynMcpTests
         var ambiguous = await workspace.CallRawAsync(
             new LspRequest { Action = LspAction.Definition, Symbol = "Program.Run" }
         );
-        AssertError(ambiguous, SymbolResolver.AmbiguousErrorCode);
-        var candidateFiles = JsonSerializer.SerializeToNode(ambiguous.StructuredContent)!["error"]![
-            "candidates"
-        ]!
-            .AsArray()
-            .Select(candidate => candidate!["file"]!.GetValue<string>());
-        candidateFiles.Should().BeEquivalentTo([applicationProgram, contractsProgram]);
+        AssertError(ambiguous, ErrorCodes.AmbiguousSymbol);
+        Candidates(ambiguous)
+            .Select(FileOf)
+            .Should()
+            .BeEquivalentTo([applicationProgram, contractsProgram]);
 
         AssertSingleLocation(
             await workspace.CallAsync(
@@ -444,13 +404,8 @@ public sealed class RoslynMcpTests
         var ambiguous = await workspace.CallRawAsync(
             new LspRequest { Action = LspAction.Definition, Symbol = "Greet" }
         );
-        AssertError(ambiguous, SymbolResolver.AmbiguousErrorCode);
-        var candidates = JsonSerializer.SerializeToNode(ambiguous.StructuredContent)!["error"]![
-            "candidates"
-        ]!
-            .AsArray()
-            .Select(candidate => candidate!["symbol"]!.GetValue<string>())
-            .ToArray();
+        AssertError(ambiguous, ErrorCodes.AmbiguousSymbol);
+        var candidates = Candidates(ambiguous).Select(SymbolName).ToArray();
         candidates.Should().HaveCount(3);
         var contract = candidates.Should().ContainSingle(name => name.Contains("IGreeter")).Which;
         AssertSingleLocation(
@@ -487,14 +442,14 @@ public sealed class RoslynMcpTests
             NewName = destination,
         };
 
-        var capabilities = await workspace.CallAsync(
-            new LspRequest { Action = LspAction.Capabilities }
+        var capabilities = JsonNode.Parse(
+            await workspace.CallAsync(new LspRequest { Action = LspAction.Capabilities })
         );
-        if (capabilities["result"]?["workspace"]?["fileOperations"]?["willRename"] is null)
+        if (capabilities?["workspace"]?["fileOperations"]?["willRename"] is null)
         {
             var original = await workspace.ReadFileAsync(ImplementationFile);
             var rejected = await workspace.CallRawAsync(request);
-            AssertError(rejected, LspTool.InvalidRequestErrorCode);
+            AssertError(rejected, ErrorCodes.InvalidRequest);
             (await workspace.ReadFileAsync(ImplementationFile)).Should().Be(original);
             File.Exists(workspace.FilePath(destination)).Should().BeFalse();
             TestContext.Current.TestOutputHelper!.WriteLine(
@@ -534,17 +489,14 @@ public sealed class RoslynMcpTests
         var original = await workspace.ReadFileAsync(ContractFile);
         original.Should().Contain("Greet(");
         original.Should().NotContain("Welcome(");
-        var previewChanges = preview["result"]!["files"]!
-            .AsArray()
-            .SelectMany(file => file!["changes"]!.AsArray());
-        previewChanges
+        var hunks = Hunks(preview);
+        hunks
             .Should()
             .NotBeEmpty()
-            .And.AllSatisfy(change =>
+            .And.AllSatisfy(hunk =>
             {
-                change!["before"]!["text"]!.GetValue<string>().Should().Contain("Greet");
-                change["after"]!["text"]!.GetValue<string>().Should().Contain("Welcome");
-                change["after"]!["startLine"]!.GetValue<int>().Should().BePositive();
+                hunk.Before.Should().Contain("Greet");
+                hunk.After.Should().Contain("Welcome");
             });
 
         var applied = await workspace.CallAsync(ApplyProposal(LspAction.Rename, preview));
@@ -575,7 +527,7 @@ public sealed class RoslynMcpTests
         await workspace.WriteFileAsync(ConsumerFile, changed);
 
         var rejected = await workspace.CallRawAsync(ApplyProposal(LspAction.Rename, preview));
-        AssertError(rejected, LspTool.StaleEditErrorCode);
+        AssertError(rejected, ErrorCodes.StaleEdit);
         (await workspace.ReadFileAsync(ConsumerFile)).Should().Be(changed);
         var contract = await workspace.ReadFileAsync(ContractFile);
         contract.Should().Contain("Greet(");
@@ -587,21 +539,25 @@ public sealed class RoslynMcpTests
     [InlineData(true)]
     public async Task ResolvesAndAppliesRoslynCodeActionAsync(bool applyFromListing)
     {
+        const string title = "using System.Collections.Generic;";
         var cancellationToken = TestContext.Current.CancellationToken;
         await using var workspace = await RoslynTestWorkspace.CreateAsync(cancellationToken);
         var request = await workspace.AtAsync(LspAction.CodeActions, ProblemsFile, "List<string>");
         var listing = await workspace.CallAsync(request);
-        var action = listing["result"]!["actions"]!
-            .AsArray()
+        var action = Lines(listing)
             .Should()
-            .ContainSingle(item =>
-                item!["title"]!.GetValue<string>() == "using System.Collections.Generic;"
-            )
-            .Which!;
-        request = request with { ActionIndex = action["index"]!.GetValue<int>() };
+            .ContainSingle(line => line.EndsWith(" " + title, StringComparison.Ordinal))
+            .Which;
+        request = request with
+        {
+            ActionIndex = int.Parse(
+                action[..action.IndexOf(' ', StringComparison.Ordinal)],
+                CultureInfo.InvariantCulture
+            ),
+        };
 
         var preview = await workspace.CallAsync(request);
-        (await DiagnosticsAsync(workspace)).Should().Contain(item => Code(item) == "CS0246");
+        (await DiagnosticsAsync(workspace)).Should().Contain(item => item.Code == "CS0246");
 
         var applyRequest = ApplyProposal(
             LspAction.CodeActions,
@@ -612,40 +568,33 @@ public sealed class RoslynMcpTests
         };
         var applied = await workspace.CallAsync(applyRequest);
         AssertApplied(applied);
-        AssertError(await workspace.CallRawAsync(applyRequest), LspTool.InvalidRequestErrorCode);
+        AssertError(await workspace.CallRawAsync(applyRequest), ErrorCodes.InvalidRequest);
         var text = await workspace.ReadFileAsync(ProblemsFile);
-        text.Should().Contain("using System.Collections.Generic;");
+        text.Should().Contain(title);
 
         var diagnostics = await DiagnosticsAsync(workspace);
-        diagnostics.Should().NotContain(item => Code(item) == "CS0246");
-        diagnostics.Should().Contain(item => Code(item) == "CS8603");
+        diagnostics.Should().NotContain(item => item.Code == "CS0246");
+        diagnostics.Should().Contain(item => item.Code == "CS8603");
     }
 
-    private static LspRequest ApplyProposal(LspAction action, JsonObject preview) =>
+    private static LspRequest ApplyProposal(LspAction action, string preview) =>
         new()
         {
             Action = action,
-            ProposalId = preview["result"]!["proposalId"]!.GetValue<string>(),
+            ProposalId = ProposalPattern().Match(preview).Groups["id"].Value,
             Apply = true,
         };
 
-    private static void AssertApplied(JsonObject response) =>
-        response["result"]!["applied"]!.GetValue<bool>().Should().BeTrue();
+    private static void AssertApplied(string response) => response.Should().StartWith("applied:");
 
     private static void AssertError(CallToolResult response, string expectedCode)
     {
         response.IsError.Should().BeTrue();
-
-        var error = JsonSerializer.SerializeToNode(response.StructuredContent)!;
-        error["error"]!["code"]!.GetValue<string>().Should().Be(expectedCode);
+        ErrorCode(response).Should().Be(expectedCode);
     }
 
-    private static void AssertSingleLocation(JsonObject response, string expectedFile) =>
-        Locations(response)
-            .Should()
-            .ContainSingle()
-            .Which.Should()
-            .Be(expectedFile, response.ToJsonString());
+    private static void AssertSingleLocation(string response, string expectedFile) =>
+        Locations(response).Should().ContainSingle().Which.Should().Be(expectedFile, response);
 
     /// <summary>
     /// Starts Roslyn and waits for the project load, so a file written next reaches Roslyn
@@ -656,52 +605,138 @@ public sealed class RoslynMcpTests
             new LspRequest { Action = LspAction.Diagnostics, File = ConsumerFile }
         );
 
-    private static async Task<JsonObject[]> DiagnosticsAsync(RoslynTestWorkspace workspace)
-    {
-        var response = await workspace.CallAsync(
-            new LspRequest { Action = LspAction.Diagnostics, File = ProblemsFile }
+    private static async Task<Diagnostic[]> DiagnosticsAsync(RoslynTestWorkspace workspace) =>
+        Diagnostics(
+            await workspace.CallAsync(
+                new LspRequest { Action = LspAction.Diagnostics, File = ProblemsFile }
+            )
         );
-        return
-        [
-            .. response["result"]!["diagnostics"]!
-                .AsArray()
-                .SelectMany(file => file!["diagnostics"]!.AsArray())
-                .Select(item => item!.AsObject()),
-        ];
+
+    private static string[] Lines(string text) => text.Split('\n');
+
+    // Result lines that are not indented details, totals or notes start with a workspace file
+    private static bool IsFileLine(string line) =>
+        !line.StartsWith(' ')
+        && !line.StartsWith("truncated:", StringComparison.Ordinal)
+        && !line.StartsWith("incomplete:", StringComparison.Ordinal)
+        && !SummaryPattern().IsMatch(line);
+
+    private static string FileOf(string line)
+    {
+        var token = line.TrimStart().Split(' ')[0];
+        var position = PositionSuffixPattern().Match(token);
+        return position.Success ? token[..position.Index] : token;
     }
 
-    private static string Code(JsonObject diagnostic) => diagnostic["code"]!.ToString();
-
-    private static IEnumerable<string> DocumentSymbolNames(JsonArray symbols)
+    // A symbol line ends with the name after its location and kind
+    private static string SymbolName(string line)
     {
-        foreach (var symbol in symbols)
-        {
-            yield return symbol!["name"]!.GetValue<string>();
-            if (symbol["children"] is not JsonArray children)
-            {
-                continue;
-            }
+        var parts = line.TrimStart().Split(' ', 3);
+        var name = parts[2];
+        var container = name.IndexOf(" in ", StringComparison.Ordinal);
+        return container < 0 ? name : name[..container];
+    }
 
-            foreach (var name in DocumentSymbolNames(children))
+    private static string[] Locations(string response) =>
+        [.. Lines(response).Where(IsFileLine).Select(FileOf)];
+
+    private static string[] Candidates(CallToolResult response) =>
+        [.. Lines(ResponseText(response)).Skip(1)];
+
+    private static string[] PreviewFiles(string preview) =>
+        [
+            .. Lines(preview)
+                .Select(line => OperationPattern().Match(line))
+                .Where(match => match.Success)
+                .Select(match => match.Groups["path"].Value),
+        ];
+
+    private static List<(string Before, string After)> Hunks(string preview)
+    {
+        var hunks = new List<(string Before, string After)>();
+        foreach (var line in Lines(preview))
+        {
+            if (line.StartsWith("@@ ", StringComparison.Ordinal))
             {
-                yield return name;
+                hunks.Add((string.Empty, string.Empty));
+            }
+            else if (hunks.Count > 0 && line.StartsWith("- ", StringComparison.Ordinal))
+            {
+                hunks[^1] = (hunks[^1].Before + line[2..] + "\n", hunks[^1].After);
+            }
+            else if (hunks.Count > 0 && line.StartsWith("+ ", StringComparison.Ordinal))
+            {
+                hunks[^1] = (hunks[^1].Before, hunks[^1].After + line[2..] + "\n");
             }
         }
+
+        return hunks;
     }
 
-    private static string[] PreviewFiles(JsonObject response) =>
+    private static Diagnostic[] Diagnostics(string response) =>
         [
-            .. response["result"]!["files"]!
-                .AsArray()
-                .Select(item =>
-                    item!["path"]!.GetValue<string>().Replace(Path.DirectorySeparatorChar, '/')
-                ),
+            .. Lines(response)
+                .Select(line => DiagnosticPattern().Match(line))
+                .Where(match => match.Success)
+                .Select(match => new Diagnostic(
+                    match.Groups["severity"].Value,
+                    match.Groups["code"].Value
+                )),
         ];
 
-    private static string[] Locations(JsonObject response) =>
-        [
-            .. response["result"]!["items"]!
-                .AsArray()
-                .Select(location => location!["file"]!.GetValue<string>()),
-        ];
+    private static DiagnosticSummary Summary(string response)
+    {
+        var match = Lines(response)
+            .Select(line => SummaryPattern().Match(line))
+            .Single(m => m.Success);
+        return new DiagnosticSummary(
+            Number(match.Groups["checked"]),
+            Number(match.Groups["files"]),
+            Number(match.Groups["total"]),
+            Number(match.Groups["below"])
+        );
+
+        static int Number(Group group) =>
+            group.Success ? int.Parse(group.Value, CultureInfo.InvariantCulture) : 0;
+    }
+
+    [GeneratedRegex(
+        @"^proposal (?<id>\w+)",
+        RegexOptions.ExplicitCapture,
+        RegexTimeoutMilliseconds
+    )]
+    private static partial Regex ProposalPattern();
+
+    [GeneratedRegex(
+        @"^(?:change|create|delete) (?<path>.+)$|^rename .+ -> (?<path>.+)$",
+        RegexOptions.None,
+        RegexTimeoutMilliseconds
+    )]
+    private static partial Regex OperationPattern();
+
+    [GeneratedRegex(
+        @"^  \d+:\d+ (?<severity>\w+) (?<code>\S+) ",
+        RegexOptions.ExplicitCapture,
+        RegexTimeoutMilliseconds
+    )]
+    private static partial Regex DiagnosticPattern();
+
+    [GeneratedRegex(
+        @"^(?<checked>\d+) files? checked, (?:no diagnostics|(?<total>\d+) diagnostics? in (?<files>\d+) files?)(?:, (?<below>\d+) below the severity)?$",
+        RegexOptions.None,
+        RegexTimeoutMilliseconds
+    )]
+    private static partial Regex SummaryPattern();
+
+    [GeneratedRegex(@":\d+:\d+$", RegexOptions.ExplicitCapture, RegexTimeoutMilliseconds)]
+    private static partial Regex PositionSuffixPattern();
+
+    private readonly record struct Diagnostic(string Severity, string Code);
+
+    private readonly record struct DiagnosticSummary(
+        int FilesChecked,
+        int FilesWithDiagnostics,
+        int Total,
+        int BelowSeverity
+    );
 }

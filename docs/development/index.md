@@ -25,12 +25,19 @@ RoslynBridge is a native executable that serves C# tools over the Model Context 
 
 ## Layout
 
-| Path                       | Contents                                      |
-| -------------------------- | --------------------------------------------- |
-| `src/RoslynBridge`         | MCP tools, Roslyn session and workspace edits |
-| `tests/RoslynBridge.Tests` | Unit tests, integration tests and fixtures    |
-| `eng`                      | Analyzer rules and CI tasks                   |
-| `docs`                     | VitePress pages and configuration             |
+| Path                        | Contents                                               |
+| --------------------------- | ------------------------------------------------------ |
+| `src/RoslynBridge/Tools`    | MCP tools and the dispatcher they share                |
+| `src/RoslynBridge/Requests` | Tool request model                                     |
+| `src/RoslynBridge/Queries`  | Read-only Roslyn queries and their result shapes       |
+| `src/RoslynBridge/Changes`  | Rename and code action proposals and their application |
+| `src/RoslynBridge/Output`   | Text rendering of tool results                         |
+| `src/RoslynBridge/Lsp`      | Roslyn process, protocol and document synchronization  |
+| `src/RoslynBridge/Symbols`  | Symbol name resolution                                 |
+| `src/RoslynBridge/Editing`  | Workspace file edits and their previews                |
+| `tests/RoslynBridge.Tests`  | Unit tests, integration tests and fixtures             |
+| `eng`                       | Analyzer rules and CI tasks                            |
+| `docs`                      | VitePress pages and configuration                      |
 
 ## Common changes
 

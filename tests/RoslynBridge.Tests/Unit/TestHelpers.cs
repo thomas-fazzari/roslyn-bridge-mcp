@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 using System.Text.Json.Nodes;
+using ModelContextProtocol.Protocol;
 using RoslynBridge.Editing;
 
 namespace RoslynBridge.Tests.Unit;
@@ -12,6 +13,24 @@ namespace RoslynBridge.Tests.Unit;
 internal static class TestHelpers
 {
     public static CancellationToken TestCt => TestContext.Current.CancellationToken;
+
+    public static string ResponseText(CallToolResult response)
+    {
+        response.StructuredContent.Should().BeNull();
+        return response.Content.OfType<TextContentBlock>().Single().Text;
+    }
+
+    public static string? ErrorCode(CallToolResult response)
+    {
+        var text = ResponseText(response);
+        if (!text.StartsWith("error ", StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        var end = text.IndexOfAny([' ', ':'], "error ".Length);
+        return text["error ".Length..end];
+    }
 
     public static async Task<string> WriteFileAsync(string root, string relativePath, string text)
     {
@@ -28,7 +47,7 @@ internal static class TestHelpers
         actual.Should().Be(expected, "file {0} should contain the expected text", path);
     }
 
-    public static JsonObject Changes(string path, params JsonObject[] edits) =>
+    public static JsonObject WorkspaceChanges(string path, params JsonObject[] edits) =>
         new()
         {
             ["changes"] = new JsonObject { [new Uri(path).AbsoluteUri] = new JsonArray(edits) },

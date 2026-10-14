@@ -3,7 +3,6 @@
 
 using System.Runtime.ExceptionServices;
 using System.Text.Json.Nodes;
-using RoslynBridge.Tools;
 
 namespace RoslynBridge.Editing;
 

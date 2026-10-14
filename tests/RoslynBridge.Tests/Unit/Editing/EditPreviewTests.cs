@@ -3,7 +3,7 @@
 
 using System.Text.Json.Nodes;
 using RoslynBridge.Editing;
-using RoslynBridge.Tools;
+using RoslynBridge.Output;
 
 namespace RoslynBridge.Tests.Unit.Editing;
 
@@ -18,10 +18,10 @@ public sealed class EditPreviewTests
             ["applied"] = false,
             ["fileCount"] = 1,
             ["files"] = new JsonArray(new JsonObject { ["path"] = "Source.cs" }),
-            ["command"] = new string('x', LspTool.PreviewBudgetCharacters),
+            ["command"] = new string('x', ResultText.PreviewBudgetCharacters),
         };
 
-        var limited = EditPreview.Limit(preview, LspTool.PreviewBudgetCharacters);
+        var limited = EditPreview.Limit(preview, ResultText.PreviewBudgetCharacters);
 
         limited["proposalId"]!.GetValue<string>().Should().Be("proposal");
         limited["files"]!.AsArray().Should().ContainSingle();
@@ -30,6 +30,6 @@ public sealed class EditPreviewTests
         limited
             .ToJsonString(BridgeJsonContext.Default.Options)
             .Length.Should()
-            .BeLessThanOrEqualTo(LspTool.PreviewBudgetCharacters);
+            .BeLessThanOrEqualTo(ResultText.PreviewBudgetCharacters);
     }
 }

@@ -1,12 +1,13 @@
 // Copyright (C) RoslynBridge contributors
 // SPDX-License-Identifier: GPL-3.0-only
 
-using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.Extensions.Logging.Abstractions;
-using ModelContextProtocol.Protocol;
+using RoslynBridge.Changes;
 using RoslynBridge.Editing;
 using RoslynBridge.Lsp;
+using RoslynBridge.Queries;
+using RoslynBridge.Requests;
 using RoslynBridge.Symbols;
 using RoslynBridge.Tests.Fakes;
 using RoslynBridge.Tools;
@@ -33,24 +34,6 @@ public sealed class LspToolTests : IDisposable
         Task Execute() => tool.ExecuteAsync(new LspRequest { Action = LspAction.Symbols }, TestCt);
     }
 
-    [Fact]
-    public async Task ErrorTextCarriesTheStructuredErrorAsync()
-    {
-        await using var session = CreateSession(FakeServer());
-        using var tool = CreateTool(session);
-
-        var response = await tool.ExecuteAsync(
-            new LspRequest { Action = LspAction.Symbols, Limit = 0 },
-            TestCt
-        );
-
-        var text = response.Content.OfType<TextContentBlock>().Single().Text;
-        JsonNode.Parse(text)!["error"]!["code"]!
-            .GetValue<string>()
-            .Should()
-            .Be(LspTool.InvalidRequestErrorCode);
-    }
-
     [Theory]
     [InlineData(LspMethods.Initialize)]
     [InlineData(LspMethods.TextDocumentDidOpen)]
@@ -71,7 +54,7 @@ public sealed class LspToolTests : IDisposable
             TestCt
         );
 
-        ErrorCode(response).Should().Be(LspTool.InvalidRequestErrorCode);
+        ErrorCode(response).Should().Be(ErrorCodes.InvalidRequest);
     }
 
     [Theory]
@@ -92,7 +75,7 @@ public sealed class LspToolTests : IDisposable
             TestCt
         );
 
-        ErrorCode(response).Should().Be(LspTool.InvalidRequestErrorCode);
+        ErrorCode(response).Should().Be(ErrorCodes.InvalidRequest);
     }
 
     [Fact]
@@ -105,7 +88,10 @@ public sealed class LspToolTests : IDisposable
                 {
                     await server.RequestClientAsync(
                         LspMethods.WorkspaceApplyEdit,
-                        new JsonObject { ["edit"] = Changes(source, TextEdit(0, 6, 0, 7, "B")) },
+                        new JsonObject
+                        {
+                            ["edit"] = WorkspaceChanges(source, TextEdit(0, 6, 0, 7, "B")),
+                        },
                         TestCt
                     );
                     throw new LocalRpcException("The command failed after its edit.");
@@ -125,18 +111,12 @@ public sealed class LspToolTests : IDisposable
             TestCt
         );
 
-        ErrorCode(response).Should().Be(LspTool.LspErrorCode);
-        var payload = response.StructuredContent!.Value;
-        payload
-            .GetProperty("error")
-            .GetProperty("phase")
-            .Deserialize(BridgeJsonContext.Default.EditApplicationPhase)
+        ErrorCode(response).Should().Be(ErrorCodes.Lsp);
+        ResponseText(response)
             .Should()
-            .Be(EditApplicationPhase.Command);
-        var result = payload.GetProperty("result");
-        result.GetProperty("synchronized").GetBoolean().Should().BeFalse();
-        result.GetProperty("fileCount").GetInt32().Should().Be(1);
-        result.GetProperty("files")[0].GetProperty("path").GetString().Should().Be("Source.cs");
+            .Contain("failed step: command")
+            .And.Contain("applied: 1 file, 1 operation, Roslyn not synchronized")
+            .And.Contain("change Source.cs");
         await AssertFileTextAsync(source, "class B {}");
     }
 
@@ -157,7 +137,7 @@ public sealed class LspToolTests : IDisposable
 
         var response = await tool.ExecuteAsync(SymbolQuery(), TestCt);
 
-        ErrorCode(response).Should().Be(LspTool.LoadingErrorCode);
+        ErrorCode(response).Should().Be(ErrorCodes.Loading);
         session.IsLoading.Should().BeTrue();
     }
 
@@ -216,12 +196,7 @@ public sealed class LspToolTests : IDisposable
         load.SetResult();
         await waiting;
 
-        status
-            .StructuredContent!.Value.GetProperty("result")
-            .GetProperty("loading")
-            .GetBoolean()
-            .Should()
-            .BeTrue();
+        ResponseText(status).Should().Contain("loading: true");
     }
 
     public void Dispose() => Directory.Delete(_root, recursive: true);
@@ -258,7 +233,4 @@ public sealed class LspToolTests : IDisposable
             NullLogger<LspTool>.Instance
         );
     }
-
-    private static string? ErrorCode(CallToolResult response) =>
-        response.StructuredContent!.Value.GetProperty("error").GetProperty("code").GetString();
 }

@@ -66,5 +66,5 @@ public sealed class ClientCallbacksTests : IDisposable
         new(session, paths, NullLogger<RoslynSession>.Instance, new TaskCompletionSource());
 
     private static JsonObject RenameClassEdit(string source) =>
-        Changes(source, TextEdit(0, 6, 0, 12, "After"));
+        WorkspaceChanges(source, TextEdit(0, 6, 0, 12, "After"));
 }

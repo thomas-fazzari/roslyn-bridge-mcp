@@ -4,7 +4,10 @@
 using System.Globalization;
 using System.Text.Json.Nodes;
 using RoslynBridge.Editing;
+using RoslynBridge.Output;
+using RoslynBridge.Requests;
 using RoslynBridge.Tools;
+using static RoslynBridge.Tests.Unit.TestHelpers;
 
 namespace RoslynBridge.Tests.Unit.Tools;
 
@@ -27,54 +30,53 @@ public sealed class LspApplicationTests
             ["files"] = files,
         };
 
-        var limited = EditPreview.Limit(preview, LspTool.PreviewBudgetCharacters);
+        var limited = EditPreview.Limit(preview, ResultText.PreviewBudgetCharacters);
         var response = LspTool.Response(LspAction.Rename, limited);
 
         response.IsError.Should().BeFalse();
-        var result = response.StructuredContent!.Value.GetProperty("result");
-        result.GetProperty("proposalId").GetString().Should().Be("proposal");
-        result.GetProperty("filesTruncated").GetBoolean().Should().BeTrue();
+        ResponseText(response)
+            .Should()
+            .StartWith("proposal proposal: 4000 files, not applied")
+            .And.Contain("files shown");
     }
 
     [Fact]
     public void LargeReadOnlyResultsStillReportTheLimit()
     {
-        var response = LspTool.Response(
-            LspAction.References,
-            JsonValue.Create(new string('x', LspTool.MaximumResponseCharacters))
-        );
+        var locations = new JsonObject
+        {
+            ["items"] = new JsonArray(
+                new JsonObject
+                {
+                    ["file"] = new string('x', ResultText.MaximumResponseCharacters),
+                    ["positions"] = new JsonArray(new JsonArray(1, 1)),
+                }
+            ),
+            ["total"] = 1,
+        };
+
+        var response = LspTool.Response(LspAction.References, locations);
 
         response.IsError.Should().BeTrue();
-        response
-            .StructuredContent!.Value.GetProperty("error")
-            .GetProperty("code")
-            .GetString()
-            .Should()
-            .Be(LspTool.ResultTooLargeErrorCode);
+        ErrorCode(response).Should().Be(ErrorCodes.ResultTooLarge);
     }
 
     [Fact]
     public void LargeCommandResponsePreservesAppliedFiles()
     {
         var result = ApplicationResult(new JsonObject { ["path"] = "Source.cs" });
-        result["commandResult"] = new string('x', LspTool.MaximumResponseCharacters);
+        result["commandExecuted"] = true;
+        result["commandResult"] = new string('x', ResultText.MaximumResponseCharacters);
 
         var response = LspTool.Response(LspAction.Request, result, preserveApplication: true);
 
         response.IsError.Should().NotBeTrue();
-        var payload = response.StructuredContent!.Value;
-        var application = payload.GetProperty("result");
-        application.GetProperty("applied").GetBoolean().Should().BeTrue();
-        application.GetProperty("fileCount").GetInt32().Should().Be(1);
-        application
-            .GetProperty("files")[0]
-            .GetProperty("path")
-            .GetString()
-            .Should()
-            .Be("Source.cs");
-        application.GetProperty("commandResultTruncated").GetBoolean().Should().BeTrue();
-        application.TryGetProperty("commandResult", out _).Should().BeFalse();
-        payload.GetRawText().Length.Should().BeLessThanOrEqualTo(LspTool.MaximumResponseCharacters);
+        var text = ResponseText(response);
+        text.Should()
+            .StartWith("applied: 1 file")
+            .And.Contain("change Source.cs")
+            .And.Contain("result omitted");
+        text.Length.Should().BeLessThanOrEqualTo(ResultText.MaximumResponseCharacters);
     }
 
     [Fact]
@@ -96,20 +98,17 @@ public sealed class LspApplicationTests
         );
 
         response.IsError.Should().NotBeTrue();
-        var payload = response.StructuredContent!.Value;
-        var application = payload.GetProperty("result");
-        application.GetProperty("applied").GetBoolean().Should().BeTrue();
-        application.GetProperty("fileCount").GetInt32().Should().Be(files.Length);
-        application.GetProperty("filesTruncated").GetBoolean().Should().BeTrue();
-        var included = application.GetProperty("files");
-        included.GetArrayLength().Should().BeInRange(1, files.Length - 1);
-        included[0].GetProperty("path").GetString().Should().Be(path + "0");
-        payload.GetRawText().Length.Should().BeLessThanOrEqualTo(LspTool.MaximumResponseCharacters);
+        var text = ResponseText(response);
+        text.Should()
+            .StartWith("applied: 64 files")
+            .And.Contain($"change {path}0\n")
+            .And.Contain("more operations not shown");
+        text.Length.Should().BeLessThanOrEqualTo(ResultText.MaximumResponseCharacters);
     }
 
     [Theory]
-    [InlineData(true, LspTool.CancelledErrorCode)]
-    [InlineData(false, LspTool.TimeoutErrorCode)]
+    [InlineData(true, ErrorCodes.Cancelled)]
+    [InlineData(false, ErrorCodes.Timeout)]
     public void CancellationKeepsTheCompletedWriteReceipt(bool cancelled, string expectedCode)
     {
         var exception = new EditApplicationException(
@@ -123,10 +122,10 @@ public sealed class LspApplicationTests
         var response = LspTool.ApplicationFailure(LspAction.Rename, exception, cancelled);
 
         response.IsError.Should().BeTrue();
-        var payload = response.StructuredContent!.Value;
-        payload.GetProperty("error").GetProperty("code").GetString().Should().Be(expectedCode);
-        payload.GetProperty("result").GetProperty("applied").GetBoolean().Should().BeTrue();
-        payload.GetProperty("result").GetProperty("synchronized").GetBoolean().Should().BeFalse();
+        ErrorCode(response).Should().Be(expectedCode);
+        ResponseText(response)
+            .Should()
+            .Contain("applied: 1 file, 1 operation, Roslyn not synchronized");
     }
 
     private static JsonObject ApplicationResult(params JsonObject[] files) =>

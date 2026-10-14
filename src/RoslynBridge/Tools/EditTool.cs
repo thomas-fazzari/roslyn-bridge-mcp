@@ -5,6 +5,7 @@ using System.ComponentModel;
 using System.Text.Json.Serialization;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
+using RoslynBridge.Requests;
 
 namespace RoslynBridge.Tools;
 

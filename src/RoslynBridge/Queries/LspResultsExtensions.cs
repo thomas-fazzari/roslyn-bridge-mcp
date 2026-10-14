@@ -4,7 +4,7 @@
 using System.Text.Json.Nodes;
 using RoslynBridge.Lsp;
 
-namespace RoslynBridge.Tools;
+namespace RoslynBridge.Queries;
 
 /// <summary>
 /// Converts Roslyn results to the compact, one-based shapes returned by the tool.

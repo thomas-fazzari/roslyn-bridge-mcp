@@ -4,6 +4,10 @@ SESSION AND RAW REQUESTS
 Session status:
 lsp {"action":"status"}
 
+Status returns running, loading, workspace and server lines, such as
+running: true
+loading: false
+
 Server capabilities:
 lsp {"action":"capabilities"}
 

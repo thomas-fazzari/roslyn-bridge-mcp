@@ -5,9 +5,10 @@ using System.Diagnostics;
 using System.Text.Json.Nodes;
 using Microsoft.Extensions.FileSystemGlobbing;
 using RoslynBridge.Lsp;
+using RoslynBridge.Requests;
 using RoslynBridge.Symbols;
 
-namespace RoslynBridge.Tools;
+namespace RoslynBridge.Queries;
 
 internal sealed class LspQueries(
     RoslynSession session,

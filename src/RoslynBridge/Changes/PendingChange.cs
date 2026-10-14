@@ -4,8 +4,9 @@
 using System.Diagnostics;
 using System.Text.Json.Nodes;
 using RoslynBridge.Editing;
+using RoslynBridge.Requests;
 
-namespace RoslynBridge.Tools;
+namespace RoslynBridge.Changes;
 
 [DebuggerDisplay("{Action} created {CreatedAt}, {Snapshot.Fingerprints.Count} files")]
 internal sealed record PendingChange(

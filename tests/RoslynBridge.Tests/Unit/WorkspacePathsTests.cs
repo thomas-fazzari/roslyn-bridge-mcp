@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 using System.Runtime.Versioning;
-using RoslynBridge.Tools;
 using static RoslynBridge.Tests.Unit.TestHelpers;
 
 namespace RoslynBridge.Tests.Unit;
@@ -93,7 +92,7 @@ public sealed class WorkspacePathsTests : IDisposable
             .Should()
             .Throw<ToolErrorException>()
             .Which.Error.Code.Should()
-            .Be(LspTool.InvalidRequestErrorCode);
+            .Be(ErrorCodes.InvalidRequest);
 
         string Resolve() => new WorkspacePaths(_root).Resolve("src/A\0.cs");
     }
@@ -130,7 +129,7 @@ public sealed class WorkspacePathsTests : IDisposable
             .Should()
             .Throw<ToolErrorException>()
             .Which.Error.Code.Should()
-            .Be(LspTool.InvalidRequestErrorCode);
+            .Be(ErrorCodes.InvalidRequest);
         return;
 
         string Resolve() =>

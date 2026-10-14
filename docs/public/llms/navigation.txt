@@ -45,28 +45,38 @@ Use symbols to locate a declaration, then navigation for semantic relationships.
 
 RESULTS
 -------
-Definition, type_definition, implementation and references return:
-{"items":[{"file":"src/Foo.cs","positions":[[42,17],[81,9]]}],"total":2,"truncated":false}
-Positions are [line, character], both one-based, with UTF-16 characters.
-Files inside the workspace use relative paths. External and generated locations
-keep their absolute URI. Location links use the target selection start.
-total counts occurrences before limiting. limit caps occurrences, not files.
-limit defaults to 50 and accepts 1 through 250. Inspect truncated before claiming
-a complete reference or implementation list. No matches returns items: [].
+Results are text lines. Positions are line:character, both one-based, with
+UTF-16 characters. Files inside the workspace use relative paths. External and
+generated locations keep their absolute URI.
 
-callers, callees, supertypes and subtypes return:
-{"items":[{"symbol":"MyApp.Consumer.Run(IGreeter)","kind":"method","file":"src/Consumer.cs","position":[7,26],"calls":[[7,59]]}],"total":1,"truncated":false}
-symbol can be sent back unchanged as the symbol argument. A result outside the
-workspace keeps Roslyn's name instead. calls is present only for callers and callees.
+definition, type_definition, implementation and references return one line per file:
+src/Foo.cs 42:17 81:9
+Location links use the target selection start. limit caps occurrences, not
+files. limit defaults to 50 and accepts 1 through 250. A final line starting with
+"truncated:" gives the total count. Inspect it before claiming a complete
+reference or implementation list. No match returns "no locations".
+
+callers, callees, supertypes and subtypes return one line per symbol:
+src/Consumer.cs:7:26 method MyApp.Consumer.Run(IGreeter)
+  calls 7:59
+The line gives the declaration position, the kind and then the symbol name.
+Send everything after the kind back unchanged as the symbol argument. A result
+outside the workspace keeps Roslyn's name. The calls line is present only for
+callers and callees.
 
 CONTEXT
 -------
-Add "context":true to receive lines, a map from line number to the trimmed source
-line of each result, without reading the file:
+Add "context":true to see the trimmed source line of each position without
+reading the file:
 navigate {"action":"references","symbol":"Calculator.Add","context":true}
-For callers and callees, lines holds the call sites. Callee call sites are in the
-requested file. context uses more tokens, so request it only when needed.
+Each position then gets its own indented line:
+src/Foo.cs
+  42:17 var sum = calculator.Add(1, 2);
+For callers and callees, the lines are the call sites. Callee call sites are in
+the requested file. context uses more tokens, so request it only when needed.
 
-Symbols return items with name, kind, file and position. Document symbols omit
-file and nest members in children. Hover returns {"text":"..."} in Markdown.
-Use the lsp tool with action=request for raw LSP locations, full ranges and location link metadata.
+Symbols use the same line shape. Document symbols omit the file and indent
+members under their container. Workspace symbols end with "in CONTAINER".
+Hover returns its Markdown text.
+Use the lsp tool with action=request for raw LSP locations, full ranges and
+location link metadata. Raw results and capabilities are JSON.

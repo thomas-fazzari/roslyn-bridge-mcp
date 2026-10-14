@@ -62,7 +62,7 @@ public sealed class SessionStartupTests : IDisposable
         var exception = (
             await FluentActions.Awaiting(Start).Should().ThrowAsync<Exception>()
         ).Which;
-        LspTool.FailureCode(exception).Should().Be(LspTool.IoErrorCode);
+        LspTool.FailureCode(exception).Should().Be(ErrorCodes.Io);
         return;
 
         Task Start() => session.EnsureStartedAsync(TestCt);

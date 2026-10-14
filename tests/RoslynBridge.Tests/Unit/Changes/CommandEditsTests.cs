@@ -1,11 +1,11 @@
 // Copyright (C) RoslynBridge contributors
 // SPDX-License-Identifier: GPL-3.0-only
 
+using RoslynBridge.Changes;
 using RoslynBridge.Editing;
-using RoslynBridge.Tools;
 using static RoslynBridge.Tests.Unit.TestHelpers;
 
-namespace RoslynBridge.Tests.Unit.Tools;
+namespace RoslynBridge.Tests.Unit.Changes;
 
 public sealed class CommandEditsTests : IDisposable
 {
@@ -34,7 +34,7 @@ public sealed class CommandEditsTests : IDisposable
         );
 
         var acknowledgement = await commandEdits.ApplyAsync(
-            Changes(path, TextEdit(0, 6, 0, 7, "B")),
+            WorkspaceChanges(path, TextEdit(0, 6, 0, 7, "B")),
             TestCt
         );
 
@@ -49,7 +49,7 @@ public sealed class CommandEditsTests : IDisposable
         await AssertFileTextAsync(path, "class B {}");
 
         var rejected = await commandEdits.ApplyAsync(
-            Changes(path, TextEdit(0, 6, 0, 7, "C")),
+            WorkspaceChanges(path, TextEdit(0, 6, 0, 7, "C")),
             TestCt
         );
 
@@ -71,9 +71,15 @@ public sealed class CommandEditsTests : IDisposable
             TestCt
         );
 
-        var first = await commandEdits.ApplyAsync(Changes(path, TextEdit(0, 6, 0, 7, "B")), TestCt);
+        var first = await commandEdits.ApplyAsync(
+            WorkspaceChanges(path, TextEdit(0, 6, 0, 7, "B")),
+            TestCt
+        );
         var second = await commandEdits.ApplyAsync(
-            Changes(Path.Combine(_root, "Missing.cs"), TextEdit(0, 0, 0, 0, "class Missing {}")),
+            WorkspaceChanges(
+                Path.Combine(_root, "Missing.cs"),
+                TextEdit(0, 0, 0, 0, "class Missing {}")
+            ),
             TestCt
         );
 
@@ -121,12 +127,12 @@ public sealed class CommandEditsTests : IDisposable
             cancellationToken
         );
         var first = commandEdits.ApplyAsync(
-            Changes(firstPath, TextEdit(0, 6, 0, 7, "Changed")),
+            WorkspaceChanges(firstPath, TextEdit(0, 6, 0, 7, "Changed")),
             cancellationToken
         );
         await firstCaptureStarted.Task.WaitAsync(cancellationToken);
         var second = commandEdits.ApplyAsync(
-            Changes(secondPath, TextEdit(0, 6, 0, 7, "Changed")),
+            WorkspaceChanges(secondPath, TextEdit(0, 6, 0, 7, "Changed")),
             cancellationToken
         );
 
@@ -166,7 +172,7 @@ public sealed class CommandEditsTests : IDisposable
             cancellationToken
         );
         var pending = commandEdits.ApplyAsync(
-            Changes(path, TextEdit(0, 6, 0, 7, "B")),
+            WorkspaceChanges(path, TextEdit(0, 6, 0, 7, "B")),
             cancellationToken
         );
         await captureStarted.Task.WaitAsync(cancellationToken);
@@ -183,7 +189,7 @@ public sealed class CommandEditsTests : IDisposable
         commandEdits.Result["applied"]!.GetValue<bool>().Should().BeTrue();
         commandEdits.Result["fileCount"]!.GetValue<int>().Should().Be(1);
         var rejected = await commandEdits.ApplyAsync(
-            Changes(path, TextEdit(0, 6, 0, 7, "C")),
+            WorkspaceChanges(path, TextEdit(0, 6, 0, 7, "C")),
             cancellationToken
         );
         rejected["applied"]!.GetValue<bool>().Should().BeFalse();

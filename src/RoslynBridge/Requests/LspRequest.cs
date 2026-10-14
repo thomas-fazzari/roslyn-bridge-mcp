@@ -3,7 +3,7 @@
 
 using System.Text.Json.Nodes;
 
-namespace RoslynBridge.Tools;
+namespace RoslynBridge.Requests;
 
 /// <summary>
 /// One operation dispatched by a tool to the shared Roslyn session.

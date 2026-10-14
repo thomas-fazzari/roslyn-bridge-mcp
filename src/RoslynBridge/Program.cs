@@ -6,8 +6,10 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol;
+using RoslynBridge.Changes;
 using RoslynBridge.Editing;
 using RoslynBridge.Lsp;
+using RoslynBridge.Queries;
 using RoslynBridge.Symbols;
 using RoslynBridge.Tools;
 

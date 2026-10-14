@@ -16,8 +16,8 @@ Paths are workspace-relative. Inputs and results use one-based lines and
 one-based UTF-16 characters, so returned positions can be reused as inputs.
 Raw LSP requests keep zero-based coordinates.
 
-Read the MCP structured result. Successful calls contain action and result
-fields. Failed calls contain an error field and set isError.
+Results are compact text lines. Failed calls start with "error CODE: message"
+and set isError. Raw LSP results and capabilities are JSON.
 An error, incomplete report or truncated result does not establish success.
 
 REFERENCE FILES

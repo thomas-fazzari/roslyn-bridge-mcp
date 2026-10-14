@@ -4,6 +4,7 @@
 using System.ComponentModel;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
+using RoslynBridge.Requests;
 
 namespace RoslynBridge.Tools;
 

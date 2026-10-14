@@ -2,9 +2,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 using System.Text.Json.Nodes;
-using RoslynBridge.Tools;
+using RoslynBridge.Queries;
+using RoslynBridge.Requests;
 
-namespace RoslynBridge.Tests.Unit.Tools;
+namespace RoslynBridge.Tests.Unit.Queries;
 
 public sealed class LspResultsExtensionsTests
 {

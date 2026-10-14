@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 using System.ComponentModel;
-using System.Text.Json.Serialization;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
+using RoslynBridge.Requests;
 
 namespace RoslynBridge.Tools;
 
@@ -45,23 +45,4 @@ internal sealed class DiagnosticsTool(LspTool lsp)
             },
             cancellationToken
         );
-}
-
-/// <summary>
-/// LSP diagnostic severities, from most to least severe.
-/// </summary>
-[JsonConverter(typeof(JsonStringEnumConverter<DiagnosticSeverity>))]
-internal enum DiagnosticSeverity
-{
-    [JsonStringEnumMemberName("error")]
-    Error = 1,
-
-    [JsonStringEnumMemberName("warning")]
-    Warning = 2,
-
-    [JsonStringEnumMemberName("information")]
-    Information = 3,
-
-    [JsonStringEnumMemberName("hint")]
-    Hint = 4,
 }

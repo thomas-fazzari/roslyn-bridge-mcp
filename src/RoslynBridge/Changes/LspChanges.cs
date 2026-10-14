@@ -6,8 +6,11 @@ using System.Runtime.ExceptionServices;
 using System.Text.Json.Nodes;
 using RoslynBridge.Editing;
 using RoslynBridge.Lsp;
+using RoslynBridge.Output;
+using RoslynBridge.Queries;
+using RoslynBridge.Requests;
 
-namespace RoslynBridge.Tools;
+namespace RoslynBridge.Changes;
 
 [DebuggerDisplay("{_pending.Count} pending proposals")]
 internal sealed class LspChanges(
@@ -300,7 +303,7 @@ internal sealed class LspChanges(
             var preview = await edits.PreviewAsync(edit, change.Snapshot, cancellationToken);
             preview["proposalId"] = Remember(change);
             preview["command"] = change.Command?.DeepClone();
-            return EditPreview.Limit(preview, LspTool.PreviewBudgetCharacters);
+            return EditPreview.Limit(preview, ResultText.PreviewBudgetCharacters);
         }
 
         var result = await edits.ApplyAsync(edit, change.Snapshot, cancellationToken);

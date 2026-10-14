@@ -5,7 +5,7 @@ using System.Globalization;
 using System.Text.Json.Nodes;
 using RoslynBridge.Editing;
 
-namespace RoslynBridge.Tools;
+namespace RoslynBridge.Queries;
 
 /// <summary>
 /// Adds the saved source lines of navigation results, so callers can read each occurrence in place.

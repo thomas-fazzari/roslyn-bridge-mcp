@@ -3,7 +3,7 @@
 
 using System.Text.Json.Nodes;
 
-namespace RoslynBridge.Tools;
+namespace RoslynBridge;
 
 /// <summary>
 /// An expected failure, reported to the client as the structured error of a tool response.
@@ -12,11 +12,11 @@ namespace RoslynBridge.Tools;
 internal sealed record ToolError(string Code, string Message, JsonArray? Candidates = null)
 {
     public static ToolError InvalidRequest(string message) =>
-        new(LspTool.InvalidRequestErrorCode, message);
+        new(ErrorCodes.InvalidRequest, message);
 
-    public static ToolError InvalidLspData(string message) => new(LspTool.LspErrorCode, message);
+    public static ToolError InvalidLspData(string message) => new(ErrorCodes.Lsp, message);
 
-    public static ToolError StaleEdit(string message) => new(LspTool.StaleEditErrorCode, message);
+    public static ToolError StaleEdit(string message) => new(ErrorCodes.StaleEdit, message);
 }
 
 /// <summary>
@@ -40,4 +40,22 @@ internal readonly struct Result<T>(T value, ToolError? error)
     public static implicit operator Result<T>(T value) => new(value, error: null);
 
     public static implicit operator Result<T>(ToolError error) => new(default!, error);
+}
+
+/// <summary>
+/// The error codes that tool responses report.
+/// </summary>
+internal static class ErrorCodes
+{
+    internal const string InvalidRequest = "invalid_request";
+    internal const string StaleEdit = "stale_edit";
+    internal const string Loading = "loading";
+    internal const string Timeout = "timeout";
+    internal const string Cancelled = "cancelled";
+    internal const string Lsp = "lsp_error";
+    internal const string Io = "io_error";
+    internal const string ResultTooLarge = "result_too_large";
+    internal const string Internal = "internal_error";
+    internal const string SymbolNotFound = "symbol_not_found";
+    internal const string AmbiguousSymbol = "ambiguous_symbol";
 }

@@ -36,63 +36,89 @@ Arguments are passed directly to each tool:
 
 `navigate` and `edit` accept a `symbol` name instead of a position, for example `Calculator.Add`.
 The name matches the end of the fully qualified name. A parameter list selects an overload, as in `Calculator.Add(int, int)`.
-A constructor needs its parameter list. An ambiguous name returns the error `ambiguous_symbol` with up to 20 `candidates`.
-Each candidate `symbol` can be sent back unchanged. When candidates share a name, send the `symbol` with the candidate's `file`.
+A constructor needs its parameter list. An ambiguous name returns the error `ambiguous_symbol` with up to 20 candidates, one per line.
+Each candidate symbol can be sent back unchanged. When candidates share a name, send the symbol with the candidate's file.
 
 Paths are relative to the workspace. Input coordinates start at **1**, with characters counted as UTF-16 code units.
-Navigation results group occurrences by file in `items`, with one-based `[line, character]` pairs in `positions`.
-This applies to `definition`, `type_definition`, `implementation` and `references`.
-`total` counts occurrences before limiting, and `truncated` reports omitted occurrences.
-Workspace files use relative paths. External and generated locations keep their absolute URI.
-Location links use the target selection start. Use the `lsp` tool with `action=request` for full LSP ranges and metadata.
-`callers`, `callees`, `supertypes` and `subtypes` return `items` of related symbols.
-Each item gives a `symbol` name that `navigate` and `edit` accept unchanged, its `kind`, `file` and one-based `position`.
-Calls also list their call sites in `calls`. Set `context` to add `lines`, the trimmed source line of each result.
-For `callers`, call sites are in the caller's file. For `callees`, they are in the requested file.
-`hover` returns its Markdown `text`. `symbols` returns `items` with the same symbol fields, nested in `children` for a file.
 Only raw requests keep zero-based LSP positions.
 
+## Results
+
+Results are compact text lines, with positions written `line:character`. Failed calls start with `error CODE: message` and set `isError`.
+Raw requests and `capabilities` return JSON.
+
+`definition`, `type_definition`, `implementation` and `references` return one line per file:
+
+```text
+src/Calculator.cs 12:9 40:17
+```
+
+Workspace files use relative paths. External and generated locations keep their absolute URI.
+Location links use the target selection start. Use the `lsp` tool with `action=request` for full LSP ranges and metadata.
+
+`callers`, `callees`, `supertypes` and `subtypes` return one line per symbol: its declaration, its kind and its name.
+Everything after the kind is a symbol name that `navigate` and `edit` accept unchanged.
+Calls add an indented line with their call sites:
+
+```text
+src/Consumer.cs:7:26 method MyApp.Consumer.Run(IGreeter)
+  calls 7:59
+```
+
+Set `context` to show each position on its own line with its trimmed source line.
+For `callers`, call sites are in the caller's file. For `callees`, they are in the requested file.
+`hover` returns its Markdown text. `symbols` uses the same symbol lines, indented under their container for a file.
+A final `truncated:` line gives the total when `limit` omitted results.
+
 For diagnostics, omit `file` to scan C# files or use a glob such as `src/**/*.cs`.
-`filesChecked` counts scanned files. `filesWithDiagnostics` counts files with diagnostics before limiting.
-`diagnostics` contains only file entries with returned diagnostics. `total` counts all diagnostics found at the selected severity.
 `severity` defaults to `warning`, which reports errors and warnings. Set it to `information` or `hint` to include analyzer suggestions.
-`belowSeverity` counts the diagnostics left out by the severity filter.
-Each diagnostic gives its one-based start `line` and `character`, its `severity`, `code` and `message`.
-`complete` is false when a scanned file is not attached to a project, for example a file outside every project.
-These files are listed in `miscellaneousFiles` and get no semantic diagnostics. A newly created file gets a few seconds to join its project first. When `truncated` is true, omitted files are not necessarily clean.
+Each file with diagnostics is followed by one indented line per diagnostic, then a summary:
+
+```text
+src/Problems.cs
+  5:19 error CS0246 The type or namespace name 'List<>' could not be found
+4 files checked, 1 diagnostic in 1 file, 3 below the severity
+```
+
+A line starting with `incomplete:` lists files not attached to a project, for example a file outside every project.
+These files get no semantic diagnostics. A newly created file gets a few seconds to join its project first.
+After a `truncated:` line, omitted files are not necessarily clean.
 `limit` defaults to 50 and accepts 1 to 250. Narrow the query if results are truncated or too large.
 
 ## Preview and apply
 
-The `edit` tool returns an edit preview and a `proposalId`. Apply that preview with the same action:
+The `edit` tool returns an edit preview whose first line holds its proposal ID. Apply that preview with the same action:
 
 ```json
 { "action": "rename", "proposalId": "id-from-preview", "apply": true }
 ```
 
-For code actions, request the listing, then send its `proposalId` and zero-based `actionIndex` to resolve a preview.
-Apply the preview with its new `proposalId`. Set `endLine` and `endCharacter` when an action needs a selection.
+For code actions, request the listing, then send its proposal ID and zero-based `actionIndex` to resolve a preview.
+Apply the preview with its new proposal ID. Set `endLine` and `endCharacter` when an action needs a selection.
 Some Roslyn commands reveal their edits only when executed.
 
-Each preview file contains `changes` with short `before` and `after` excerpts.
-Each excerpt gives its start and exclusive end position. Lines and UTF-16 characters start at **1**.
-Unchanged surrounding text is omitted. `previewTruncated` means some changes could not be fully shown within the comparison or display limits.
-The preview response is limited to 32 000 serialized characters. `filesTruncated` marks omitted files while `fileCount` keeps the full total.
-`commandPreviewTruncated` marks an omitted command description. These limits leave the proposed edit unchanged.
+A preview lists each file operation, followed by its changed excerpts with their one-based start:
+
+```text
+proposal 3f2a9c: 1 file, not applied
+change src/Calculator.cs
+@@ 12:9
+- int Add(int a, int b)
++ int Compute(int a, int b)
+```
+
+Excerpts keep some unchanged context. A `preview truncated:` line means some changes could not be fully shown within the comparison or display limits.
+The preview response is limited to 32 000 characters. A `truncated:` line marks omitted files.
+These limits leave the proposed edit unchanged.
 
 Proposals expire after five minutes. If source files change, `stale_edit` requires a new preview.
 Reloading also discards proposals. Applied file creation, deletion and renaming reload Roslyn before the next request.
 
 Application results contain a compact receipt, without source excerpts.
-`applied` reports whether the requested file writes finished. `synchronized` reports whether Roslyn was refreshed.
-If a later step fails, the response includes both `result` and `error`. The receipt still describes completed writes.
-`error.phase` identifies the failed step. A write failure also includes its path and operation.
-Inspect these fields before retrying. The next request reloads Roslyn after an application failure.
-
-`fileCount` counts distinct paths touched. `files` lists completed operations in order, so a path can appear more than once.
-`operationCount` counts those operations.
-Large receipts retain their totals and set `filesTruncated` when some paths are omitted.
-Commands also return `commandExecuted` and `commandResult`. An oversized command result is omitted with `commandResultTruncated`.
+The first line says whether the writes finished and whether Roslyn was refreshed. One line per completed operation follows, so a path can appear more than once.
+If a later step fails, the response starts with the error and the failed step, followed by the receipt of completed writes.
+Inspect both before retrying. The next request reloads Roslyn after an application failure.
+Large receipts keep their totals and end with a `truncated:` line when some operations are omitted. An oversized command result is omitted.
 
 ## Limits
 

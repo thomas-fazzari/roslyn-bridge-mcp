@@ -42,11 +42,20 @@ edit {"action":"code_actions","proposalId":"ID_FROM_PREVIEW","apply":true}
 Do not reuse the listing ID in place of the resolved preview ID.
 Some command-based actions reveal their edits only during execution.
 
-Each preview file contains changes with before and after excerpts around edited text.
-startLine, startCharacter, endLine and endCharacter use one-based UTF-16 positions.
-The end position is exclusive. previewTruncated marks an incomplete view of the changes.
-The serialized preview is limited to 32 000 characters. filesTruncated marks omitted
-files, and commandPreviewTruncated marks an omitted command description.
+A listing starts with "proposal ID", then one line per action: its zero-based
+index, its kind when Roslyn gives one, and its title:
+0 quickfix using System.Collections.Generic;
+
+A preview starts with "proposal ID: N files, not applied". Each file operation
+follows (change, create, delete, or rename OLD -> NEW), then its excerpts:
+@@ 12:9
+- int Add(int a, int b)
++ int Compute(int a, int b)
+@@ gives the one-based start of the excerpt, followed by "-> LINE:CHARACTER"
+when the start differs in the new text. Excerpts keep some unchanged context.
+"preview truncated:" marks an incomplete view of the changes.
+The preview is limited to 32 000 characters. "truncated: N of M files shown"
+marks omitted files, and "command omitted" an omitted command description.
 These display limits do not change the edit stored by proposalId.
 
 PROPOSAL LIFETIME AND FAILURES
@@ -56,14 +65,18 @@ On stale_edit, request a new preview against current files. Do not retry the old
 After applying, inspect the result and rerun diagnostics on affected files.
 File creation, deletion and renaming trigger a Roslyn reload before the next request.
 
-Application results contain completed file operations without source excerpts.
-applied reports completed writes. synchronized reports a successful Roslyn refresh.
-On a later failure, both result and error are present. Read the receipt and error.phase
-before retrying. A failed write also identifies its path and operation.
-The next request reloads Roslyn after an application failure.
-fileCount counts distinct paths. files lists completed operations in order.
-operationCount counts those operations.
-filesTruncated marks omitted paths. commandResultTruncated marks an omitted command result.
+An application result starts with a status line, then one line per completed
+file operation, in order:
+applied: 2 files, 2 operations, Roslyn synchronized
+change src/Calculator.cs
+change src/Program.cs
+The status is applied, partially applied or not applied. "Roslyn synchronized"
+reports a successful Roslyn refresh. Commands add "command executed" and their
+result. On a later failure, the response starts with "error CODE: message" and
+"failed step: STEP", with the failed path and operation when known, and then
+the receipt. Read both before retrying. The next request reloads Roslyn after
+an application failure. Large receipts end with "truncated: N more operations
+not shown" or "result omitted".
 
 Edits must remain inside the workspace. Symlinks below its root are rejected.
 Each file replacement is atomic. A failed multi-file operation can leave partial

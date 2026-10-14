@@ -3,7 +3,7 @@
 
 using System.Text.Json.Serialization;
 
-namespace RoslynBridge.Tools;
+namespace RoslynBridge.Requests;
 
 [JsonConverter(typeof(JsonStringEnumConverter<LspAction>))]
 internal enum LspAction

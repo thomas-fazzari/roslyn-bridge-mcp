@@ -4,7 +4,7 @@
 using System.Text.Json.Nodes;
 using RoslynBridge.Editing;
 
-namespace RoslynBridge.Tools;
+namespace RoslynBridge.Changes;
 
 internal sealed class CommandEdits(
     WorkspaceEditService edits,

@@ -4,10 +4,11 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.Text.Json;
-using System.Text.Json.Nodes;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
+using RoslynBridge.Requests;
 using RoslynBridge.Tools;
+using static RoslynBridge.Tests.Unit.TestHelpers;
 
 namespace RoslynBridge.Tests.Integration.Roslyn;
 
@@ -67,13 +68,12 @@ internal sealed class RoslynTestWorkspace : IAsyncDisposable
     public Task WriteFileAsync(string relativePath, string text) =>
         File.WriteAllTextAsync(FilePath(relativePath), text, _cancellationToken);
 
-    public async Task<JsonObject> CallAsync(LspRequest request)
+    public async Task<string> CallAsync(LspRequest request)
     {
         var response = await CallRawAsync(request).ConfigureAwait(false);
-        response.StructuredContent.Should().NotBeNull(JsonSerializer.Serialize(response));
-        var content = JsonSerializer.SerializeToNode(response.StructuredContent)!.AsObject();
-        response.IsError.Should().NotBeTrue(content.ToJsonString());
-        return content;
+        var text = ResponseText(response);
+        response.IsError.Should().NotBeTrue(text);
+        return text;
     }
 
     public async Task<CallToolResult> CallRawAsync(LspRequest request)

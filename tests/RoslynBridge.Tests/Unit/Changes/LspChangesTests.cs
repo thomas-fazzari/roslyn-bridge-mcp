@@ -3,15 +3,18 @@
 
 using System.Text.Json.Nodes;
 using Microsoft.Extensions.Logging.Abstractions;
+using RoslynBridge.Changes;
 using RoslynBridge.Editing;
 using RoslynBridge.Lsp;
+using RoslynBridge.Queries;
+using RoslynBridge.Requests;
 using RoslynBridge.Symbols;
 using RoslynBridge.Tests.Fakes;
 using RoslynBridge.Tools;
 using StreamJsonRpc;
 using static RoslynBridge.Tests.Unit.TestHelpers;
 
-namespace RoslynBridge.Tests.Unit.Tools;
+namespace RoslynBridge.Tests.Unit.Changes;
 
 public sealed class LspChangesTests : IDisposable
 {
@@ -37,7 +40,7 @@ public sealed class LspChangesTests : IDisposable
         }
 
         var oldest = await changes.ExecuteAsync(Proposal(proposals[0]), TestCt);
-        oldest.Error!.Code.Should().Be(LspTool.InvalidRequestErrorCode);
+        oldest.Error!.Code.Should().Be(ErrorCodes.InvalidRequest);
 
         // Each use remembers a new preview, which evicts the oldest remaining proposal
         foreach (var proposal in proposals[^LspChanges.MaximumPendingProposals..])
@@ -67,7 +70,7 @@ public sealed class LspChangesTests : IDisposable
             TestCt
         );
 
-        result.Error!.Code.Should().Be(LspTool.InvalidRequestErrorCode);
+        result.Error!.Code.Should().Be(ErrorCodes.InvalidRequest);
     }
 
     [Fact]
@@ -112,7 +115,7 @@ public sealed class LspChangesTests : IDisposable
         var pending = new PendingChange(
             LspAction.RenameFile,
             snapshot,
-            Changes(path, TextEdit(0, 6, 0, 7, "B")),
+            WorkspaceChanges(path, TextEdit(0, 6, 0, 7, "B")),
             Command: null,
             RenamesFiles: true
         );
@@ -123,13 +126,15 @@ public sealed class LspChangesTests : IDisposable
             .ThrowAsync<EditApplicationException>();
 
         failure.Which.Phase.Should().Be(EditApplicationPhase.Synchronize);
-        LspTool
-            .ApplicationFailure(LspAction.RenameFile, failure.Which, cancellationRequested: false)
-            .StructuredContent!.Value.GetProperty("error")
-            .GetProperty("code")
-            .GetString()
+        ErrorCode(
+                LspTool.ApplicationFailure(
+                    LspAction.RenameFile,
+                    failure.Which,
+                    cancellationRequested: false
+                )
+            )
             .Should()
-            .Be(LspTool.IoErrorCode);
+            .Be(ErrorCodes.Io);
         failure.Which.Result["applied"]!.GetValue<bool>().Should().BeTrue();
         failure.Which.Result["fileCount"]!.GetValue<int>().Should().Be(1);
         await AssertFileTextAsync(path, "class B {}");

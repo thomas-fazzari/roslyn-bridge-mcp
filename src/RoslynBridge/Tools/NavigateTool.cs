@@ -5,6 +5,7 @@ using System.ComponentModel;
 using System.Text.Json.Serialization;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
+using RoslynBridge.Requests;
 
 namespace RoslynBridge.Tools;
 
@@ -29,9 +30,7 @@ internal sealed class NavigateTool(LspTool lsp)
         [Description(ToolDescriptions.File)] string? file = null,
         [Description(ToolDescriptions.Line)] int? line = null,
         [Description(ToolDescriptions.Character)] int? character = null,
-        [Description(
-            "Add lines, a map from line number to the trimmed source line of each result. Uses more tokens."
-        )]
+        [Description("Show the trimmed source line of each result position. Uses more tokens.")]
             bool context = false,
         [Description(ToolDescriptions.Limit)] int limit = LspRequest.DefaultResultLimit,
         CancellationToken cancellationToken = default

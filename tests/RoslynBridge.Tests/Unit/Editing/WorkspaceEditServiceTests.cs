@@ -5,7 +5,7 @@ using System.Globalization;
 using System.Text;
 using System.Text.Json.Nodes;
 using RoslynBridge.Editing;
-using RoslynBridge.Tools;
+using RoslynBridge.Output;
 using static RoslynBridge.Tests.Unit.TestHelpers;
 
 namespace RoslynBridge.Tests.Unit.Editing;
@@ -24,7 +24,7 @@ public sealed class WorkspaceEditServiceTests : IDisposable
         await File.WriteAllTextAsync(path, $"// a{separator}b\nclass C {{}}\n", TestCt);
         var service = CreateService();
         var snapshot = await service.CaptureAsync(TestCt);
-        var edit = Changes(path, TextEdit(2, 6, 2, 7, "D"));
+        var edit = WorkspaceChanges(path, TextEdit(2, 6, 2, 7, "D"));
 
         await service.ApplyAsync(edit, snapshot, TestCt);
 
@@ -44,7 +44,7 @@ public sealed class WorkspaceEditServiceTests : IDisposable
         );
         var service = CreateService();
         var snapshot = await service.CaptureAsync(TestCt);
-        var edit = Changes(path, TextEdit(0, 6, 0, 10, "value"));
+        var edit = WorkspaceChanges(path, TextEdit(0, 6, 0, 10, "value"));
 
         var result = await service.ApplyAsync(edit, snapshot, TestCt);
 
@@ -124,7 +124,7 @@ public sealed class WorkspaceEditServiceTests : IDisposable
         var snapshot = await service.CaptureAsync(TestCt);
 
         var preview = await service.PreviewAsync(
-            Changes(path, TextEdit(0, 6, 0, 7, "B")),
+            WorkspaceChanges(path, TextEdit(0, 6, 0, 7, "B")),
             snapshot,
             TestCt
         );
@@ -164,7 +164,7 @@ public sealed class WorkspaceEditServiceTests : IDisposable
 
         var preview = EditPreview.Limit(
             await service.PreviewAsync(edit, snapshot, TestCt),
-            LspTool.PreviewBudgetCharacters
+            ResultText.PreviewBudgetCharacters
         );
 
         preview["fileCount"]!.GetValue<int>().Should().Be(fileCount);
@@ -173,7 +173,7 @@ public sealed class WorkspaceEditServiceTests : IDisposable
         preview
             .ToJsonString(BridgeJsonContext.Default.Options)
             .Length.Should()
-            .BeLessThanOrEqualTo(LspTool.PreviewBudgetCharacters);
+            .BeLessThanOrEqualTo(ResultText.PreviewBudgetCharacters);
         await AssertFileTextAsync(Path.Combine(_root, "Source0.cs"), before);
 
         var applied = await service.ApplyAsync(edit, snapshot, TestCt);
@@ -198,13 +198,13 @@ public sealed class WorkspaceEditServiceTests : IDisposable
         var second = await WriteFileAsync(_root, "Second.cs", "class B {}");
         var service = CreateService();
         var snapshot = await service.CaptureAsync(TestCt);
-        var edit = Changes(first, TextEdit(0, 6, 0, 7, "Changed"));
+        var edit = WorkspaceChanges(first, TextEdit(0, 6, 0, 7, "Changed"));
         edit["changes"]![new Uri(second).AbsoluteUri] = new JsonArray(
             TextEdit(0, 6, 0, 7, "Changed")
         );
         await File.WriteAllTextAsync(second, "class External {}", TestCt);
 
-        await AssertErrorAsync(Apply, LspTool.StaleEditErrorCode);
+        await AssertErrorAsync(Apply, ErrorCodes.StaleEdit);
         await AssertFileTextAsync(first, "class A {}");
         await AssertFileTextAsync(second, "class External {}");
         return;
@@ -221,12 +221,16 @@ public sealed class WorkspaceEditServiceTests : IDisposable
         var snapshot = await service.CaptureAsync(TestCt);
         await File.WriteAllTextAsync(dependency, "class Other {}", TestCt);
 
-        await AssertErrorAsync(Apply, LspTool.StaleEditErrorCode);
+        await AssertErrorAsync(Apply, ErrorCodes.StaleEdit);
         await AssertFileTextAsync(target, "class A {}");
         return;
 
         Task Apply() =>
-            service.ApplyAsync(Changes(target, TextEdit(0, 6, 0, 7, "C")), snapshot, TestCt);
+            service.ApplyAsync(
+                WorkspaceChanges(target, TextEdit(0, 6, 0, 7, "C")),
+                snapshot,
+                TestCt
+            );
     }
 
     [Fact]
@@ -260,9 +264,13 @@ public sealed class WorkspaceEditServiceTests : IDisposable
         var path = await WriteFileAsync(_root, "Source.cs", "class A {}");
         var service = CreateService();
         var snapshot = await service.CaptureAsync(TestCt);
-        var edit = Changes(path, TextEdit(0, 0, 0, 5, "struct"), TextEdit(0, 3, 0, 7, "invalid"));
+        var edit = WorkspaceChanges(
+            path,
+            TextEdit(0, 0, 0, 5, "struct"),
+            TextEdit(0, 3, 0, 7, "invalid")
+        );
 
-        await AssertErrorAsync(Apply, LspTool.LspErrorCode);
+        await AssertErrorAsync(Apply, ErrorCodes.Lsp);
         await AssertFileTextAsync(path, "class A {}");
         return;
 
@@ -281,7 +289,7 @@ public sealed class WorkspaceEditServiceTests : IDisposable
         };
         var edit = DocumentChanges(DocumentEdit(path, 2, TextEdit(0, 6, 0, 7, "B")));
 
-        await AssertErrorAsync(Apply, LspTool.StaleEditErrorCode);
+        await AssertErrorAsync(Apply, ErrorCodes.StaleEdit);
         return;
 
         Task Apply() => service.ApplyAsync(edit, snapshot, TestCt);
@@ -292,12 +300,12 @@ public sealed class WorkspaceEditServiceTests : IDisposable
     {
         var service = CreateService();
         var snapshot = await service.CaptureAsync(TestCt);
-        var edit = Changes(
+        var edit = WorkspaceChanges(
             Path.Combine(_root, "..", "outside.cs"),
             TextEdit(0, 0, 0, 0, "content")
         );
 
-        await AssertErrorAsync(Apply, LspTool.InvalidRequestErrorCode);
+        await AssertErrorAsync(Apply, ErrorCodes.InvalidRequest);
         return;
 
         Task Apply() => service.ApplyAsync(edit, snapshot, TestCt);
@@ -313,7 +321,7 @@ public sealed class WorkspaceEditServiceTests : IDisposable
         operation["options"] = new JsonObject { ["recursive"] = true };
         var edit = DocumentChanges(operation);
 
-        await AssertErrorAsync(Apply, LspTool.InvalidRequestErrorCode);
+        await AssertErrorAsync(Apply, ErrorCodes.InvalidRequest);
         File.Exists(source).Should().BeTrue();
         return;
 
@@ -334,7 +342,7 @@ public sealed class WorkspaceEditServiceTests : IDisposable
             CreateFile(child)
         );
 
-        await AssertErrorAsync(Apply, LspTool.InvalidRequestErrorCode);
+        await AssertErrorAsync(Apply, ErrorCodes.InvalidRequest);
         await AssertFileTextAsync(source, "class A {}");
         File.Exists(parent).Should().BeFalse();
         return;
@@ -348,7 +356,7 @@ public sealed class WorkspaceEditServiceTests : IDisposable
         var source = await WriteFileAsync(_root, "Source.cs", "class A {}");
         var service = CreateService();
         var snapshot = await service.CaptureAsync(TestCt);
-        var edit = Changes(
+        var edit = WorkspaceChanges(
             source,
             TextEdit(0, 0, 0, 0, "public "),
             TextEdit(0, 0, 0, 0, "sealed ")
@@ -408,7 +416,7 @@ public sealed class WorkspaceEditServiceTests : IDisposable
 
         Task Apply() =>
             service.ApplyAsync(
-                Changes(source, TextEdit(0, 6, 0, 7, "B")),
+                WorkspaceChanges(source, TextEdit(0, 6, 0, 7, "B")),
                 snapshot,
                 new CancellationToken(canceled: true)
             );
@@ -423,7 +431,7 @@ public sealed class WorkspaceEditServiceTests : IDisposable
             stream.SetLength(WorkspaceEditService.MaximumSnapshotBytes + 1L);
         }
 
-        await AssertErrorAsync(Capture, LspTool.InvalidRequestErrorCode);
+        await AssertErrorAsync(Capture, ErrorCodes.InvalidRequest);
         return;
 
         Task Capture() => CreateService().CaptureAsync(TestCt);
@@ -439,7 +447,7 @@ public sealed class WorkspaceEditServiceTests : IDisposable
         var service = CreateService();
         var snapshot = await service.CaptureAsync(TestCt);
 
-        await AssertErrorAsync(Apply, LspTool.InvalidRequestErrorCode);
+        await AssertErrorAsync(Apply, ErrorCodes.InvalidRequest);
         File.Exists(target).Should().BeFalse();
         return;
 
@@ -465,7 +473,7 @@ public sealed class WorkspaceEditServiceTests : IDisposable
             $"/{new Uri(target).AbsolutePath.TrimStart('/')}"
         );
 
-        await AssertErrorAsync(Apply, LspTool.LspErrorCode);
+        await AssertErrorAsync(Apply, ErrorCodes.Lsp);
         File.Exists(target).Should().BeFalse();
         return;
 
@@ -489,7 +497,7 @@ public sealed class WorkspaceEditServiceTests : IDisposable
             ? CreateFile(target)
             : RenameFile(source, target);
 
-        await AssertErrorAsync(Apply, LspTool.InvalidRequestErrorCode);
+        await AssertErrorAsync(Apply, ErrorCodes.InvalidRequest);
         await AssertFileTextAsync(source, "class Source {}");
         await AssertFileTextAsync(target, "class Target {}");
         return;

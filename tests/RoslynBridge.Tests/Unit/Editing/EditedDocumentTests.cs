@@ -4,7 +4,6 @@
 using System.Text;
 using System.Text.Json.Nodes;
 using RoslynBridge.Editing;
-using RoslynBridge.Tools;
 
 namespace RoslynBridge.Tests.Unit.Editing;
 
@@ -49,7 +48,7 @@ public sealed class EditedDocumentTests
             .Should()
             .Throw<ToolErrorException>()
             .Which.Error.Code.Should()
-            .Be(LspTool.InvalidRequestErrorCode);
+            .Be(ErrorCodes.InvalidRequest);
 
         JsonObject Describe() => document.Describe(new WorkspacePaths("."));
     }

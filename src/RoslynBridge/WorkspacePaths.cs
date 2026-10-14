@@ -4,7 +4,6 @@
 using System.Collections.Frozen;
 using System.Diagnostics;
 using System.IO.Enumeration;
-using RoslynBridge.Tools;
 
 namespace RoslynBridge;
 

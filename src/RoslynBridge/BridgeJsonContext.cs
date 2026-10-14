@@ -4,6 +4,7 @@
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using RoslynBridge.Editing;
+using RoslynBridge.Requests;
 using RoslynBridge.Tools;
 using StreamJsonRpc.Protocol;
 

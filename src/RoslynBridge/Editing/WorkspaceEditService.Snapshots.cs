@@ -3,7 +3,6 @@
 
 using System.Collections.Frozen;
 using System.Security.Cryptography;
-using RoslynBridge.Tools;
 
 namespace RoslynBridge.Editing;
 

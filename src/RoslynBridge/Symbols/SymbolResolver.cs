@@ -3,7 +3,6 @@
 
 using System.Text.Json.Nodes;
 using RoslynBridge.Lsp;
-using RoslynBridge.Tools;
 
 namespace RoslynBridge.Symbols;
 
@@ -16,8 +15,6 @@ namespace RoslynBridge.Symbols;
 /// </remarks>
 internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths)
 {
-    internal const string NotFoundErrorCode = "symbol_not_found";
-    internal const string AmbiguousErrorCode = "ambiguous_symbol";
     internal const int MaximumCandidates = 20;
 
     /// <summary>
@@ -58,7 +55,7 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
         if (symbols.Count == 0)
         {
             return new ToolError(
-                NotFoundErrorCode,
+                ErrorCodes.SymbolNotFound,
                 $"No declaration matches '{text}'. Use symbols to search by name."
             );
         }
@@ -69,7 +66,7 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
                 ? "Send one candidate symbol with its file."
                 : "Send one candidate symbol instead.";
         return new ToolError(
-            AmbiguousErrorCode,
+            ErrorCodes.AmbiguousSymbol,
             symbols.Count > MaximumCandidates
                 ? $"'{text}' matches {symbols.Count} symbols. The first {MaximumCandidates} are listed. {advice}"
                 : $"'{text}' matches {symbols.Count} symbols. {advice}",
