@@ -24,6 +24,7 @@ internal sealed partial class LspTool(
 {
     internal const string InvalidRequestErrorCode = "invalid_request";
     internal const string StaleEditErrorCode = "stale_edit";
+    internal const string LoadingErrorCode = "loading";
     internal const string TimeoutErrorCode = "timeout";
     internal const string CancelledErrorCode = "cancelled";
     internal const string LspErrorCode = "lsp_error";
@@ -74,13 +75,18 @@ internal sealed partial class LspTool(
         CancellationToken cancellationToken
     )
     {
+        if (request.Action is LspAction.Status)
+        {
+            return Response(request.Action, Status());
+        }
+
         await _gate.WaitAsync(cancellationToken);
         var started = Stopwatch.GetTimestamp();
         try
         {
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             timeout.CancelAfter(
-                session.IsRunning && !MayRestartServer(request)
+                session.IsReady && !MayRestartServer(request)
                     ? options.RequestTimeout
                     : options.StartupTimeout + options.RequestTimeout
             );
@@ -146,6 +152,7 @@ internal sealed partial class LspTool(
     private static bool IsReported(Exception exception) =>
         exception
             is ToolErrorException
+                or WorkspaceLoadingException
                 or IOException
                 or UnauthorizedAccessException
                 or Win32Exception
@@ -157,6 +164,7 @@ internal sealed partial class LspTool(
         exception switch
         {
             ToolErrorException toolError => toolError.Error.Code,
+            WorkspaceLoadingException => LoadingErrorCode,
             TimeoutException => TimeoutErrorCode,
             IOException or UnauthorizedAccessException or Win32Exception => IoErrorCode,
             RemoteRpcException or JsonException => LspErrorCode,
@@ -213,13 +221,6 @@ internal sealed partial class LspTool(
 
         switch (request.Action)
         {
-            case LspAction.Status:
-                return new JsonObject
-                {
-                    ["running"] = session.IsRunning,
-                    ["workspace"] = options.WorkspaceRoot,
-                    ["server"] = options.ServerPath,
-                };
             case LspAction.Reload:
                 changes.Clear();
                 await session.ReloadAsync(cancellationToken);
@@ -252,6 +253,15 @@ internal sealed partial class LspTool(
             _ => throw new InvalidOperationException($"Unsupported LSP action: {request.Action}."),
         };
     }
+
+    private JsonObject Status() =>
+        new()
+        {
+            ["running"] = session.IsRunning,
+            ["loading"] = session.IsLoading,
+            ["workspace"] = options.WorkspaceRoot,
+            ["server"] = options.ServerPath,
+        };
 
     private async Task<Result<JsonNode?>> RawRequestAsync(
         LspRequest request,

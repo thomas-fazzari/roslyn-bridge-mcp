@@ -36,6 +36,8 @@ internal sealed partial class RoslynSession(
     private HeaderDelimitedMessageHandler? _messageHandler;
     private Task? _stderrTask;
     private CancellationTokenSource? _processLifetime;
+    private CancellationTokenSource? _startupCancellation;
+    private Task? _startup;
     private TaskCompletionSource _initialized = NewCompletionSource();
 
     private bool _disposed;
@@ -48,6 +50,10 @@ internal sealed partial class RoslynSession(
         && _server is { HasExited: false }
         && _rpc is { IsDisposed: false, Completion.IsCompleted: false };
 
+    public bool IsLoading => _startup is { IsCompleted: false };
+
+    public bool IsReady => IsRunning && _startup is { IsCompletedSuccessfully: true };
+
     public void RequireReload() => _restartRequired = true;
 
     public Func<
@@ -56,34 +62,45 @@ internal sealed partial class RoslynSession(
         Task<JsonObject>
     >? ApplyWorkspaceEditAsync { get; set; }
 
+    /// <summary>
+    /// Starts Roslyn when needed and waits up to the startup timeout for the workspace to load.
+    /// </summary>
+    /// <remarks>
+    /// The load continues when the wait ends, so a later call can use it.
+    /// </remarks>
     public async Task EnsureStartedAsync(CancellationToken cancellationToken)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
-        if (IsRunning && _initialized.Task.IsCompletedSuccessfully)
+        if (!IsReady && !IsLoading)
         {
-            return;
+            await StopServerAsync().ConfigureAwait(false);
+            _startupCancellation?.Dispose();
+            _startupCancellation = new CancellationTokenSource();
+            _startup = StartAsync(_startupCancellation.Token);
         }
 
-        await StopAsync().ConfigureAwait(false);
-        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeout.CancelAfter(options.StartupTimeout);
+        try
+        {
+            await _startup!
+                .WaitAsync(options.StartupTimeout, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (TimeoutException) when (IsLoading)
+        {
+            throw new WorkspaceLoadingException();
+        }
+    }
+
+    private async Task StartAsync(CancellationToken cancellationToken)
+    {
         try
         {
             StartServer();
-            await InitializeAsync(timeout.Token).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException exception)
-            when (!cancellationToken.IsCancellationRequested)
-        {
-            await StopAsync().ConfigureAwait(false);
-            throw new TimeoutException(
-                "Roslyn did not finish loading the workspace before the startup timeout.",
-                exception
-            );
+            await InitializeAsync(cancellationToken).ConfigureAwait(false);
         }
         catch
         {
-            await StopAsync().ConfigureAwait(false);
+            await StopServerAsync().ConfigureAwait(false);
             throw;
         }
     }
@@ -198,6 +215,7 @@ internal sealed partial class RoslynSession(
 
         _disposed = true;
         await StopAsync().ConfigureAwait(false);
+        _startupCancellation?.Dispose();
     }
 
     [UnconditionalSuppressMessage(
@@ -312,6 +330,24 @@ internal sealed partial class RoslynSession(
     }
 
     private async Task StopAsync()
+    {
+        if (_startup is { IsCompleted: false } startup)
+        {
+            await _startupCancellation!.CancelAsync().ConfigureAwait(false);
+            try
+            {
+                await startup.ConfigureAwait(false);
+            }
+            catch (Exception exception)
+            {
+                LogStartupStopped(logger, exception);
+            }
+        }
+
+        await StopServerAsync().ConfigureAwait(false);
+    }
+
+    private async Task StopServerAsync()
     {
         var server = _server;
         var rpc = _rpc;
@@ -455,6 +491,9 @@ internal sealed partial class RoslynSession(
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "Roslyn did not shut down cleanly.")]
     private static partial void LogShutdownFailure(ILogger logger, Exception exception);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Stopped Roslyn while it was loading.")]
+    private static partial void LogStartupStopped(ILogger logger, Exception exception);
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "Roslyn stderr: {Message}")]
     private static partial void LogStderr(ILogger logger, string message);

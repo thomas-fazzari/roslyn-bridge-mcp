@@ -43,6 +43,11 @@ internal sealed class FakeRoslynServer : IRoslynServer
     public Func<string, JsonNode?, Task<JsonNode?>> Handle { get; set; } =
         (_, _) => Task.FromResult<JsonNode?>(null);
 
+    /// <summary>
+    /// Completes when the fake reports the project load, which defaults to at once.
+    /// </summary>
+    public Task ProjectLoad { get; set; } = Task.CompletedTask;
+
     public Stream Input { get; }
 
     public Stream Output => Input;
@@ -107,6 +112,7 @@ internal sealed class FakeRoslynServer : IRoslynServer
         public async Task InitializedAsync(JsonObject parameters)
         {
             _ = parameters;
+            await server.ProjectLoad;
             await server._rpc.NotifyAsync(LspMethods.WorkspaceProjectInitializationComplete);
         }
 

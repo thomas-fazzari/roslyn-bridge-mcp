@@ -140,7 +140,94 @@ public sealed class LspToolTests : IDisposable
         await AssertFileTextAsync(source, "class B {}");
     }
 
+    [Fact]
+    public async Task CallReportsLoadingWhenTheWorkspaceLoadsPastTheStartupTimeoutAsync()
+    {
+        var load = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var options = new BridgeOptions
+        {
+            WorkspaceRoot = _root,
+            StartupTimeout = TimeSpan.FromMilliseconds(50),
+        };
+        await using var session = CreateSession(
+            FakeServer(server => server.ProjectLoad = load.Task),
+            options
+        );
+        using var tool = CreateTool(session, options);
+
+        var response = await tool.ExecuteAsync(SymbolQuery(), TestCt);
+
+        ErrorCode(response).Should().Be(LspTool.LoadingErrorCode);
+        session.IsLoading.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task CanceledCallLeavesTheLoadForTheNextCallAsync()
+    {
+        var load = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var launched = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var launches = 0;
+        await using var session = CreateSession(
+            FakeServer(server =>
+            {
+                launches++;
+                server.ProjectLoad = load.Task;
+                launched.SetResult();
+            })
+        );
+        using var tool = CreateTool(session);
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestCt);
+
+        var canceled = tool.ExecuteAsync(SymbolQuery(), cancellation.Token);
+        await launched.Task;
+        await cancellation.CancelAsync();
+        await FluentActions.Awaiting(Canceled).Should().ThrowAsync<OperationCanceledException>();
+        load.SetResult();
+        var response = await tool.ExecuteAsync(SymbolQuery(), TestCt);
+
+        response.IsError.Should().NotBe(true);
+        launches.Should().Be(1);
+        return;
+
+        Task Canceled() => canceled;
+    }
+
+    [Fact(Timeout = 30_000)]
+    public async Task StatusAnswersWhileAnotherCallWaitsForTheLoadAsync()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var load = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var launched = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        await using var session = CreateSession(
+            FakeServer(server =>
+            {
+                server.ProjectLoad = load.Task;
+                launched.SetResult();
+            })
+        );
+        using var tool = CreateTool(session);
+
+        var waiting = tool.ExecuteAsync(SymbolQuery(), cancellationToken);
+        await launched.Task;
+        var status = await tool.ExecuteAsync(
+            new LspRequest { Action = LspAction.Status },
+            cancellationToken
+        );
+        load.SetResult();
+        await waiting;
+
+        status
+            .StructuredContent!.Value.GetProperty("result")
+            .GetProperty("loading")
+            .GetBoolean()
+            .Should()
+            .BeTrue();
+    }
+
     public void Dispose() => Directory.Delete(_root, recursive: true);
+
+    private static LspRequest SymbolQuery() =>
+        new() { Action = LspAction.Symbols, Query = "Greeter" };
 
     private static RoslynLauncher FakeServer(Action<FakeRoslynServer>? configure = null) =>
         (_, _) =>
@@ -150,17 +237,17 @@ public sealed class LspToolTests : IDisposable
             return server;
         };
 
-    private RoslynSession CreateSession(RoslynLauncher launcher) =>
+    private RoslynSession CreateSession(RoslynLauncher launcher, BridgeOptions? options = null) =>
         new(
-            new BridgeOptions { WorkspaceRoot = _root },
+            options ?? new BridgeOptions { WorkspaceRoot = _root },
             new WorkspacePaths(_root),
             launcher,
             NullLogger<RoslynSession>.Instance
         );
 
-    private LspTool CreateTool(RoslynSession session)
+    private LspTool CreateTool(RoslynSession session, BridgeOptions? options = null)
     {
-        var options = new BridgeOptions { WorkspaceRoot = _root };
+        options ??= new BridgeOptions { WorkspaceRoot = _root };
         var paths = new WorkspacePaths(_root);
         var queries = new LspQueries(session, paths, new SymbolResolver(session, paths));
         return new LspTool(

@@ -8,7 +8,9 @@ Server capabilities:
 lsp {"action":"capabilities"}
 
 Use capabilities when support for an operation is uncertain.
-Roslyn loads the project on the first language request.
+Roslyn loads the project on the first language request. If the load outlasts
+the startup timeout, the call returns the error loading and the load goes on.
+Retry the same call. Status answers at once and reports loading true meanwhile.
 
 Reload:
 lsp {"action":"reload"}

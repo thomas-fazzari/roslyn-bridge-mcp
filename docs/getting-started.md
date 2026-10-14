@@ -56,7 +56,8 @@ Claude Code stores the user-scope registration in `~/.claude.json`, or under `CL
 Allow the tools without prompts by adding `mcp__roslyn__*` to `permissions.allow` in `~/.claude/settings.json`.
 See [Claude Code MCP](https://docs.claude.com/en/docs/claude-code/mcp) for client settings.
 
-Roslyn loads the solution on the first language request.
+Roslyn loads the solution on the first language request. A call waits up to the startup timeout for the load.
+When the load takes longer, the call returns the error `loading` and the load continues for later calls.
 For large projects, set `tool_timeout_sec = 200` under `[mcp_servers.roslyn]` in Codex.
 In Claude Code, set the `MCP_TOOL_TIMEOUT` environment variable in milliseconds, for example `200000`.
 
