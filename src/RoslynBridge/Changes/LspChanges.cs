@@ -169,8 +169,16 @@ internal sealed partial class LspChanges(
         var edit = change.Edit ?? [];
         if (!apply)
         {
-            var files = await edits.PreviewAsync(edit, change.Snapshot, cancellationToken);
-            return new ProposalPreview(Remember(change), files, change.Command?.DeepClone());
+            var (files, snapshot) = await edits.PreviewAsync(
+                edit,
+                change.Snapshot,
+                cancellationToken
+            );
+            return new ProposalPreview(
+                Remember(change with { Snapshot = snapshot }),
+                files,
+                change.Command?.DeepClone()
+            );
         }
 
         var result = await edits.ApplyAsync(edit, change.Snapshot, cancellationToken);
@@ -315,13 +323,12 @@ internal sealed partial class LspChanges(
     }
 
     /// <summary>
-    /// Hashes the workspace and synchronizes Roslyn with it. Call it before the first Roslyn read of a change.
+    /// Synchronizes Roslyn with the workspace and records what it received. Call it before the first Roslyn read of a change.
     /// </summary>
     private async Task<WorkspaceSnapshot> CaptureAsync(CancellationToken cancellationToken)
     {
-        var snapshot = await edits.CaptureAsync(cancellationToken);
-        await session.SynchronizeSnapshotAsync(snapshot.Fingerprints, cancellationToken);
-        return WithDocumentVersions(snapshot);
+        var files = await session.SynchronizeWorkspaceAsync(cancellationToken);
+        return new WorkspaceSnapshot(files, session.CopyDocumentVersions());
     }
 
     // Opening a document after the capture changes versions, so they are recorded again before the edit request

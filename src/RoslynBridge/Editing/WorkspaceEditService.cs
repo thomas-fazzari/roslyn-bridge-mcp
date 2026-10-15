@@ -15,20 +15,26 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
     private const int MaximumEditBytes = 64 * BytesPerMebibyte;
     private const int MaximumEditedFiles = 256;
 
-    public async Task<IReadOnlyList<FilePreview>> PreviewAsync(
+    /// <returns>The previewed files, and the snapshot with the fingerprints of the files the edit reads.</returns>
+    public async Task<(IReadOnlyList<FilePreview> Files, WorkspaceSnapshot Snapshot)> PreviewAsync(
         JsonObject edit,
         WorkspaceSnapshot snapshot,
         CancellationToken cancellationToken
     )
     {
         var documents = await PlanAsync(edit, snapshot, cancellationToken);
-        await EnsureCurrentAsync(snapshot, cancellationToken);
-        return
-        [
-            .. documents
-                .Where(document => document.Changed)
-                .Select(document => document.Describe(paths)),
-        ];
+        EnsureCurrent(documents, snapshot);
+        return (
+            [
+                .. documents
+                    .Where(document => document.Changed)
+                    .Select(document => document.Describe(paths)),
+            ],
+            snapshot with
+            {
+                Fingerprints = Fingerprints(documents),
+            }
+        );
     }
 
     public async Task<EditReceipt> ApplyAsync(
@@ -100,7 +106,7 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
         try
         {
             await StageAsync(documents, temporaryFiles, cancellationToken);
-            await EnsureCurrentAsync(snapshot, cancellationToken);
+            EnsureCurrent(documents, snapshot);
             cancellationToken.ThrowIfCancellationRequested();
             ApplyDestinationWrites(
                 documents,
@@ -473,7 +479,7 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
         )
         && File.Exists(destination)
         && (
-            !snapshot.Fingerprints.ContainsKey(destination)
+            !snapshot.Files.ContainsKey(destination)
             || StringComparer.Ordinal.Equals(source.OriginalPath, destination)
         );
 

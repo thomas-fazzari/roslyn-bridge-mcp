@@ -74,6 +74,8 @@ These display limits do not change the edit stored by proposalId.
 PROPOSAL LIFETIME AND FAILURES
 ------------------------------
 Proposals expire after five minutes. Reload discards them.
+A change to a file the proposal edits, or to a project, props, solution or
+editorconfig file, makes it stale. Changes to other source files do not.
 On stale_edit, request a new preview against current files. Do not retry the old ID.
 After applying, inspect the result and rerun diagnostics on affected files.
 File creation, deletion and renaming trigger a Roslyn reload before the next request.
@@ -94,5 +96,4 @@ not shown" or "result omitted".
 Edits must remain inside the workspace. Symlinks below its root are rejected.
 Each file replacement is atomic. A failed multi-file operation can leave partial
 changes, so inspect the workspace before retrying.
-Limits: 256 edited files, 8 MiB per file, 64 MiB total edited content,
-and 256 MiB for the source snapshot used to detect stale edits.
+Limits: 256 edited files, 8 MiB per file and 64 MiB total edited content.

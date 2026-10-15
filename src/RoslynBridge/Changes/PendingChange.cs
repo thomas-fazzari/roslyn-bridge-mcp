@@ -8,7 +8,7 @@ using RoslynBridge.Requests;
 
 namespace RoslynBridge.Changes;
 
-[DebuggerDisplay("{Action} created {CreatedAt}, {Snapshot.Fingerprints.Count} files")]
+[DebuggerDisplay("{Action} created {CreatedAt}, {Snapshot.Files.Count} files")]
 internal sealed record PendingChange(
     LspAction Action,
     WorkspaceSnapshot Snapshot,

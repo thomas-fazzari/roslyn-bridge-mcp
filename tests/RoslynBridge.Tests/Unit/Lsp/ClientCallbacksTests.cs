@@ -21,7 +21,7 @@ public sealed class ClientCallbacksTests : IDisposable
         var source = await WriteFileAsync(_root, "Source.cs", "class Before {}");
         var paths = new WorkspacePaths(_root);
         var editor = new WorkspaceEditService(paths);
-        var snapshot = await editor.CaptureAsync(TestCt);
+        var snapshot = Snapshot(_root);
         await using var session = CreateSession(paths.Root, RoslynProcess.Start);
         using var edits = session.HandleWorkspaceEdits(
             async (edit, token) =>

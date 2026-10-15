@@ -226,4 +226,21 @@ internal sealed class WorkspacePaths(string root)
     }
 }
 
-internal readonly record struct WorkspaceFile(string Path, long Length, DateTime LastWriteTimeUtc);
+internal readonly record struct WorkspaceFile(string Path, long Length, DateTime LastWriteTimeUtc)
+{
+    public FileStamp Stamp => new(Length, LastWriteTimeUtc);
+}
+
+internal readonly record struct FileStamp(long Length, DateTime ModifiedUtc)
+{
+    /// <summary>
+    /// Returns the stamp of a regular file, or null for a missing file or a symlink, which the workspace scan skips.
+    /// </summary>
+    public static FileStamp? Read(string path)
+    {
+        var file = new FileInfo(path);
+        return file.Exists && !file.Attributes.HasFlag(FileAttributes.ReparsePoint)
+            ? new FileStamp(file.Length, file.LastWriteTimeUtc)
+            : null;
+    }
+}

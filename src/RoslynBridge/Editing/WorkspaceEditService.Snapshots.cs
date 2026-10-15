@@ -8,8 +8,6 @@ namespace RoslynBridge.Editing;
 
 internal sealed partial class WorkspaceEditService
 {
-    internal const int MaximumSnapshotBytes = 256 * BytesPerMebibyte;
-
     private const int UnbufferedStreamBufferSize = 1;
 
     private static readonly FrozenSet<string> _sourceExtensions = new[]
@@ -32,66 +30,76 @@ internal sealed partial class WorkspaceEditService
         ".txt",
     }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
-    public async Task<WorkspaceSnapshot> CaptureAsync(CancellationToken cancellationToken)
+    // Changes to these files can change what an edit means, even when the edit does not touch them
+    private static readonly FrozenSet<string> _projectExtensions = new[]
     {
-        var fingerprints = await CaptureFingerprintsAsync(cancellationToken);
-        return new WorkspaceSnapshot(fingerprints, FrozenDictionary<string, int>.Empty);
-    }
+        ".csproj",
+        ".props",
+        ".targets",
+        ".sln",
+        ".slnx",
+        ".editorconfig",
+        ".globalconfig",
+    }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
-    private async Task<Dictionary<string, string>> CaptureFingerprintsAsync(
-        CancellationToken cancellationToken
-    )
+    private static Dictionary<string, string> Fingerprints(List<EditedDocument> documents) =>
+        documents
+            .Where(document => document.Original is not null)
+            .ToDictionary(
+                document => document.OriginalPath,
+                document => Convert.ToHexString(SHA256.HashData(document.Original!)),
+                StringComparer.Ordinal
+            );
+
+    /// <exception cref="ToolErrorException">A touched file or a project file changed since the snapshot.</exception>
+    private void EnsureCurrent(List<EditedDocument> documents, WorkspaceSnapshot snapshot)
     {
-        var fingerprints = new Dictionary<string, string>(StringComparer.Ordinal);
-        var totalBytes = 0L;
-        foreach (var (file, length, _) in paths.EnumerateFiles())
+        // A case-only rename targets the same file under another spelling
+        var touched = documents.SelectMany(document =>
+            document.CaseOnlyRename
+                ? [document.OriginalPath]
+                : (string[])[document.OriginalPath, document.Path]
+        );
+        foreach (var path in touched.Distinct(StringComparer.Ordinal))
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            if (!IsSourceFile(file))
+            if (FileStamp.Read(path) != Expected(snapshot, path))
             {
-                continue;
+                throw StaleWorkspace();
             }
-
-            totalBytes += length;
-            if (totalBytes > MaximumSnapshotBytes)
-            {
-                throw new ToolErrorException(
-                    ToolError.InvalidRequest(
-                        $"The workspace snapshot exceeds {MaximumSnapshotBytes / BytesPerMebibyte} MiB of source and project files."
-                    )
-                );
-            }
-
-            fingerprints.Add(file, await FingerprintAsync(file, cancellationToken));
         }
 
-        return fingerprints;
-    }
+        // Build output under obj also holds generated props and editorconfig files, so only sources count
+        var projectFiles = 0;
+        foreach (var file in paths.EnumerateFiles().Where(file => IsProjectFile(file.Path)))
+        {
+            projectFiles++;
+            if (!snapshot.Files.TryGetValue(file.Path, out var stamp) || stamp != file.Stamp)
+            {
+                throw StaleWorkspace();
+            }
+        }
 
-    /// <summary>
-    /// Throws a <see cref="ToolErrorException"/> with a stale edit error when any workspace file changed since the snapshot.
-    /// </summary>
-    public async Task EnsureCurrentAsync(
-        WorkspaceSnapshot snapshot,
-        CancellationToken cancellationToken
-    )
-    {
-        var current = await CaptureFingerprintsAsync(cancellationToken);
         if (
-            current.Count != snapshot.Fingerprints.Count
-            || snapshot.Fingerprints.Any(pair =>
-                !current.TryGetValue(pair.Key, out var hash)
-                || !StringComparer.Ordinal.Equals(pair.Value, hash)
-            )
+            projectFiles
+            != snapshot
+                .Files.Keys.Where(path => IsProjectFile(path) && !paths.IsExcluded(path))
+                .Take(projectFiles + 1)
+                .Count()
         )
         {
-            throw new ToolErrorException(
-                ToolError.StaleEdit(
-                    "Workspace files changed after Roslyn computed this edit. Request the action again."
-                )
-            );
+            throw StaleWorkspace();
         }
     }
+
+    private static FileStamp? Expected(WorkspaceSnapshot snapshot, string path) =>
+        snapshot.Files.TryGetValue(path, out var stamp) ? stamp : null;
+
+    private static ToolErrorException StaleWorkspace() =>
+        new(
+            ToolError.StaleEdit(
+                "Workspace files changed after Roslyn computed this edit. Request the action again."
+            )
+        );
 
     private static async Task<byte[]?> ReadOriginalAsync(
         string path,
@@ -99,9 +107,10 @@ internal sealed partial class WorkspaceEditService
         CancellationToken cancellationToken
     )
     {
-        if (!File.Exists(path))
+        var expected = Expected(snapshot, path);
+        if (FileStamp.Read(path) is not { } stamp)
         {
-            if (snapshot.Fingerprints.ContainsKey(path))
+            if (expected is not null)
             {
                 throw new ToolErrorException(
                     ToolError.StaleEdit($"The source file was deleted: {path}")
@@ -109,6 +118,20 @@ internal sealed partial class WorkspaceEditService
             }
 
             return null;
+        }
+
+        if (stamp != expected)
+        {
+            throw ChangedFile(path);
+        }
+
+        if (stamp.Length > MaximumFileBytes)
+        {
+            throw new ToolErrorException(
+                ToolError.InvalidRequest(
+                    $"The source file exceeds {MaximumFileBytes / BytesPerMebibyte} MiB: {path}"
+                )
+            );
         }
 
         await using var stream = new FileStream(
@@ -119,31 +142,27 @@ internal sealed partial class WorkspaceEditService
             bufferSize: UnbufferedStreamBufferSize,
             FileOptions.Asynchronous | FileOptions.SequentialScan
         );
-        if (stream.Length > MaximumFileBytes)
-        {
-            throw new ToolErrorException(
-                ToolError.InvalidRequest(
-                    $"The source file exceeds {MaximumFileBytes / BytesPerMebibyte} MiB: {path}"
-                )
-            );
-        }
-
-        var content = new byte[(int)stream.Length];
+        var content = new byte[stamp.Length];
         await stream.ReadExactlyAsync(content, cancellationToken);
-        var fingerprint = Convert.ToHexString(SHA256.HashData(content));
         if (
             stream.Length != content.Length
-            || !snapshot.Fingerprints.TryGetValue(path, out var expected)
-            || !StringComparer.Ordinal.Equals(expected, fingerprint)
+            || (
+                snapshot.Fingerprints.TryGetValue(path, out var fingerprint)
+                && !StringComparer.Ordinal.Equals(
+                    fingerprint,
+                    Convert.ToHexString(SHA256.HashData(content))
+                )
+            )
         )
         {
-            throw new ToolErrorException(
-                ToolError.StaleEdit($"The source file changed after the request: {path}")
-            );
+            throw ChangedFile(path);
         }
 
         return content;
     }
+
+    private static ToolErrorException ChangedFile(string path) =>
+        new(ToolError.StaleEdit($"The source file changed after the request: {path}"));
 
     private string ResolveEditPath(string value)
     {
@@ -184,19 +203,6 @@ internal sealed partial class WorkspaceEditService
     private static bool IsSourceFile(string path) =>
         _sourceExtensions.Contains(Path.GetExtension(path));
 
-    private static async Task<string> FingerprintAsync(
-        string path,
-        CancellationToken cancellationToken
-    )
-    {
-        await using var stream = new FileStream(
-            path,
-            FileMode.Open,
-            FileAccess.Read,
-            FileShare.ReadWrite,
-            bufferSize: UnbufferedStreamBufferSize,
-            FileOptions.Asynchronous | FileOptions.SequentialScan
-        );
-        return Convert.ToHexString(await SHA256.HashDataAsync(stream, cancellationToken));
-    }
+    private static bool IsProjectFile(string path) =>
+        _projectExtensions.Contains(Path.GetExtension(path));
 }

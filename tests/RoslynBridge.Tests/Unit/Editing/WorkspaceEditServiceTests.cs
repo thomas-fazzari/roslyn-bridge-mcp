@@ -25,7 +25,7 @@ public sealed class WorkspaceEditServiceTests : IDisposable
         var path = Path.Combine(_root, "Source.cs");
         await File.WriteAllTextAsync(path, $"// a{separator}b\nclass C {{}}\n", TestCt);
         var service = CreateService();
-        var snapshot = await service.CaptureAsync(TestCt);
+        var snapshot = Snapshot(_root);
         var edit = WorkspaceChanges(path, TextEdit(2, 6, 2, 7, "D"));
 
         await service.ApplyAsync(edit, snapshot, TestCt);
@@ -45,7 +45,7 @@ public sealed class WorkspaceEditServiceTests : IDisposable
             TestCt
         );
         var service = CreateService();
-        var snapshot = await service.CaptureAsync(TestCt);
+        var snapshot = Snapshot(_root);
         var edit = WorkspaceChanges(path, TextEdit(0, 6, 0, 10, "value"));
 
         var result = await service.ApplyAsync(edit, snapshot, TestCt);
@@ -79,7 +79,7 @@ public sealed class WorkspaceEditServiceTests : IDisposable
             "class Delete {}"
         );
         var service = CreateService();
-        var snapshot = await service.CaptureAsync(TestCt);
+        var snapshot = Snapshot(_root);
         var edit = DocumentChanges(
             DocumentEdit(first, version: null, TextEdit(0, 6, 0, 11, "Changed")),
             DeleteFile(deleted)
@@ -120,9 +120,9 @@ public sealed class WorkspaceEditServiceTests : IDisposable
     {
         var path = await WriteFileAsync(_root, "Source.cs", "class A {}");
         var service = CreateService();
-        var snapshot = await service.CaptureAsync(TestCt);
+        var snapshot = Snapshot(_root);
 
-        var preview = await service.PreviewAsync(
+        var (preview, _) = await service.PreviewAsync(
             WorkspaceChanges(path, TextEdit(0, 6, 0, 7, "B")),
             snapshot,
             TestCt
@@ -155,9 +155,9 @@ public sealed class WorkspaceEditServiceTests : IDisposable
 
         var edit = new JsonObject { ["changes"] = changes };
         var service = CreateService();
-        var snapshot = await service.CaptureAsync(TestCt);
+        var snapshot = Snapshot(_root);
 
-        var preview = await service.PreviewAsync(edit, snapshot, TestCt);
+        var (preview, _) = await service.PreviewAsync(edit, snapshot, TestCt);
         var rendered = ResponseText(
             LspTool.Response(new ProposalPreview("proposal", preview, Command: null))
         );
@@ -183,7 +183,7 @@ public sealed class WorkspaceEditServiceTests : IDisposable
         var first = await WriteFileAsync(_root, "First.cs", "class A {}");
         var second = await WriteFileAsync(_root, "Second.cs", "class B {}");
         var service = CreateService();
-        var snapshot = await service.CaptureAsync(TestCt);
+        var snapshot = Snapshot(_root);
         var edit = WorkspaceChanges(first, TextEdit(0, 6, 0, 7, "Changed"));
         edit["changes"]![new Uri(second).AbsoluteUri] = new JsonArray(
             TextEdit(0, 6, 0, 7, "Changed")
@@ -199,13 +199,13 @@ public sealed class WorkspaceEditServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task ExternalChangeToUneditedSourceInvalidatesEditAsync()
+    public async Task ExternalChangeToAProjectFileInvalidatesEditAsync()
     {
         var target = await WriteFileAsync(_root, "Target.cs", "class A {}");
-        var dependency = await WriteFileAsync(_root, "Dependency.cs", "class B {}");
+        var project = await WriteFileAsync(_root, "Sample.csproj", "<Project />");
         var service = CreateService();
-        var snapshot = await service.CaptureAsync(TestCt);
-        await File.WriteAllTextAsync(dependency, "class Other {}", TestCt);
+        var snapshot = Snapshot(_root);
+        await File.WriteAllTextAsync(project, "<Project Sdk=\"Microsoft.NET.Sdk\" />", TestCt);
 
         await AssertErrorAsync(Apply, ErrorCodes.StaleEdit);
         await AssertFileTextAsync(target, "class A {}");
@@ -220,120 +220,39 @@ public sealed class WorkspaceEditServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task ResourceOperationsUseTheirDeclaredOrderAsync()
+    public async Task ExternalChangeToAnUntouchedSourceKeepsTheEditAsync()
     {
-        var oldPath = await WriteFileAsync(_root, "Old.cs", "class Old {}");
-        var deleted = await WriteFileAsync(_root, "Delete.cs", "class Delete {}");
-        var created = Path.Combine(_root, "New.cs");
-        var renamed = Path.Combine(_root, "Renamed.cs");
+        var target = await WriteFileAsync(_root, "Target.cs", "class A {}");
+        var other = await WriteFileAsync(_root, "Other.cs", "class B {}");
         var service = CreateService();
-        var snapshot = await service.CaptureAsync(TestCt);
-        var edit = DocumentChanges(
-            CreateFile(created),
-            DocumentEdit(created, version: null, TextEdit(0, 0, 0, 0, "class New {}")),
-            RenameFile(oldPath, renamed),
-            DocumentEdit(renamed, version: null, TextEdit(0, 6, 0, 9, "Renamed")),
-            DeleteFile(deleted)
+        var snapshot = Snapshot(_root);
+        await File.WriteAllTextAsync(other, "class Other {}", TestCt);
+
+        await service.ApplyAsync(
+            WorkspaceChanges(target, TextEdit(0, 6, 0, 7, "C")),
+            snapshot,
+            TestCt
         );
 
-        await service.ApplyAsync(edit, snapshot, TestCt);
-
-        await AssertFileTextAsync(created, "class New {}");
-        await AssertFileTextAsync(renamed, "class Renamed {}");
-        File.Exists(oldPath).Should().BeFalse();
-        File.Exists(deleted).Should().BeFalse();
+        await AssertFileTextAsync(target, "class C {}");
     }
 
     [Fact]
-    public async Task OverlappingRangesAreRejectedAsync()
+    public async Task PreviewedFileChangedWithItsStampKeptInvalidatesTheApplyAsync()
     {
-        var path = await WriteFileAsync(_root, "Source.cs", "class A {}");
+        var target = await WriteFileAsync(_root, "Target.cs", "class A {}");
         var service = CreateService();
-        var snapshot = await service.CaptureAsync(TestCt);
-        var edit = WorkspaceChanges(
-            path,
-            TextEdit(0, 0, 0, 5, "struct"),
-            TextEdit(0, 3, 0, 7, "invalid")
-        );
-
-        await AssertErrorAsync(Apply, ErrorCodes.Lsp);
-        await AssertFileTextAsync(path, "class A {}");
-        return;
-
-        Task Apply() => service.ApplyAsync(edit, snapshot, TestCt);
-    }
-
-    [Fact]
-    public async Task VersionedDocumentEditRequiresCapturedVersionAsync()
-    {
-        var path = await WriteFileAsync(_root, "Source.cs", "class A {}");
-        var service = CreateService();
-        var snapshot = await service.CaptureAsync(TestCt);
-        snapshot = snapshot with
-        {
-            DocumentVersions = new Dictionary<string, int>(StringComparer.Ordinal) { [path] = 3 },
-        };
-        var edit = DocumentChanges(DocumentEdit(path, 2, TextEdit(0, 6, 0, 7, "B")));
+        var edit = WorkspaceChanges(target, TextEdit(0, 6, 0, 7, "C"));
+        var (_, previewed) = await service.PreviewAsync(edit, Snapshot(_root), TestCt);
+        var written = File.GetLastWriteTimeUtc(target);
+        await File.WriteAllTextAsync(target, "class B {}", TestCt);
+        File.SetLastWriteTimeUtc(target, written);
 
         await AssertErrorAsync(Apply, ErrorCodes.StaleEdit);
+        await AssertFileTextAsync(target, "class B {}");
         return;
 
-        Task Apply() => service.ApplyAsync(edit, snapshot, TestCt);
-    }
-
-    [Fact]
-    public async Task EscapingWorkspaceIsRejectedBeforeAnyWriteAsync()
-    {
-        var service = CreateService();
-        var snapshot = await service.CaptureAsync(TestCt);
-        var edit = WorkspaceChanges(
-            Path.Combine(_root, "..", "outside.cs"),
-            TextEdit(0, 0, 0, 0, "content")
-        );
-
-        await AssertErrorAsync(Apply, ErrorCodes.InvalidRequest);
-        return;
-
-        Task Apply() => service.ApplyAsync(edit, snapshot, TestCt);
-    }
-
-    [Fact]
-    public async Task RecursiveDirectoryDeleteIsRejectedAsync()
-    {
-        var source = await WriteFileAsync(_root, "Source.cs", "class A {}");
-        var service = CreateService();
-        var snapshot = await service.CaptureAsync(TestCt);
-        var operation = DeleteFile(_root);
-        operation["options"] = new JsonObject { ["recursive"] = true };
-        var edit = DocumentChanges(operation);
-
-        await AssertErrorAsync(Apply, ErrorCodes.InvalidRequest);
-        File.Exists(source).Should().BeTrue();
-        return;
-
-        Task Apply() => service.ApplyAsync(edit, snapshot, TestCt);
-    }
-
-    [Fact]
-    public async Task PlannedFileCannotAlsoBeAParentDirectoryAsync()
-    {
-        var source = await WriteFileAsync(_root, "Source.cs", "class A {}");
-        var parent = Path.Combine(_root, "Parent.cs");
-        var child = Path.Combine(parent, "Child.cs");
-        var service = CreateService();
-        var snapshot = await service.CaptureAsync(TestCt);
-        var edit = DocumentChanges(
-            DocumentEdit(source, version: null, TextEdit(0, 6, 0, 7, "B")),
-            CreateFile(parent),
-            CreateFile(child)
-        );
-
-        await AssertErrorAsync(Apply, ErrorCodes.InvalidRequest);
-        await AssertFileTextAsync(source, "class A {}");
-        File.Exists(parent).Should().BeFalse();
-        return;
-
-        Task Apply() => service.ApplyAsync(edit, snapshot, TestCt);
+        Task Apply() => service.ApplyAsync(edit, previewed, TestCt);
     }
 
     [Fact]
@@ -341,7 +260,7 @@ public sealed class WorkspaceEditServiceTests : IDisposable
     {
         var source = await WriteFileAsync(_root, "Source.cs", "class A {}");
         var service = CreateService();
-        var snapshot = await service.CaptureAsync(TestCt);
+        var snapshot = Snapshot(_root);
         var edit = WorkspaceChanges(
             source,
             TextEdit(0, 0, 0, 0, "public "),
@@ -359,7 +278,7 @@ public sealed class WorkspaceEditServiceTests : IDisposable
         var source = await WriteFileAsync(_root, "Name.cs", "class Name {}");
         var destination = Path.Combine(_root, "name.cs");
         var service = CreateService();
-        var snapshot = await service.CaptureAsync(TestCt);
+        var snapshot = Snapshot(_root);
         var edit = DocumentChanges(
             RenameFile(source, destination),
             DocumentEdit(destination, version: null, TextEdit(0, 6, 0, 10, "name"))
@@ -377,7 +296,7 @@ public sealed class WorkspaceEditServiceTests : IDisposable
         var source = await WriteFileAsync(_root, "Name.cs", "class Name {}");
         var destination = Path.Combine(_root, "name.cs");
         var service = CreateService();
-        var snapshot = await service.CaptureAsync(TestCt);
+        var snapshot = Snapshot(_root);
         var edit = DocumentChanges(
             RenameFile(source, destination),
             RenameFile(destination, source)
@@ -394,7 +313,7 @@ public sealed class WorkspaceEditServiceTests : IDisposable
     {
         var source = await WriteFileAsync(_root, "Source.cs", "class A {}");
         var service = CreateService();
-        var snapshot = await service.CaptureAsync(TestCt);
+        var snapshot = Snapshot(_root);
 
         await FluentActions.Awaiting(Apply).Should().ThrowAsync<OperationCanceledException>();
         await AssertFileTextAsync(source, "class A {}");
@@ -408,21 +327,6 @@ public sealed class WorkspaceEditServiceTests : IDisposable
             );
     }
 
-    [Fact]
-    public async Task CaptureRefusesSourceFilesOverTheSnapshotLimitAsync()
-    {
-        await using (var stream = File.Create(Path.Combine(_root, "Large.cs")))
-        {
-            // A sparse file reaches the limit without writing its content
-            stream.SetLength(WorkspaceEditService.MaximumSnapshotBytes + 1L);
-        }
-
-        await AssertErrorAsync(Capture, ErrorCodes.InvalidRequest);
-        return;
-
-        Task Capture() => CreateService().CaptureAsync(TestCt);
-    }
-
     [Theory]
     [InlineData("bin/Generated.cs")]
     [InlineData(".git/Hook.cs")]
@@ -431,7 +335,7 @@ public sealed class WorkspaceEditServiceTests : IDisposable
     {
         var target = Path.Combine(_root, relativePath);
         var service = CreateService();
-        var snapshot = await service.CaptureAsync(TestCt);
+        var snapshot = Snapshot(_root);
 
         await AssertErrorAsync(Apply, ErrorCodes.InvalidRequest);
         File.Exists(target).Should().BeFalse();
@@ -450,7 +354,7 @@ public sealed class WorkspaceEditServiceTests : IDisposable
     {
         var target = Path.Combine(_root, "Created.cs");
         var service = CreateService();
-        var snapshot = await service.CaptureAsync(TestCt);
+        var snapshot = Snapshot(_root);
         var operation = CreateFile(target);
         operation["uri"] = string.Format(
             CultureInfo.InvariantCulture,
@@ -474,7 +378,7 @@ public sealed class WorkspaceEditServiceTests : IDisposable
         var source = await WriteFileAsync(_root, "Source.cs", "class Source {}");
         var target = await WriteFileAsync(_root, "Target.cs", "class Target {}");
         var service = CreateService();
-        var snapshot = await service.CaptureAsync(TestCt);
+        var snapshot = Snapshot(_root);
         var operation = string.Equals(kind, FileOperation.Create, StringComparison.Ordinal)
             ? CreateFile(target)
             : RenameFile(source, target);

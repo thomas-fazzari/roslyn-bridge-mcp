@@ -275,46 +275,6 @@ public sealed partial class RoslynMcpTests
     }
 
     [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
-    public async Task RefreshesUnopenedFilesWithUnchangedMetadataBeforeRenameAsync()
-    {
-        var cancellationToken = TestContext.Current.CancellationToken;
-        await using var workspace = await RoslynTestWorkspace.CreateAsync(cancellationToken);
-        var request = await workspace.AtAsync(LspAction.References, ContractFile, "Greet(");
-        var consumerPath = workspace.FilePath(ConsumerFile);
-
-        var references = await workspace.CallAsync(request);
-        Locations(references).Should().Contain(ConsumerFile);
-        var rename = request with { Action = LspAction.Rename, NewName = "Welcome" };
-
-        // first preview records fingerprints, second must detect an edit that keeps the metadata
-        var initialPreview = await workspace.CallAsync(rename);
-        PreviewFiles(initialPreview).Should().Contain(ConsumerFile);
-
-        var original = await workspace.ReadFileAsync(ConsumerFile);
-        var changed = original.Replace(
-            "greeter.Greet(\"world\")",
-            "OtherGreeter.Greet(\"\")",
-            StringComparison.Ordinal
-        );
-        changed.Should().NotBe(original);
-        var file = new FileInfo(consumerPath);
-        var length = file.Length;
-        var lastWriteTime = file.LastWriteTimeUtc;
-        await workspace.WriteFileAsync(ConsumerFile, changed);
-        File.SetLastWriteTimeUtc(consumerPath, lastWriteTime);
-        file.Refresh();
-        file.Length.Should().Be(length);
-        file.LastWriteTimeUtc.Should().Be(lastWriteTime);
-
-        var preview = await workspace.CallAsync(rename);
-        PreviewFiles(preview).Should().BeEquivalentTo([ContractFile, ImplementationFile]);
-
-        var refreshed = await workspace.CallAsync(request);
-        Locations(refreshed).Should().NotContain(ConsumerFile);
-        (await workspace.ReadFileAsync(ConsumerFile)).Should().Be(changed);
-    }
-
-    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
     public async Task ResolvesSymbolsInFilesDeclaringComparisonOperatorsAsync()
     {
         const string moneyFile = "Application/Money.cs";

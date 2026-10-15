@@ -4,6 +4,7 @@
 using System.Text.Json.Nodes;
 using Microsoft.Extensions.Logging.Abstractions;
 using ModelContextProtocol.Protocol;
+using RoslynBridge.Editing;
 using RoslynBridge.Lsp;
 using RoslynBridge.Results;
 using RoslynBridge.Tests.Fakes;
@@ -27,6 +28,14 @@ internal static class TestHelpers
             new WorkspacePaths(root),
             launcher,
             NullLogger<RoslynSession>.Instance
+        );
+
+    public static WorkspaceSnapshot Snapshot(string root) =>
+        new(
+            new WorkspacePaths(root)
+                .EnumerateWatchedFiles()
+                .ToDictionary(file => file.Path, file => file.Stamp, StringComparer.Ordinal),
+            new Dictionary<string, int>(StringComparer.Ordinal)
         );
 
     public static RoslynLauncher FakeServer(Action<FakeRoslynServer>? configure = null) =>

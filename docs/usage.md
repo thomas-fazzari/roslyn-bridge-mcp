@@ -129,7 +129,8 @@ Excerpts keep some unchanged context. A `preview truncated:` line means some cha
 The preview response is limited to 32 000 characters. A `truncated:` line marks omitted files.
 These limits leave the proposed edit unchanged.
 
-Proposals expire after five minutes. If source files change, `stale_edit` requires a new preview.
+Proposals expire after five minutes. A proposal becomes stale when a file it edits changes, or when a project, props, solution or editorconfig file changes.
+Then `stale_edit` requires a new preview. Changes to other source files keep the proposal valid.
 Reloading also discards proposals. Applied file creation, deletion and renaming reload Roslyn before the next request.
 
 Application results contain a compact receipt, without source excerpts.
@@ -144,7 +145,6 @@ Edits must stay inside the workspace. Symbolic links below its root are rejected
 Each file replacement is atomic, but a failed operation across several files can leave partial changes.
 
 Diagnostics scans cover at most 1000 files. An edit can affect up to 256 files, with 8 MiB per file and 64 MiB in total.
-The source snapshot used to validate edits is limited to 256 MiB.
 
 Raw requests reserve lifecycle and document synchronization methods for the bridge.
 Unknown methods and `workspace/executeCommand` require `apply: true` because they may write files.

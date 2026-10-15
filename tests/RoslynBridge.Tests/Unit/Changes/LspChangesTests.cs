@@ -25,8 +25,8 @@ public sealed class LspChangesTests : IDisposable
     public async Task EvictionKeepsTheNewestProposalsAsync()
     {
         await using var session = CreateSession(_root, FakeServer());
-        var (changes, edits) = CreateChanges(session);
-        var snapshot = await edits.CaptureAsync(TestCt);
+        var changes = CreateChanges(session);
+        var snapshot = Snapshot(_root);
         var proposals = new List<string>();
         for (var index = 0; index < 2 * LspChanges.MaximumPendingProposals; index++)
         {
@@ -53,8 +53,8 @@ public sealed class LspChangesTests : IDisposable
     public async Task ProposalCannotBeUsedForAnotherActionAsync()
     {
         await using var session = CreateSession(_root, FakeServer());
-        var (changes, edits) = CreateChanges(session);
-        var snapshot = await edits.CaptureAsync(TestCt);
+        var changes = CreateChanges(session);
+        var snapshot = Snapshot(_root);
         var preview = await changes.CompleteAsync(
             new PendingChange(LspAction.Rename, snapshot, Edit: [], Command: null),
             apply: false,
@@ -82,8 +82,8 @@ public sealed class LspChangesTests : IDisposable
             )
         );
         await session.EnsureStartedAsync(TestCt);
-        var (changes, edits) = CreateChanges(session);
-        var snapshot = await edits.CaptureAsync(TestCt);
+        var changes = CreateChanges(session);
+        var snapshot = Snapshot(_root);
         var command = new JsonObject { ["command"] = "unknown.command" };
 
         await FluentActions.Awaiting(Apply).Should().ThrowAsync<RemoteRpcException>();
@@ -111,8 +111,8 @@ public sealed class LspChangesTests : IDisposable
                 ServerPath = Path.Combine(_root, "missing-server"),
             }
         );
-        var (changes, edits) = CreateChanges(session);
-        var snapshot = await edits.CaptureAsync(TestCt);
+        var changes = CreateChanges(session);
+        var snapshot = Snapshot(_root);
         var pending = new PendingChange(
             LspAction.RenameFile,
             snapshot,
@@ -164,7 +164,7 @@ public sealed class LspChangesTests : IDisposable
             )
         );
         await session.EnsureStartedAsync(TestCt);
-        var (changes, _) = CreateChanges(session);
+        var changes = CreateChanges(session);
 
         var listing = (ActionListing)
             (
@@ -242,12 +242,11 @@ public sealed class LspChangesTests : IDisposable
         ];
     }
 
-    private (LspChanges Changes, WorkspaceEditService Edits) CreateChanges(RoslynSession session)
+    private LspChanges CreateChanges(RoslynSession session)
     {
         var paths = new WorkspacePaths(_root);
-        var edits = new WorkspaceEditService(paths);
         var queries = new LspQueries(session, paths, new SymbolResolver(session, paths));
-        return (new LspChanges(session, paths, edits, queries), edits);
+        return new LspChanges(session, paths, new WorkspaceEditService(paths), queries);
     }
 
     private static LspRequest Proposal(string proposalId) =>

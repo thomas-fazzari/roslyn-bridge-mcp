@@ -20,7 +20,7 @@ public sealed class CommandEditsTests : IDisposable
     {
         var path = await WriteFileAsync(_root, "Source.cs", "class A {}");
         var service = CreateService();
-        var snapshot = await service.CaptureAsync(TestCt);
+        var snapshot = Snapshot(_root);
         var captureCalls = 0;
         await using var commandEdits = new CommandEdits(
             service,
@@ -63,11 +63,11 @@ public sealed class CommandEditsTests : IDisposable
     {
         var path = await WriteFileAsync(_root, "Source.cs", "class A {}");
         var service = CreateService();
-        var snapshot = await service.CaptureAsync(TestCt);
+        var snapshot = Snapshot(_root);
         await using var commandEdits = new CommandEdits(
             service,
             snapshot,
-            token => service.CaptureAsync(token),
+            _ => Task.FromResult(Snapshot(_root)),
             TestCt
         );
 
@@ -100,7 +100,7 @@ public sealed class CommandEditsTests : IDisposable
         var firstPath = await WriteFileAsync(_root, "First.cs", "class A {}");
         var secondPath = await WriteFileAsync(_root, "Second.cs", "class B {}");
         var service = CreateService();
-        var snapshot = await service.CaptureAsync(cancellationToken);
+        var snapshot = Snapshot(_root);
         var firstCaptureStarted = new TaskCompletionSource(
             TaskCreationOptions.RunContinuationsAsynchronously
         );
@@ -117,7 +117,7 @@ public sealed class CommandEditsTests : IDisposable
                 await releaseFirstCapture.Task.WaitAsync(token);
             }
 
-            return await service.CaptureAsync(token);
+            return Snapshot(_root);
         }
 
         await using var commandEdits = new CommandEdits(
@@ -154,7 +154,7 @@ public sealed class CommandEditsTests : IDisposable
         var cancellationToken = TestContext.Current.CancellationToken;
         var path = await WriteFileAsync(_root, "Source.cs", "class A {}");
         var service = CreateService();
-        var snapshot = await service.CaptureAsync(cancellationToken);
+        var snapshot = Snapshot(_root);
         var captureStarted = new TaskCompletionSource(
             TaskCreationOptions.RunContinuationsAsynchronously
         );
@@ -162,7 +162,7 @@ public sealed class CommandEditsTests : IDisposable
         {
             captureStarted.SetResult();
             await Task.Delay(Timeout.InfiniteTimeSpan, token);
-            return await service.CaptureAsync(token);
+            return Snapshot(_root);
         }
 
         await using var commandEdits = new CommandEdits(

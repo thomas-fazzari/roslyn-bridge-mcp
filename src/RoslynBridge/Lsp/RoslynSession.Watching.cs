@@ -65,8 +65,8 @@ internal sealed partial class RoslynSession
             .Keys.Where(path => _pendingFiles.TryRemove(path, out _))
             .ToList();
 
-        var forceAllChanges = Interlocked.Exchange(ref _scanRequested, 0) != 0;
-        var rescan = forceAllChanges || RequiresRescan(changedPaths);
+        var scanRequested = Interlocked.Exchange(ref _scanRequested, 0) != 0;
+        var rescan = scanRequested || RequiresRescan(changedPaths);
         try
         {
             if (rescan)
@@ -75,7 +75,6 @@ internal sealed partial class RoslynSession
                 await NotifyFileChangesAsync(
                     current,
                     changedPaths.ToHashSet(StringComparer.Ordinal),
-                    forceAllChanges,
                     cancellationToken
                 );
 
@@ -88,8 +87,8 @@ internal sealed partial class RoslynSession
         }
         catch
         {
-            // Retry the same paths next time instead of resending the whole workspace
-            if (forceAllChanges)
+            // Retry the same paths, and the scan only when one was requested
+            if (scanRequested)
             {
                 Interlocked.Exchange(ref _scanRequested, 1);
             }
@@ -153,13 +152,8 @@ internal sealed partial class RoslynSession
         foreach (var path in changedPaths)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var file = new FileInfo(path);
             var exists = _workspaceFiles.ContainsKey(path);
-            // The workspace scan skips symlinks, so a link counts as a missing file
-            FileStamp? current =
-                file.Exists && !file.Attributes.HasFlag(FileAttributes.ReparsePoint)
-                    ? new FileStamp(file.Length, file.LastWriteTimeUtc)
-                    : null;
+            var current = FileStamp.Read(path);
             if (current is null)
             {
                 if (exists)
@@ -198,12 +192,6 @@ internal sealed partial class RoslynSession
     {
         foreach (var batch in changes.Chunk(FileChangeBatchSize))
         {
-            foreach (var change in batch)
-            {
-                // Roslyn rereads these files, so their recorded fingerprints are no longer reliable
-                _snapshotFingerprints.Remove(change.Path);
-            }
-
             if (!_watchRegistrations.IsEmpty)
             {
                 await NotifyAsync(

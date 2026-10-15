@@ -27,10 +27,6 @@ internal sealed partial class RoslynSession
     private Dictionary<string, FileStamp> _workspaceFiles = new(StringComparer.Ordinal);
     private readonly HashSet<string> _createdFiles = new(StringComparer.Ordinal);
 
-    // Fingerprints of the file contents Roslyn received at the last snapshot synchronization
-    private readonly Dictionary<string, string> _snapshotFingerprints = new(StringComparer.Ordinal);
-    private bool _snapshotBaselined;
-
     private FileSystemWatcher? _watcher;
     private int _scanRequested;
 
@@ -175,68 +171,16 @@ internal sealed partial class RoslynSession
     }
 
     /// <summary>
-    /// Resends snapshot files whose content changed since the last snapshot sync.
-    /// Compares content fingerprints, not metadata, so an edit that keeps the size and timestamp is still sent.
+    /// Compares every watched file with what Roslyn last received and sends the differences,
+    /// without waiting for the file watcher. Returns the file stamps Roslyn now has.
     /// </summary>
-    public async Task SynchronizeSnapshotAsync(
-        IReadOnlyDictionary<string, string> fingerprints,
+    public async Task<Dictionary<string, FileStamp>> SynchronizeWorkspaceAsync(
         CancellationToken cancellationToken
     )
     {
-        foreach (
-            var file in StaleSnapshotFiles(fingerprints, _snapshotFingerprints, _snapshotBaselined)
-        )
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            QueueFile(file);
-        }
-
-        // Snapshot files existed when hashed, so only the other known files need a disk check
-        foreach (var path in _workspaceFiles.Keys)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            if (!fingerprints.ContainsKey(path) && !File.Exists(path))
-            {
-                QueueFile(path);
-            }
-        }
-
+        Interlocked.Exchange(ref _scanRequested, 1);
         await SynchronizeAsync(cancellationToken);
-        foreach (var (file, fingerprint) in fingerprints)
-        {
-            _snapshotFingerprints[file] = fingerprint;
-        }
-
-        _snapshotBaselined = true;
-    }
-
-    /// <summary>
-    /// Returns the snapshot files whose fingerprint differs from the one Roslyn received.
-    /// </summary>
-    internal static List<string> StaleSnapshotFiles(
-        IReadOnlyDictionary<string, string> fingerprints,
-        IReadOnlyDictionary<string, string> synchronized,
-        bool baselined
-    )
-    {
-        var stale = new List<string>();
-        foreach (var (file, fingerprint) in fingerprints)
-        {
-            if (synchronized.TryGetValue(file, out var current))
-            {
-                if (!string.Equals(current, fingerprint, StringComparison.Ordinal))
-                {
-                    stale.Add(file);
-                }
-            }
-            else if (baselined)
-            {
-                // Roslyn loaded the first snapshot from disk itself, later removals come from watched changes
-                stale.Add(file);
-            }
-        }
-
-        return stale;
+        return new Dictionary<string, FileStamp>(_workspaceFiles, StringComparer.Ordinal);
     }
 
     internal void RegisterCapabilities(JsonObject parameters)
@@ -412,7 +356,7 @@ internal sealed partial class RoslynSession
         foreach (var file in paths.EnumerateWatchedFiles())
         {
             cancellationToken.ThrowIfCancellationRequested();
-            files.Add(file.Path, new FileStamp(file.Length, file.LastWriteTimeUtc));
+            files.Add(file.Path, file.Stamp);
         }
 
         return files;
@@ -421,7 +365,6 @@ internal sealed partial class RoslynSession
     private async Task NotifyFileChangesAsync(
         Dictionary<string, FileStamp> current,
         HashSet<string> changedPaths,
-        bool forceAllChanges,
         CancellationToken cancellationToken
     )
     {
@@ -432,7 +375,7 @@ internal sealed partial class RoslynSession
             {
                 changes.Add(new FileChange(path, FileCreated));
             }
-            else if (forceAllChanges || changedPaths.Contains(path) || stamp != previous)
+            else if (changedPaths.Contains(path) || stamp != previous)
             {
                 changes.Add(new FileChange(path, FileChanged));
             }
@@ -445,8 +388,6 @@ internal sealed partial class RoslynSession
 
         await SendFileChangesAsync(changes, cancellationToken);
     }
-
-    private readonly record struct FileStamp(long Length, DateTime ModifiedUtc);
 
     private sealed record OpenDocument(string Text, int Version, LinkedListNode<string> Node);
 }
