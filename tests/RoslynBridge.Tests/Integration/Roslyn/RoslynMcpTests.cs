@@ -406,6 +406,33 @@ public sealed partial class RoslynMcpTests
     }
 
     [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    public async Task GathersTheImpactOfAMemberInOneCallAsync()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var workspace = await RoslynTestWorkspace.CreateAsync(cancellationToken);
+
+        var impact = Lines(
+            await workspace.CallAsync(
+                new LspRequest { Action = LspAction.Impact, Symbol = "IGreeter.Greet" }
+            )
+        );
+
+        Section(impact, "references").Select(FileOf).Should().Contain(ConsumerFile);
+        Section(impact, "callers")
+            .Should()
+            .ContainSingle(line => line.StartsWith(ConsumerFile + ":", StringComparison.Ordinal));
+        Section(impact, "implementation").Select(FileOf).Should().Contain(ImplementationFile);
+        impact.Should().NotContain(line => line.StartsWith("# subtypes", StringComparison.Ordinal));
+
+        var typeImpact = Lines(
+            await workspace.CallAsync(
+                new LspRequest { Action = LspAction.Impact, Symbol = "IGreeter" }
+            )
+        );
+        Section(typeImpact, "subtypes").Select(FileOf).Should().Equal(ImplementationFile);
+    }
+
+    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
     public async Task ReloadGetsTheStartupBudgetAsync()
     {
         var cancellationToken = TestContext.Current.CancellationToken;

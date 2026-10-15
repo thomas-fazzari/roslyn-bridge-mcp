@@ -36,6 +36,11 @@ internal sealed partial class LspQueries(
             return (await MembersAsync(request, cancellationToken)).AsToolResult();
         }
 
+        if (request.Action is LspAction.Impact)
+        {
+            return await ImpactAsync(request, cancellationToken);
+        }
+
         var position = await PositionAsync(request, cancellationToken);
         if (position.Error is { } error)
         {
@@ -372,6 +377,15 @@ internal sealed partial class LspQueries(
         }
 
         var (file, position) = location.Value;
+        return await PositionParametersAsync(file, position, cancellationToken);
+    }
+
+    private async Task<JsonObject> PositionParametersAsync(
+        string file,
+        SourcePosition position,
+        CancellationToken cancellationToken
+    )
+    {
         var parameters = LspParameters.Document(
             await session.OpenDocumentAsync(file, cancellationToken)
         );

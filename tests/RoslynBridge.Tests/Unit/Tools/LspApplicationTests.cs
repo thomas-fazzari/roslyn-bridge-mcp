@@ -71,6 +71,45 @@ public sealed class LspApplicationTests
     }
 
     [Fact]
+    public void LargeImpactDropsItsLargestSectionToFit()
+    {
+        var references = new Locations(
+            [
+                .. Enumerable
+                    .Range(0, 2_000)
+                    .Select(index => new FileLocations(
+                        string.Create(CultureInfo.InvariantCulture, $"src/File{index}.cs"),
+                        [new SourcePosition(1, 1)]
+                    )),
+            ],
+            Total: 2_000,
+            Truncated: false,
+            Generated: 0
+        );
+        var callers = new SymbolList(
+            [new SymbolItem("Sample.Caller.Run()", "method") { File = "src/Caller.cs" }],
+            Total: 1,
+            Truncated: false
+        );
+        var impact = new ImpactReport([
+            new ImpactSection("references", references),
+            new ImpactSection("callers", callers),
+            new ImpactSection("subtypes", new SymbolList([], Total: 0, Truncated: false)),
+        ]);
+
+        var response = LspTool.Response(impact);
+
+        response.IsError.Should().BeFalse();
+        var text = ResponseText(response);
+        text.Should()
+            .Contain("# callers\nsrc/Caller.cs method Sample.Caller.Run()")
+            .And.Contain("# subtypes: none")
+            .And.Contain("omitted to fit: references")
+            .And.NotContain("src/File0.cs");
+        text.Length.Should().BeLessThanOrEqualTo(ResultText.MaximumResponseCharacters);
+    }
+
+    [Fact]
     public void LargeCommandResponsePreservesAppliedFiles()
     {
         var receipt = Receipt("Source.cs") with

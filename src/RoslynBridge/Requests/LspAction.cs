@@ -44,6 +44,8 @@ internal enum LspAction
     Source = 18,
 
     Members = 19,
+
+    Impact = 20,
 }
 
 internal static class LspActions
@@ -62,6 +64,7 @@ internal static class LspActions
                     or LspAction.Hover
                     or LspAction.Source
                     or LspAction.Members
+                    or LspAction.Impact
             || action.IsHierarchy;
 
         /// <summary>

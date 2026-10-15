@@ -51,6 +51,9 @@ internal static partial class ResultText
             case TypeMembers members:
                 AppendMembers(text, members);
                 break;
+            case ImpactReport impact:
+                AppendImpact(text, impact, budget);
+                break;
             case SessionStatus status:
                 AppendStatus(text, status);
                 break;
@@ -101,6 +104,34 @@ internal static partial class ResultText
         }
 
         return Encoding.UTF8.GetString(buffer.GetBuffer(), 0, (int)buffer.Length);
+    }
+
+    // A block per section, dropping the largest ones when they do not all fit
+    private static void AppendImpact(StringBuilder text, ImpactReport impact, int budget)
+    {
+        var blocks = impact
+            .Sections.Select(section =>
+                section.Result is Locations { Total: 0 } or SymbolList { Total: 0 }
+                    ? $"# {section.Name}: none\n"
+                    : $"# {section.Name}\n{Render(section.Result, budget)}\n"
+            )
+            .ToArray();
+        var omitted = new SortedSet<int>();
+
+        while (blocks.Sum(block => block.Length) > budget - ClosingReserve)
+        {
+            var largest = Array.IndexOf(blocks, blocks.MaxBy(block => block.Length));
+            blocks[largest] = string.Empty;
+            omitted.Add(largest);
+        }
+
+        text.AppendJoin(string.Empty, blocks);
+        if (omitted.Count > 0)
+        {
+            text.Append("omitted to fit: ")
+                .AppendJoin(", ", omitted.Select(index => impact.Sections[index].Name))
+                .Append(". Request each alone.\n");
+        }
     }
 
     private static void AppendStatus(StringBuilder text, SessionStatus status)

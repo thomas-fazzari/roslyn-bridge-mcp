@@ -2,6 +2,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 using System.Text;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using RoslynBridge.Lsp;
 using RoslynBridge.Requests;
 using RoslynBridge.Results;
 using RoslynBridge.Symbols;
@@ -12,6 +15,14 @@ internal sealed partial class LspQueries
 {
     // Keeps the text within a 32,000-character response, with room for headers
     private const int MaximumSourceCharacters = 31_000;
+
+    private static readonly LspAction[] _impactActions =
+    [
+        LspAction.References,
+        LspAction.Callers,
+        LspAction.Implementation,
+        LspAction.Subtypes,
+    ];
 
     /// <summary>
     /// Returns the saved text of each declaration of a symbol, with its documentation comment.
@@ -81,6 +92,92 @@ internal sealed partial class LspQueries
             members.Count,
             members.Count > request.Limit
         );
+    }
+
+    /// <summary>
+    /// Runs the impact navigations on the declaration the request targets, which is resolved only once.
+    /// </summary>
+    private async Task<Result<ToolResult>> ImpactAsync(
+        LspRequest request,
+        CancellationToken cancellationToken
+    )
+    {
+        var location = await LocateAsync(request, cancellationToken);
+        if (location.Error is { } error)
+        {
+            return error;
+        }
+
+        var (file, position) = location.Value;
+        var targetsType = await TargetsTypeAsync(
+            await PositionParametersAsync(file, position, cancellationToken),
+            cancellationToken
+        );
+        var sections = new List<ImpactSection>(_impactActions.Length);
+        foreach (
+            var action in _impactActions.Where(action =>
+                targetsType || action is not LspAction.Subtypes
+            )
+        )
+        {
+            var section = await NavigationAsync(
+                request with
+                {
+                    Action = action,
+                    Symbol = null,
+                    File = file,
+                    Line = position.Line,
+                    Character = position.Character,
+                },
+                cancellationToken
+            );
+            if (section.Error is { } sectionError)
+            {
+                return sectionError;
+            }
+
+            sections.Add(
+                new ImpactSection(
+                    JsonNamingPolicy.SnakeCaseLower.ConvertName(action.ToString()),
+                    section.Value
+                )
+            );
+        }
+
+        return new ImpactReport(sections);
+    }
+
+    // For a member, Roslyn prepares the hierarchy of its containing type, whose name lies elsewhere
+    private async Task<bool> TargetsTypeAsync(
+        JsonObject parameters,
+        CancellationToken cancellationToken
+    )
+    {
+        var items =
+            await session.RequestAsync(
+                LspMethods.TextDocumentPrepareTypeHierarchy,
+                parameters,
+                cancellationToken
+            ) as JsonArray
+            ?? [];
+        var uri = parameters["textDocument"]!["uri"]!.GetValue<string>();
+        var position = parameters["position"]!;
+        return items.Any(item =>
+            string.Equals(item?["uri"]?.GetValue<string>(), uri, StringComparison.Ordinal)
+            && item?["selectionRange"] is { } range
+            && IsAtOrBefore(range["start"]!, position)
+            && IsAtOrBefore(position, range["end"]!)
+        );
+    }
+
+    private static bool IsAtOrBefore(JsonNode first, JsonNode second)
+    {
+        var (line, otherLine) = (first["line"]!.GetValue<int>(), second["line"]!.GetValue<int>());
+        return line < otherLine
+            || (
+                line == otherLine
+                && first["character"]!.GetValue<int>() <= second["character"]!.GetValue<int>()
+            );
     }
 
     // A request names the symbol, or gives a line inside its declaration

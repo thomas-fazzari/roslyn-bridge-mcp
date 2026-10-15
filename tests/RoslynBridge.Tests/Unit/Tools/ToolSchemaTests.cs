@@ -75,6 +75,7 @@ public sealed class ToolSchemaTests
             "subtypes",
             "source",
             "members",
+            "impact",
         }
     )]
     [InlineData(SymbolsTool.Name, new string[0], null)]

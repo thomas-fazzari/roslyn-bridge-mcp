@@ -35,6 +35,8 @@ subtypes - Find the types that derive from or implement a type.
 hover - Read type information and documentation.
 source - Read the declaration's saved text with its documentation comment.
 members - List the members a type declares, across its partial declarations.
+impact - Gather references, callers and implementations in one call, plus
+  subtypes for a type.
 
 source and members also accept a file and a line without a character. They then
 use the innermost declaration around that line.
@@ -96,6 +98,12 @@ class MyApp.Calculator
 src/Calculator.cs
   12:16 method Add(int, int) : int
 Prefix a member with the type name to send it back, as in MyApp.Calculator.Add(int, int).
+
+impact resolves the symbol once and returns one section per navigation, each
+headed by "# ACTION" and shaped like that action's own result. A section that
+does not apply reads "# ACTION: none". limit applies to each section. When the
+sections do not all fit, the largest ones are left out and named on a final
+"omitted to fit:" line. Request those alone.
 
 Symbols use the same line shape. Document symbols omit the file, give the
 declaration end after a dash, as in 5:18-9:2, and indent members under their
