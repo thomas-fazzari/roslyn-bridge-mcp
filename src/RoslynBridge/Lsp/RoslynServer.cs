@@ -72,8 +72,7 @@ internal sealed class RoslynProcess(Process process) : IRoslynServer
 
     public bool HasExited => process.HasExited;
 
-    // Roslyn leaves its MSBuild build hosts running as orphans after the exit notification.
-    // Killing the tree ends them while they are still Roslyn's descendants.
+    // Roslyn leaves its MSBuild build hosts running after exit, so the whole tree is killed
     public void Kill() => process.Kill(entireProcessTree: true);
 
     public Task WaitForExitAsync(CancellationToken cancellationToken) =>

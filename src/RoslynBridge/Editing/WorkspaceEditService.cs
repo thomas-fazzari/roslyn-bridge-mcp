@@ -548,7 +548,6 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
             .ToArray();
         return new JsonObject
         {
-            ["applied"] = false,
             ["fileCount"] = files.Length,
             ["files"] = new JsonArray(files),
             ["previewTruncated"] = files.Any(file => file["previewTruncated"]!.GetValue<bool>()),

@@ -228,7 +228,7 @@ internal sealed partial class RoslynSession
 
     internal void UnregisterCapabilities(JsonObject parameters)
     {
-        // The misspelling is part of the LSP 3.17 protocol contract :D
+        // The misspelling is part of the LSP 3.17 protocol
         if (parameters["unregisterations"] is not JsonArray registrations)
         {
             return;
@@ -338,8 +338,7 @@ internal sealed partial class RoslynSession
             return;
         }
 
-        // Watched-file notifications update Roslyn asynchronously
-        // Opening/closing the document sends its saved text through the serialized document sync queue
+        // Opening the document sends its saved text in order, unlike asynchronous watched-file notifications
         try
         {
             await OpenDocumentAsync(path, cancellationToken).ConfigureAwait(false);

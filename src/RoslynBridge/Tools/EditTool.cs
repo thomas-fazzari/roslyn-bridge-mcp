@@ -53,7 +53,8 @@ internal sealed class EditTool(LspTool lsp)
                 {
                     EditAction.Rename => LspAction.Rename,
                     EditAction.RenameFile => LspAction.RenameFile,
-                    _ => LspAction.CodeActions,
+                    EditAction.CodeActions => LspAction.CodeActions,
+                    _ => throw new ArgumentOutOfRangeException(nameof(action)),
                 },
                 Symbol = symbol,
                 File = file,

@@ -115,7 +115,7 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
         return symbols;
     }
 
-    // Unknown project membership keeps the previous assumption that same-named declarations are partial
+    // Without known projects, same-named declarations count as parts of one partial type
     private static bool SharesProject(
         string first,
         string second,

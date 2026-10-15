@@ -9,21 +9,19 @@ namespace RoslynBridge.Output;
 
 internal static partial class ResultText
 {
-    private const int OmittedFilesReserve = 80;
+    // Room kept for the closing lines that report what was left out
+    private const int ClosingReserve = 200;
 
-    private static void AppendChange(StringBuilder text, JsonObject result)
+    // Applied changes render as receipts before reaching here
+    private static void AppendChange(StringBuilder text, JsonObject result, int budget)
     {
         if (result["actions"] is JsonArray actions)
         {
             AppendActions(text, result, actions);
         }
-        else if (result["proposalId"] is not null)
-        {
-            AppendPreview(text, result);
-        }
         else
         {
-            AppendReceipt(text, result, int.MaxValue);
+            AppendPreview(text, result, budget);
         }
     }
 
@@ -46,38 +44,28 @@ internal static partial class ResultText
         AppendEmptyOrTruncation(text, result, "actions");
     }
 
-    private static void AppendPreview(StringBuilder text, JsonObject result)
+    private static void AppendPreview(StringBuilder text, JsonObject result, int budget)
     {
         var files = Items(result, "files").ToList();
         text.Append("proposal ")
             .Append(result["proposalId"]!.GetValue<string>())
             .Append(": ")
-            .Append(Count(Int(result, "fileCount"), "file", "files"))
+            .Append(Count(files.Count, "file", "files"))
             .Append(", not applied\n");
-        foreach (var file in files)
-        {
-            AppendOperation(text, file);
-            foreach (var change in (file["changes"] as JsonArray ?? []).OfType<JsonObject>())
-            {
-                AppendHunk(text, change);
-            }
-        }
-
-        if (result["command"] is { } command)
-        {
-            text.Append("command ").Append(Json(command)).Append('\n');
-        }
-
-        if (result["commandPreviewTruncated"]?.GetValue<bool>() is true)
+        var shown = AppendWithin(text, files.Select(PreviewOfFile), budget);
+        if (
+            result["command"] is { } command
+            && AppendWithin(text, [$"command {Json(command)}\n"], budget) == 0
+        )
         {
             text.Append("command omitted: too large to show\n");
         }
 
-        if (result["filesTruncated"]?.GetValue<bool>() is true)
+        if (shown < files.Count)
         {
             text.Append(
                 CultureInfo.InvariantCulture,
-                $"truncated: {files.Count} of {Int(result, "fileCount")} files shown\n"
+                $"truncated: {shown} of {files.Count} files shown\n"
             );
         }
 
@@ -85,6 +73,17 @@ internal static partial class ResultText
         {
             text.Append("preview truncated: some changes are not shown in full\n");
         }
+    }
+
+    private static string PreviewOfFile(JsonObject file)
+    {
+        var text = new StringBuilder(Operation(file));
+        foreach (var change in (file["changes"] as JsonArray ?? []).OfType<JsonObject>())
+        {
+            AppendHunk(text, change);
+        }
+
+        return text.ToString();
     }
 
     private static void AppendHunk(StringBuilder text, JsonObject change)
@@ -140,20 +139,7 @@ internal static partial class ResultText
             );
 
         var files = Items(result, "files").ToList();
-        var shown = 0;
-        foreach (var file in files)
-        {
-            var line = new StringBuilder();
-            AppendOperation(line, file);
-            if (text.Length + line.Length > budget - OmittedFilesReserve)
-            {
-                break;
-            }
-
-            text.Append(line);
-            shown++;
-        }
-
+        var shown = AppendWithin(text, files.Select(Operation), budget);
         if (shown < files.Count)
         {
             text.Append(
@@ -179,14 +165,31 @@ internal static partial class ResultText
         }
     }
 
-    private static void AppendOperation(StringBuilder text, JsonObject file)
+    // kind path, or rename old -> new
+    private static string Operation(JsonObject file)
     {
-        text.Append(file["kind"]?.GetValue<string>() ?? "change").Append(' ');
-        if (file["oldPath"]?.GetValue<string>() is { } oldPath)
+        var path = file["path"]!.GetValue<string>();
+        var kind = file["kind"]!.GetValue<string>();
+        return file["oldPath"]?.GetValue<string>() is { } oldPath
+            ? $"{kind} {oldPath} -> {path}\n"
+            : $"{kind} {path}\n";
+    }
+
+    // Appends whole blocks while they fit, keeping room for the closing lines
+    private static int AppendWithin(StringBuilder text, IEnumerable<string> blocks, int budget)
+    {
+        var shown = 0;
+        foreach (var block in blocks)
         {
-            text.Append(oldPath).Append(" -> ");
+            if (text.Length + block.Length > budget - ClosingReserve)
+            {
+                break;
+            }
+
+            text.Append(block);
+            shown++;
         }
 
-        text.Append(file["path"]!.GetValue<string>()).Append('\n');
+        return shown;
     }
 }

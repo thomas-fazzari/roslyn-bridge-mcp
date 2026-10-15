@@ -3,6 +3,7 @@
 
 using System.Text.Json.Nodes;
 using RoslynBridge.Lsp;
+using RoslynBridge.Requests;
 
 namespace RoslynBridge.Queries;
 
@@ -155,6 +156,13 @@ internal static class LspResultsExtensions
 
     extension(JsonNode diagnostic)
     {
+        // LSP leaves a missing severity to the client. Reporting it as an error keeps it visible
+        public DiagnosticSeverity Severity() =>
+            diagnostic["severity"]?.GetValue<int>() is { } severity
+            && Enum.IsDefined((DiagnosticSeverity)severity)
+                ? (DiagnosticSeverity)severity
+                : DiagnosticSeverity.Error;
+
         public JsonObject ToCompactDiagnostic()
         {
             var start =
@@ -167,16 +175,7 @@ internal static class LspResultsExtensions
                 ["line"] = start["line"]!.GetValue<int>() + 1,
                 ["character"] = start["character"]!.GetValue<int>() + 1,
             };
-            if (diagnostic["severity"]?.GetValue<int>() is { } severity)
-            {
-                compact["severity"] = severity switch
-                {
-                    1 => "error",
-                    2 => "warning",
-                    3 => "information",
-                    _ => "hint",
-                };
-            }
+            compact["severity"] = diagnostic.Severity().ToString().ToLowerInvariant();
 
             compact["code"] = diagnostic["code"]?.DeepClone();
             compact["message"] = diagnostic["message"]?.DeepClone();

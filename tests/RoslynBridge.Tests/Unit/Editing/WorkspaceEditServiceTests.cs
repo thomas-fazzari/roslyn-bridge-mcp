@@ -6,6 +6,8 @@ using System.Text;
 using System.Text.Json.Nodes;
 using RoslynBridge.Editing;
 using RoslynBridge.Output;
+using RoslynBridge.Requests;
+using RoslynBridge.Tools;
 using static RoslynBridge.Tests.Unit.TestHelpers;
 
 namespace RoslynBridge.Tests.Unit.Editing;
@@ -162,18 +164,13 @@ public sealed class WorkspaceEditServiceTests : IDisposable
         var service = CreateService();
         var snapshot = await service.CaptureAsync(TestCt);
 
-        var preview = EditPreview.Limit(
-            await service.PreviewAsync(edit, snapshot, TestCt),
-            ResultText.PreviewBudgetCharacters
-        );
+        var preview = await service.PreviewAsync(edit, snapshot, TestCt);
+        preview["proposalId"] = "proposal";
+        var rendered = ResponseText(LspTool.Response(LspAction.Rename, preview));
 
         preview["fileCount"]!.GetValue<int>().Should().Be(fileCount);
-        preview["files"]!.AsArray().Count.Should().BeInRange(1, fileCount - 1);
-        preview["filesTruncated"]!.GetValue<bool>().Should().BeTrue();
-        preview
-            .ToJsonString(BridgeJsonContext.Default.Options)
-            .Length.Should()
-            .BeLessThanOrEqualTo(ResultText.PreviewBudgetCharacters);
+        rendered.Should().Contain("files shown");
+        rendered.Length.Should().BeLessThanOrEqualTo(ResultText.MaximumResponseCharacters);
         await AssertFileTextAsync(Path.Combine(_root, "Source0.cs"), before);
 
         var applied = await service.ApplyAsync(edit, snapshot, TestCt);

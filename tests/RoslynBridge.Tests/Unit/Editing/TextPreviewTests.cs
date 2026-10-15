@@ -69,11 +69,8 @@ public sealed class TextPreviewTests
         var after = preview.Changes[1]!["after"]!;
         before["text"]!.GetValue<string>().Should().Be("old\n");
         before["startLine"]!.GetValue<int>().Should().Be(3);
-        before["endLine"]!.GetValue<int>().Should().Be(4);
         after["text"]!.GetValue<string>().Should().Be("new\n");
         after["startLine"]!.GetValue<int>().Should().Be(4);
-        after["endLine"]!.GetValue<int>().Should().Be(5);
-        after["endCharacter"]!.GetValue<int>().Should().Be(1);
     }
 
     [Fact]
@@ -85,10 +82,8 @@ public sealed class TextPreviewTests
         var change = preview.Changes[0]!;
         change["before"]!["text"]!.GetValue<string>().Should().Be("remove\n");
         change["before"]!["startLine"]!.GetValue<int>().Should().Be(2);
-        change["before"]!["endLine"]!.GetValue<int>().Should().Be(3);
         change["after"]!["text"]!.GetValue<string>().Should().BeEmpty();
         change["after"]!["startLine"]!.GetValue<int>().Should().Be(2);
-        change["after"]!["endLine"]!.GetValue<int>().Should().Be(2);
     }
 
     [Fact]
@@ -131,6 +126,5 @@ public sealed class TextPreviewTests
 
         preview.Truncated.Should().BeTrue();
         preview.Changes.Should().ContainSingle();
-        preview.Changes[0]!["truncated"]!.GetValue<bool>().Should().BeTrue();
     }
 }

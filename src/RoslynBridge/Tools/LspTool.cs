@@ -179,8 +179,7 @@ internal sealed partial class LspTool(
     private static bool MayRestartServer(LspRequest request) =>
         request.Action is LspAction.Reload || request.Apply;
 
-    // Diagnostics first announces new files, and a new edit captures its snapshot first
-    // Both synchronize Roslyn then, so an earlier synchronization would repeat the work
+    // Diagnostics and a new edit synchronize Roslyn themselves, so an earlier synchronization repeats work
     private static bool SynchronizesBeforeFirstRead(LspRequest request) =>
         request.Action is LspAction.Diagnostics
         || (
@@ -211,12 +210,11 @@ internal sealed partial class LspTool(
             );
         }
 
-        switch (request.Action)
+        if (request.Action is LspAction.Reload)
         {
-            case LspAction.Reload:
-                changes.Clear();
-                await session.ReloadAsync(cancellationToken);
-                return new JsonObject { ["running"] = true };
+            changes.Clear();
+            await session.ReloadAsync(cancellationToken);
+            return new JsonObject { ["running"] = true };
         }
 
         await session.EnsureStartedAsync(cancellationToken);
@@ -355,14 +353,7 @@ internal sealed partial class LspTool(
         var message = cause.Message[..Math.Min(cause.Message.Length, MaximumErrorCharacters)];
         var text = new StringBuilder(ResultText.Error(new ToolError(code, message), rpcCode: null))
             .Append("\nfailed step: ")
-            .Append(
-                JsonSerializer
-                    .SerializeToNode(
-                        exception.Phase,
-                        BridgeJsonContext.Default.EditApplicationPhase
-                    )!
-                    .GetValue<string>()
-            );
+            .Append(exception.Phase.ToString().ToLowerInvariant());
         if (exception.FailedPath is { } path)
         {
             text.Append(", path ").Append(path);

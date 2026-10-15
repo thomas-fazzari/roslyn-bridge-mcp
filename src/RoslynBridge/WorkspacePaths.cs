@@ -115,10 +115,6 @@ internal sealed class WorkspacePaths(string root)
     public string ToUri(string file) => new Uri(Resolve(file)).AbsoluteUri;
 
     /// <summary>
-    /// Returns the URI of a full path that <see cref="Resolve"/> returned or the workspace walk produced.
-    /// Skips the symbolic link check, so never use it for a path the bridge reads next.
-    /// </summary>
-    /// <summary>
     /// Returns the local path of a file URI, including a Windows drive written as c%3A, which
     /// <see cref="Uri.LocalPath"/> leaves unusable.
     /// </summary>

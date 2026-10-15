@@ -121,24 +121,18 @@ internal static class TextPreview
             {
                 ["before"] = DescribeRange(before[..beforeLimit], beforeOrigin),
                 ["after"] = DescribeRange(after[..afterLimit], afterOrigin),
-                ["truncated"] = truncated,
             },
             truncated
         );
     }
 
-    private static JsonObject DescribeRange(string text, Position start)
-    {
-        var end = PositionAt(text, text.Length, start);
-        return new JsonObject
+    private static JsonObject DescribeRange(string text, Position start) =>
+        new()
         {
             ["startLine"] = start.Line,
             ["startCharacter"] = start.Character,
-            ["endLine"] = end.Line,
-            ["endCharacter"] = end.Character,
             ["text"] = text,
         };
-    }
 
     private static (int Start, int BeforeEnd, int AfterEnd) ChangedWindow(
         string before,

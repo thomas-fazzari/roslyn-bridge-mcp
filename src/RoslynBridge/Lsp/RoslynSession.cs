@@ -193,8 +193,7 @@ internal sealed partial class RoslynSession(
         }
         catch
         {
-            // A canceled write may still reach Roslyn
-            // Reloading is necessary before trusting document versions
+            // A canceled write may still reach Roslyn, so document versions are untrusted until a reload
             _restartRequired = true;
             throw;
         }

@@ -14,30 +14,53 @@ namespace RoslynBridge.Tests.Unit.Tools;
 public sealed class LspApplicationTests
 {
     [Fact]
-    public void PreviewNearTheLimitStillFitsInTheResponse()
+    public void LargePreviewDropsTrailingFilesAndTheCommandToFit()
     {
-        // Small files fill the budget almost exactly
-        var files = new JsonArray();
-        for (var index = 0; index < 4_000; index++)
+        // Short lines cost more as text than as JSON, so the budget must hold for rendered text
+        var change = new JsonObject
         {
-            files.Add(new JsonObject { ["path"] = "S.cs" });
+            ["before"] = new JsonObject
+            {
+                ["startLine"] = 1,
+                ["startCharacter"] = 1,
+                ["text"] = string.Concat(Enumerable.Repeat("<\n", 50)),
+            },
+            ["after"] = new JsonObject
+            {
+                ["startLine"] = 1,
+                ["startCharacter"] = 1,
+                ["text"] = string.Concat(Enumerable.Repeat(">\n", 50)),
+            },
+        };
+        var files = new JsonArray();
+        for (var index = 0; index < 1_000; index++)
+        {
+            files.Add(
+                new JsonObject
+                {
+                    ["path"] = "S.cs",
+                    ["kind"] = "change",
+                    ["changes"] = new JsonArray(change.DeepClone()),
+                }
+            );
         }
+
         var preview = new JsonObject
         {
             ["proposalId"] = "proposal",
-            ["applied"] = false,
-            ["fileCount"] = files.Count,
             ["files"] = files,
+            ["command"] = new string('x', ResultText.MaximumResponseCharacters),
         };
 
-        var limited = EditPreview.Limit(preview, ResultText.PreviewBudgetCharacters);
-        var response = LspTool.Response(LspAction.Rename, limited);
+        var response = LspTool.Response(LspAction.Rename, preview);
 
         response.IsError.Should().BeFalse();
-        ResponseText(response)
-            .Should()
-            .StartWith("proposal proposal: 4000 files, not applied")
+        var text = ResponseText(response);
+        text.Should()
+            .StartWith("proposal proposal: 1000 files, not applied")
+            .And.Contain("command omitted")
             .And.Contain("files shown");
+        text.Length.Should().BeLessThanOrEqualTo(ResultText.MaximumResponseCharacters);
     }
 
     [Fact]
@@ -129,5 +152,12 @@ public sealed class LspApplicationTests
     }
 
     private static JsonObject ApplicationResult(params JsonObject[] files) =>
-        EditReceipt.Create(applied: true, files);
+        EditReceipt.Create(
+            applied: true,
+            files.Select(file =>
+            {
+                file["kind"] = "change";
+                return file;
+            })
+        );
 }

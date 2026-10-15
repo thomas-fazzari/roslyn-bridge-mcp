@@ -6,7 +6,6 @@ using System.Runtime.ExceptionServices;
 using System.Text.Json.Nodes;
 using RoslynBridge.Editing;
 using RoslynBridge.Lsp;
-using RoslynBridge.Output;
 using RoslynBridge.Queries;
 using RoslynBridge.Requests;
 
@@ -303,7 +302,7 @@ internal sealed class LspChanges(
             var preview = await edits.PreviewAsync(edit, change.Snapshot, cancellationToken);
             preview["proposalId"] = Remember(change);
             preview["command"] = change.Command?.DeepClone();
-            return EditPreview.Limit(preview, ResultText.PreviewBudgetCharacters);
+            return preview;
         }
 
         var result = await edits.ApplyAsync(edit, change.Snapshot, cancellationToken);
@@ -409,7 +408,7 @@ internal sealed class LspChanges(
         return result;
     }
 
-    internal static JsonObject MergeApplicationResults(JsonObject first, JsonObject second)
+    private static JsonObject MergeApplicationResults(JsonObject first, JsonObject second)
     {
         var merged = EditReceipt.Create(
             first["applied"]!.GetValue<bool>() && second["applied"]!.GetValue<bool>(),
@@ -476,8 +475,7 @@ internal sealed class LspChanges(
         return WithDocumentVersions(snapshot);
     }
 
-    // Opening a document after the capture adds or evicts versions, so record them again
-    // right before the request that computes the edit
+    // Opening a document after the capture changes versions, so they are recorded again before the edit request
     private WorkspaceSnapshot WithDocumentVersions(WorkspaceSnapshot snapshot) =>
         snapshot with
         {

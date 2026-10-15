@@ -19,8 +19,6 @@ internal static partial class ResultText
 {
     internal const int MaximumResponseCharacters = 32_000;
 
-    // Previews are measured as JSON, which is longer than the rendered text
-    internal const int PreviewBudgetCharacters = MaximumResponseCharacters - 100;
     private const string Indent = "  ";
 
     private static readonly JsonWriterOptions _jsonOptions = new()
@@ -28,7 +26,7 @@ internal static partial class ResultText
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
     };
 
-    /// <param name="budget">Characters a receipt may use. It drops trailing files to fit.</param>
+    /// <param name="budget">Characters a preview or receipt may use. They drop trailing files to fit.</param>
     public static string Render(LspAction action, JsonNode? result, bool application, int budget)
     {
         var text = new StringBuilder();
@@ -71,7 +69,7 @@ internal static partial class ResultText
                 AppendMembers(text, (JsonObject)result!);
                 break;
             case LspAction.Rename or LspAction.RenameFile or LspAction.CodeActions:
-                AppendChange(text, (JsonObject)result!);
+                AppendChange(text, (JsonObject)result!, budget);
                 break;
             default:
                 text.Append(Json(result));
@@ -135,7 +133,7 @@ internal static partial class ResultText
                 text.Append(Indent)
                     .Append(Position(diagnostic["line"]!, diagnostic["character"]!))
                     .Append(' ')
-                    .Append(diagnostic["severity"]?.GetValue<string>() ?? "error");
+                    .Append(diagnostic["severity"]!.GetValue<string>());
                 if (diagnostic["code"] is { } code)
                 {
                     text.Append(' ').Append(Scalar(code));

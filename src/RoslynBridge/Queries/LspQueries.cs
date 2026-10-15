@@ -181,7 +181,7 @@ internal sealed partial class LspQueries(
             {
                 item.Remove("name");
                 item.Remove("detail");
-                item.Insert(0, "symbol", name);
+                item["symbol"] = name;
             }
         }
     }
@@ -233,8 +233,7 @@ internal sealed partial class LspQueries(
         var miscellaneousFiles = new JsonArray();
         foreach (var batch in files.Chunk(RoslynSession.MaximumOpenDocuments))
         {
-            // Each opened document creates a new solution version and discards diagnostics
-            // computed for earlier versions, so open the whole batch before pulling reports
+            // Each open discards diagnostics of earlier solution versions, so the batch opens before any pull
             var uris = new List<string>(batch.Length);
             foreach (var file in batch)
             {
@@ -296,7 +295,6 @@ internal sealed partial class LspQueries(
             ["filesChecked"] = files.Length,
             ["filesWithDiagnostics"] = filesWithDiagnostics,
             ["diagnostics"] = results,
-            ["complete"] = miscellaneousFiles.Count == 0,
             ["total"] = total,
             ["belowSeverity"] = belowSeverity,
             ["truncated"] = total > request.Limit,
@@ -351,9 +349,8 @@ internal sealed partial class LspQueries(
             && contexts.All(context => context?["_vs_is_miscellaneous"]?.GetValue<bool>() is true);
     }
 
-    // LSP leaves a missing severity to the client. Reporting it as an error keeps it visible
     private static bool IsReported(JsonNode diagnostic, DiagnosticSeverity minimum) =>
-        (diagnostic["severity"]?.GetValue<int>() ?? (int)DiagnosticSeverity.Error) <= (int)minimum;
+        diagnostic.Severity() <= minimum;
 
     public async Task<JsonObject> FileDiagnosticsAsync(
         string uri,

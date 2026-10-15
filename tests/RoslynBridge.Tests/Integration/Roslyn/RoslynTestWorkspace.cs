@@ -222,9 +222,7 @@ internal sealed class RoslynTestWorkspace : IAsyncDisposable
 
         var values = new Dictionary<string, object?>(StringComparer.Ordinal)
         {
-            ["action"] = JsonSerializer
-                .SerializeToNode(request.Action, BridgeJsonContext.Default.LspAction)!
-                .GetValue<string>(),
+            ["action"] = JsonNamingPolicy.SnakeCaseLower.ConvertName(request.Action.ToString()),
             ["file"] = request.File,
             ["symbol"] = request.Symbol,
             ["severity"] = JsonSerializer
