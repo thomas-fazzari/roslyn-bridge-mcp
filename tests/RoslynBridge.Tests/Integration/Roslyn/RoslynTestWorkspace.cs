@@ -49,13 +49,13 @@ internal sealed class RoslynTestWorkspace : IAsyncDisposable
         try
         {
             workspace.CopyFixture();
-            await workspace.RestoreAsync().ConfigureAwait(false);
-            await workspace.ConnectAsync(requestTimeoutSeconds).ConfigureAwait(false);
+            await workspace.RestoreAsync();
+            await workspace.ConnectAsync(requestTimeoutSeconds);
             return workspace;
         }
         catch
         {
-            await workspace.DisposeAsync().ConfigureAwait(false);
+            await workspace.DisposeAsync();
             throw;
         }
     }
@@ -70,7 +70,7 @@ internal sealed class RoslynTestWorkspace : IAsyncDisposable
 
     public async Task<string> CallAsync(LspRequest request)
     {
-        var response = await CallRawAsync(request).ConfigureAwait(false);
+        var response = await CallRawAsync(request);
         var text = ResponseText(response);
         response.IsError.Should().NotBeTrue(text);
         return text;
@@ -79,15 +79,12 @@ internal sealed class RoslynTestWorkspace : IAsyncDisposable
     public async Task<CallToolResult> CallRawAsync(LspRequest request)
     {
         var (tool, arguments) = ToolCall(request);
-        return await Client
-            .CallToolAsync(tool, arguments, cancellationToken: _cancellationToken)
-            .ConfigureAwait(false);
+        return await Client.CallToolAsync(tool, arguments, cancellationToken: _cancellationToken);
     }
 
     public async Task<LspRequest> AtAsync(LspAction action, string file, string symbol)
     {
-        var text = await File.ReadAllTextAsync(FilePath(file), _cancellationToken)
-            .ConfigureAwait(false);
+        var text = await File.ReadAllTextAsync(FilePath(file), _cancellationToken);
         var offset = text.IndexOf(symbol, StringComparison.Ordinal);
         offset.Should().BeGreaterThanOrEqualTo(0);
         var prefix = text[..offset];
@@ -106,7 +103,7 @@ internal sealed class RoslynTestWorkspace : IAsyncDisposable
     {
         if (_client is not null)
         {
-            await _client.DisposeAsync().ConfigureAwait(false);
+            await _client.DisposeAsync();
             _client = null;
         }
 
@@ -116,21 +113,19 @@ internal sealed class RoslynTestWorkspace : IAsyncDisposable
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
         try
         {
-            await process.WaitForExitAsync(timeout.Token).ConfigureAwait(false);
+            await process.WaitForExitAsync(timeout.Token);
         }
         catch (OperationCanceledException exception)
         {
             process.Kill(entireProcessTree: true);
-            await process.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false);
+            await process.WaitForExitAsync(CancellationToken.None);
             throw new TimeoutException(
                 "The MCP host did not stop after its input was closed.",
                 exception
             );
         }
 
-        TestContext.Current.TestOutputHelper?.WriteLine(
-            await _standardError!.ConfigureAwait(false)
-        );
+        TestContext.Current.TestOutputHelper?.WriteLine(await _standardError!);
         return process.ExitCode;
     }
 
@@ -142,7 +137,7 @@ internal sealed class RoslynTestWorkspace : IAsyncDisposable
         {
             if (_process is { HasExited: false })
             {
-                var exitCode = await StopAsync().ConfigureAwait(false);
+                var exitCode = await StopAsync();
                 output?.WriteLine(
                     string.Create(
                         CultureInfo.InvariantCulture,
@@ -152,7 +147,7 @@ internal sealed class RoslynTestWorkspace : IAsyncDisposable
             }
             else if (_client is not null)
             {
-                await _client.DisposeAsync().ConfigureAwait(false);
+                await _client.DisposeAsync();
             }
         }
         catch (TimeoutException exception)
@@ -255,19 +250,17 @@ internal sealed class RoslynTestWorkspace : IAsyncDisposable
         var error = process.StandardError.ReadToEndAsync(_cancellationToken);
         try
         {
-            await process.WaitForExitAsync(_cancellationToken).ConfigureAwait(false);
+            await process.WaitForExitAsync(_cancellationToken);
         }
         finally
         {
             if (!process.HasExited)
             {
                 process.Kill(entireProcessTree: true);
-                await process.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false);
+                await process.WaitForExitAsync(CancellationToken.None);
             }
         }
-        process
-            .ExitCode.Should()
-            .Be(0, await output.ConfigureAwait(false) + await error.ConfigureAwait(false));
+        process.ExitCode.Should().Be(0, await output + await error);
     }
 
     private async Task ConnectAsync(int requestTimeoutSeconds)
@@ -307,14 +300,12 @@ internal sealed class RoslynTestWorkspace : IAsyncDisposable
 
         _process.Start().Should().BeTrue();
         _standardError = _process.StandardError.ReadToEndAsync(CancellationToken.None);
-        _client = await McpClient
-            .CreateAsync(
-                new StreamClientTransport(
-                    _process.StandardInput.BaseStream,
-                    _process.StandardOutput.BaseStream
-                ),
-                cancellationToken: _cancellationToken
-            )
-            .ConfigureAwait(false);
+        _client = await McpClient.CreateAsync(
+            new StreamClientTransport(
+                _process.StandardInput.BaseStream,
+                _process.StandardOutput.BaseStream
+            ),
+            cancellationToken: _cancellationToken
+        );
     }
 }

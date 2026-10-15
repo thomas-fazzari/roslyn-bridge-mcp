@@ -69,19 +69,17 @@ internal sealed partial class RoslynSession
             {
                 var current = ScanWorkspace(cancellationToken);
                 await NotifyFileChangesAsync(
-                        current,
-                        changedPaths.ToHashSet(StringComparer.Ordinal),
-                        forceAllChanges,
-                        cancellationToken
-                    )
-                    .ConfigureAwait(false);
+                    current,
+                    changedPaths.ToHashSet(StringComparer.Ordinal),
+                    forceAllChanges,
+                    cancellationToken
+                );
 
                 _workspaceFiles = current;
             }
             else if (changedPaths.Count > 0)
             {
-                await SynchronizeChangedPathsAsync(changedPaths, cancellationToken)
-                    .ConfigureAwait(false);
+                await SynchronizeChangedPathsAsync(changedPaths, cancellationToken);
             }
         }
         catch
@@ -174,7 +172,7 @@ internal sealed partial class RoslynSession
             updates.Add(path, current);
         }
 
-        await SendFileChangesAsync(changes, cancellationToken).ConfigureAwait(false);
+        await SendFileChangesAsync(changes, cancellationToken);
 
         foreach (var (path, stamp) in updates)
         {
@@ -205,22 +203,17 @@ internal sealed partial class RoslynSession
             if (!_watchRegistrations.IsEmpty)
             {
                 await NotifyAsync(
-                        LspMethods.WorkspaceDidChangeWatchedFiles,
-                        new JsonObject
-                        {
-                            ["changes"] = new JsonArray([.. batch.Select(ToFileEvent)]),
-                        },
-                        cancellationToken
-                    )
-                    .ConfigureAwait(false);
+                    LspMethods.WorkspaceDidChangeWatchedFiles,
+                    new JsonObject { ["changes"] = new JsonArray([.. batch.Select(ToFileEvent)]) },
+                    cancellationToken
+                );
             }
 
             foreach (var change in batch)
             {
                 if (change.Type is not FileDeleted)
                 {
-                    await SynchronizeClosedDocumentAsync(change.Path, cancellationToken)
-                        .ConfigureAwait(false);
+                    await SynchronizeClosedDocumentAsync(change.Path, cancellationToken);
                 }
             }
         }

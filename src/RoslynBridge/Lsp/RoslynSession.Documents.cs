@@ -57,25 +57,24 @@ internal sealed partial class RoslynSession
             var oldest =
                 _openedOrder.First
                 ?? throw new InvalidOperationException("The open document order is empty.");
-            await CloseDocumentAsync(oldest.Value, cancellationToken).ConfigureAwait(false);
+            await CloseDocumentAsync(oldest.Value, cancellationToken);
         }
 
-        var text = await ReadDocumentAsync(path, cancellationToken).ConfigureAwait(false);
+        var text = await ReadDocumentAsync(path, cancellationToken);
         await NotifyAsync(
-                LspMethods.TextDocumentDidOpen,
-                new JsonObject
+            LspMethods.TextDocumentDidOpen,
+            new JsonObject
+            {
+                ["textDocument"] = new JsonObject
                 {
-                    ["textDocument"] = new JsonObject
-                    {
-                        ["uri"] = uri,
-                        ["languageId"] = "csharp",
-                        ["version"] = InitialDocumentVersion,
-                        ["text"] = text,
-                    },
+                    ["uri"] = uri,
+                    ["languageId"] = "csharp",
+                    ["version"] = InitialDocumentVersion,
+                    ["text"] = text,
                 },
-                cancellationToken
-            )
-            .ConfigureAwait(false);
+            },
+            cancellationToken
+        );
 
         _documents.Add(
             path,
@@ -97,11 +96,10 @@ internal sealed partial class RoslynSession
         try
         {
             result = await RequestAsync(
-                    LspMethods.TextDocumentGetProjectContexts,
-                    new JsonObject { ["_vs_textDocument"] = new JsonObject { ["uri"] = uri } },
-                    cancellationToken
-                )
-                .ConfigureAwait(false);
+                LspMethods.TextDocumentGetProjectContexts,
+                new JsonObject { ["_vs_textDocument"] = new JsonObject { ["uri"] = uri } },
+                cancellationToken
+            );
         }
         catch (RemoteInvocationException)
         {
@@ -116,10 +114,10 @@ internal sealed partial class RoslynSession
         foreach (var path in _documents.Keys.ToArray())
         {
             cancellationToken.ThrowIfCancellationRequested();
-            await SynchronizeDocumentAsync(path, cancellationToken).ConfigureAwait(false);
+            await SynchronizeDocumentAsync(path, cancellationToken);
         }
 
-        await SynchronizeWatchedFilesAsync(cancellationToken).ConfigureAwait(false);
+        await SynchronizeWatchedFilesAsync(cancellationToken);
     }
 
     /// <summary>
@@ -136,7 +134,7 @@ internal sealed partial class RoslynSession
             QueueFile(file);
         }
 
-        await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        await SynchronizeAsync(cancellationToken);
     }
 
     /// <summary>
@@ -166,7 +164,7 @@ internal sealed partial class RoslynSession
             }
         }
 
-        await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        await SynchronizeAsync(cancellationToken);
         foreach (var (file, fingerprint) in fingerprints)
         {
             _snapshotFingerprints[file] = fingerprint;
@@ -267,7 +265,7 @@ internal sealed partial class RoslynSession
         var buffer = new char[DocumentReadBufferCharacters];
         while (true)
         {
-            var count = await reader.ReadAsync(buffer, cancellationToken).ConfigureAwait(false);
+            var count = await reader.ReadAsync(buffer, cancellationToken);
             if (count == 0)
             {
                 return builder.ToString();
@@ -289,20 +287,20 @@ internal sealed partial class RoslynSession
         var uri = paths.ToUri(path);
         if (!File.Exists(path))
         {
-            await CloseDocumentAsync(path, cancellationToken).ConfigureAwait(false);
+            await CloseDocumentAsync(path, cancellationToken);
             return;
         }
 
         string text;
         try
         {
-            text = await ReadDocumentAsync(path, cancellationToken).ConfigureAwait(false);
+            text = await ReadDocumentAsync(path, cancellationToken);
         }
         catch (InvalidDataException)
         {
             // Roslyn reads the file from disk once the document closes
             LogOversizedDocument(logger, path);
-            await CloseDocumentAsync(path, cancellationToken).ConfigureAwait(false);
+            await CloseDocumentAsync(path, cancellationToken);
             return;
         }
 
@@ -314,16 +312,15 @@ internal sealed partial class RoslynSession
 
         var version = document.Version + 1;
         await NotifyAsync(
-                LspMethods.TextDocumentDidChange,
-                new JsonObject
-                {
-                    ["textDocument"] = new JsonObject { ["uri"] = uri, ["version"] = version },
-                    // A change without a range replaces the whole document
-                    ["contentChanges"] = new JsonArray(new JsonObject { ["text"] = text }),
-                },
-                cancellationToken
-            )
-            .ConfigureAwait(false);
+            LspMethods.TextDocumentDidChange,
+            new JsonObject
+            {
+                ["textDocument"] = new JsonObject { ["uri"] = uri, ["version"] = version },
+                // A change without a range replaces the whole document
+                ["contentChanges"] = new JsonArray(new JsonObject { ["text"] = text }),
+            },
+            cancellationToken
+        );
         _documents[path] = document with { Text = text, Version = version };
     }
 
@@ -341,7 +338,7 @@ internal sealed partial class RoslynSession
         // Opening the document sends its saved text in order, unlike asynchronous watched-file notifications
         try
         {
-            await OpenDocumentAsync(path, cancellationToken).ConfigureAwait(false);
+            await OpenDocumentAsync(path, cancellationToken);
         }
         catch (InvalidDataException)
         {
@@ -349,7 +346,7 @@ internal sealed partial class RoslynSession
             return;
         }
 
-        await CloseDocumentAsync(path, cancellationToken).ConfigureAwait(false);
+        await CloseDocumentAsync(path, cancellationToken);
     }
 
     private static bool IsCSharpFile(string path) =>
@@ -359,14 +356,13 @@ internal sealed partial class RoslynSession
     private async Task CloseDocumentAsync(string path, CancellationToken cancellationToken)
     {
         await NotifyAsync(
-                LspMethods.TextDocumentDidClose,
-                new JsonObject
-                {
-                    ["textDocument"] = new JsonObject { ["uri"] = new Uri(path).AbsoluteUri },
-                },
-                cancellationToken
-            )
-            .ConfigureAwait(false);
+            LspMethods.TextDocumentDidClose,
+            new JsonObject
+            {
+                ["textDocument"] = new JsonObject { ["uri"] = new Uri(path).AbsoluteUri },
+            },
+            cancellationToken
+        );
         if (_documents.Remove(path, out var document))
         {
             _openedOrder.Remove(document.Node);
@@ -410,7 +406,7 @@ internal sealed partial class RoslynSession
             changes.Add(new FileChange(path, FileDeleted));
         }
 
-        await SendFileChangesAsync(changes, cancellationToken).ConfigureAwait(false);
+        await SendFileChangesAsync(changes, cancellationToken);
     }
 
     private readonly record struct FileStamp(long Length, DateTime ModifiedUtc);

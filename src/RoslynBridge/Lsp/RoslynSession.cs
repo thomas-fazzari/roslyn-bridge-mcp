@@ -89,7 +89,7 @@ internal sealed partial class RoslynSession(
         ObjectDisposedException.ThrowIf(_disposed, this);
         if (!IsReady && !IsLoading)
         {
-            await StopServerAsync().ConfigureAwait(false);
+            await StopServerAsync();
             _startupCancellation?.Dispose();
             _startupCancellation = new CancellationTokenSource();
             _startup = StartAsync(_startupCancellation.Token);
@@ -97,9 +97,7 @@ internal sealed partial class RoslynSession(
 
         try
         {
-            await _startup!
-                .WaitAsync(options.StartupTimeout, cancellationToken)
-                .ConfigureAwait(false);
+            await _startup!.WaitAsync(options.StartupTimeout, cancellationToken);
         }
         catch (TimeoutException) when (IsLoading)
         {
@@ -112,11 +110,11 @@ internal sealed partial class RoslynSession(
         try
         {
             StartServer();
-            await InitializeAsync(cancellationToken).ConfigureAwait(false);
+            await InitializeAsync(cancellationToken);
         }
         catch
         {
-            await StopServerAsync().ConfigureAwait(false);
+            await StopServerAsync();
             throw;
         }
     }
@@ -138,11 +136,10 @@ internal sealed partial class RoslynSession(
         try
         {
             return await rpc.InvokeWithParameterObjectAsync<JsonNode>(
-                    method,
-                    parameters,
-                    timeout.Token
-                )
-                .ConfigureAwait(false);
+                method,
+                parameters,
+                timeout.Token
+            );
         }
         catch (OperationCanceledException exception)
             when (!cancellationToken.IsCancellationRequested)
@@ -157,8 +154,7 @@ internal sealed partial class RoslynSession(
             // A write to a dead process fails with a broken pipe before the connection loss is noticed
             _restartRequired = true;
             throw new IOException(
-                await WithStderrAsync($"Roslyn exited during '{method}'.", cancellationToken)
-                    .ConfigureAwait(false),
+                await WithStderrAsync($"Roslyn exited during '{method}'.", cancellationToken),
                 exception
             );
         }
@@ -171,7 +167,7 @@ internal sealed partial class RoslynSession(
             // The pipe closes when Roslyn exits, so its last lines arrive shortly after
             try
             {
-                await stderr.WaitAsync(_shutdownTimeout, cancellationToken).ConfigureAwait(false);
+                await stderr.WaitAsync(_shutdownTimeout, cancellationToken);
             }
             catch (TimeoutException)
             {
@@ -204,8 +200,7 @@ internal sealed partial class RoslynSession(
         try
         {
             await rpc.NotifyWithParameterObjectAsync(method, parameters)
-                .WaitAsync(cancellationToken)
-                .ConfigureAwait(false);
+                .WaitAsync(cancellationToken);
         }
         catch
         {
@@ -217,8 +212,8 @@ internal sealed partial class RoslynSession(
 
     public async Task ReloadAsync(CancellationToken cancellationToken)
     {
-        await StopAsync().ConfigureAwait(false);
-        await EnsureStartedAsync(cancellationToken).ConfigureAwait(false);
+        await StopAsync();
+        await EnsureStartedAsync(cancellationToken);
     }
 
     public async ValueTask DisposeAsync()
@@ -229,7 +224,7 @@ internal sealed partial class RoslynSession(
         }
 
         _disposed = true;
-        await StopAsync().ConfigureAwait(false);
+        await StopAsync();
         _startupCancellation?.Dispose();
     }
 
@@ -304,40 +299,34 @@ internal sealed partial class RoslynSession(
         try
         {
             result = await rpc.InvokeWithParameterObjectAsync<JsonObject>(
-                    LspMethods.Initialize,
-                    initialize,
-                    cancellationToken
-                )
-                .ConfigureAwait(false);
+                LspMethods.Initialize,
+                initialize,
+                cancellationToken
+            );
         }
         catch (Exception exception) when (exception is ConnectionLostException or IOException)
         {
             throw new IOException(
-                await WithStderrAsync("Roslyn exited during initialization.", cancellationToken)
-                    .ConfigureAwait(false),
+                await WithStderrAsync("Roslyn exited during initialization.", cancellationToken),
                 exception
             );
         }
 
         Capabilities = result?["capabilities"]?.AsObject();
 
-        await NotifyAsync(LspMethods.Initialized, new JsonObject(), cancellationToken)
-            .ConfigureAwait(false);
+        await NotifyAsync(LspMethods.Initialized, new JsonObject(), cancellationToken);
 
         var initializationOrDisconnect = Task.WhenAny(_initialized.Task, rpc.Completion);
 
-        var completed = await initializationOrDisconnect
-            .WaitAsync(cancellationToken)
-            .ConfigureAwait(false);
-        await completed.ConfigureAwait(false);
+        var completed = await initializationOrDisconnect.WaitAsync(cancellationToken);
+        await completed;
         if (completed != _initialized.Task)
         {
             throw new IOException(
                 await WithStderrAsync(
-                        "Roslyn disconnected while loading the workspace.",
-                        cancellationToken
-                    )
-                    .ConfigureAwait(false)
+                    "Roslyn disconnected while loading the workspace.",
+                    cancellationToken
+                )
             );
         }
 
@@ -348,10 +337,10 @@ internal sealed partial class RoslynSession(
     {
         if (_startup is { IsCompleted: false } startup)
         {
-            await _startupCancellation!.CancelAsync().ConfigureAwait(false);
+            await _startupCancellation!.CancelAsync();
             try
             {
-                await startup.ConfigureAwait(false);
+                await startup;
             }
             catch (Exception exception)
             {
@@ -359,7 +348,7 @@ internal sealed partial class RoslynSession(
             }
         }
 
-        await StopServerAsync().ConfigureAwait(false);
+        await StopServerAsync();
     }
 
     private async Task StopServerAsync()
@@ -378,11 +367,11 @@ internal sealed partial class RoslynSession(
 
         try
         {
-            await ShutdownAsync(rpc, server).ConfigureAwait(false);
+            await ShutdownAsync(rpc, server);
         }
         finally
         {
-            await DisposeProcessResourcesAsync(rpc, server).ConfigureAwait(false);
+            await DisposeProcessResourcesAsync(rpc, server);
         }
     }
 
@@ -407,7 +396,7 @@ internal sealed partial class RoslynSession(
         rpc?.Dispose();
         if (_messageHandler is not null)
         {
-            await _messageHandler.DisposeAsync().ConfigureAwait(false);
+            await _messageHandler.DisposeAsync();
         }
 
         _messageHandler = null;
@@ -415,14 +404,14 @@ internal sealed partial class RoslynSession(
         _formatter = null;
         if (_processLifetime is not null)
         {
-            await _processLifetime.CancelAsync().ConfigureAwait(false);
+            await _processLifetime.CancelAsync();
             _processLifetime.Dispose();
             _processLifetime = null;
         }
 
         if (_stderrTask is not null)
         {
-            await _stderrTask.ConfigureAwait(false);
+            await _stderrTask;
             _stderrTask = null;
         }
 
@@ -442,10 +431,9 @@ internal sealed partial class RoslynSession(
             if (rpc is { IsDisposed: false })
             {
                 await rpc.InvokeWithCancellationAsync(
-                        LspMethods.Shutdown,
-                        cancellationToken: timeout.Token
-                    )
-                    .ConfigureAwait(false);
+                    LspMethods.Shutdown,
+                    cancellationToken: timeout.Token
+                );
             }
         }
         catch (Exception exception)
@@ -465,7 +453,7 @@ internal sealed partial class RoslynSession(
             server.Kill();
         }
 
-        await server.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false);
+        await server.WaitForExitAsync(CancellationToken.None);
     }
 
     private async Task ReadStderrAsync(StreamReader reader, CancellationToken cancellationToken)
@@ -475,7 +463,7 @@ internal sealed partial class RoslynSession(
         {
             while (true)
             {
-                var count = await reader.ReadAsync(buffer, cancellationToken).ConfigureAwait(false);
+                var count = await reader.ReadAsync(buffer, cancellationToken);
                 if (count == 0)
                 {
                     return;

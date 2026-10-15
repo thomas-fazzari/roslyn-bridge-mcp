@@ -25,7 +25,7 @@ internal sealed class BoundedPipeReader(PipeReader inner, long maximumBytes) : P
 
     public override async ValueTask<ReadResult> ReadAsync(
         CancellationToken cancellationToken = default
-    ) => Validate(await inner.ReadAsync(cancellationToken).ConfigureAwait(false));
+    ) => Validate(await inner.ReadAsync(cancellationToken));
 
     public override bool TryRead(out ReadResult result)
     {

@@ -62,7 +62,7 @@ internal sealed class CommandEdits(
             );
             try
             {
-                await _gate.WaitAsync(linked.Token).ConfigureAwait(false);
+                await _gate.WaitAsync(linked.Token);
             }
             catch (OperationCanceledException exception)
             {
@@ -74,7 +74,7 @@ internal sealed class CommandEdits(
             try
             {
                 return IsAcceptingEdits()
-                    ? await ApplyAndCaptureAsync(edit, linked.Token).ConfigureAwait(false)
+                    ? await ApplyAndCaptureAsync(edit, linked.Token)
                     : RejectedResponse();
             }
             finally
@@ -93,7 +93,7 @@ internal sealed class CommandEdits(
         EditReceipt receipt;
         try
         {
-            receipt = await edits.ApplyAsync(edit, _snapshot, token).ConfigureAwait(false);
+            receipt = await edits.ApplyAsync(edit, _snapshot, token);
         }
         catch (EditApplicationException exception)
         {
@@ -108,7 +108,7 @@ internal sealed class CommandEdits(
         RecordReceipt(receipt);
         try
         {
-            _snapshot = await capture(token).ConfigureAwait(false);
+            _snapshot = await capture(token);
             return new JsonObject { ["applied"] = true };
         }
         catch (Exception exception)
@@ -126,13 +126,13 @@ internal sealed class CommandEdits(
             drained = _callbacksDrained?.Task ?? Task.CompletedTask;
         }
 
-        await _lifetime.CancelAsync().ConfigureAwait(false);
-        await drained.ConfigureAwait(false);
+        await _lifetime.CancelAsync();
+        await drained;
     }
 
     public async ValueTask DisposeAsync()
     {
-        await StopAsync().ConfigureAwait(false);
+        await StopAsync();
         _lifetime.Dispose();
         _gate.Dispose();
     }
