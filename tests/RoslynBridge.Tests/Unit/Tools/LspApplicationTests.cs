@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Text.Json.Nodes;
 using RoslynBridge.Editing;
 using RoslynBridge.Output;
+using RoslynBridge.Queries;
 using RoslynBridge.Requests;
 using RoslynBridge.Tools;
 using static RoslynBridge.Tests.Unit.TestHelpers;
@@ -52,7 +53,7 @@ public sealed class LspApplicationTests
             ["command"] = new string('x', ResultText.MaximumResponseCharacters),
         };
 
-        var response = LspTool.Response(LspAction.Rename, preview);
+        var response = LspTool.Response(LspAction.Rename, new JsonResult(preview));
 
         response.IsError.Should().BeFalse();
         var text = ResponseText(response);
@@ -66,17 +67,17 @@ public sealed class LspApplicationTests
     [Fact]
     public void LargeReadOnlyResultsStillReportTheLimit()
     {
-        var locations = new JsonObject
-        {
-            ["items"] = new JsonArray(
-                new JsonObject
-                {
-                    ["file"] = new string('x', ResultText.MaximumResponseCharacters),
-                    ["positions"] = new JsonArray(new JsonArray(1, 1)),
-                }
-            ),
-            ["total"] = 1,
-        };
+        var locations = new Locations(
+            [
+                new FileLocations(
+                    new string('x', ResultText.MaximumResponseCharacters),
+                    [new SourcePosition(1, 1)]
+                ),
+            ],
+            Total: 1,
+            Truncated: false,
+            Generated: 0
+        );
 
         var response = LspTool.Response(LspAction.References, locations);
 
@@ -91,7 +92,11 @@ public sealed class LspApplicationTests
         result["commandExecuted"] = true;
         result["commandResult"] = new string('x', ResultText.MaximumResponseCharacters);
 
-        var response = LspTool.Response(LspAction.Request, result, preserveApplication: true);
+        var response = LspTool.Response(
+            LspAction.Request,
+            new JsonResult(result),
+            preserveApplication: true
+        );
 
         response.IsError.Should().NotBeTrue();
         var text = ResponseText(response);
@@ -116,7 +121,7 @@ public sealed class LspApplicationTests
 
         var response = LspTool.Response(
             LspAction.Rename,
-            ApplicationResult(files),
+            new JsonResult(ApplicationResult(files)),
             preserveApplication: true
         );
 

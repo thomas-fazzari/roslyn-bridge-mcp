@@ -1,8 +1,6 @@
 // Copyright (C) RoslynBridge contributors
 // SPDX-License-Identifier: GPL-3.0-only
 
-using System.Globalization;
-using System.Text.Json.Nodes;
 using RoslynBridge.Editing;
 
 namespace RoslynBridge.Queries;
@@ -14,64 +12,69 @@ internal static class SourceLines
 {
     internal const int MaximumLineCharacters = 200;
 
-    /// <summary>
-    /// Adds <c>lines</c>, a map from one-based line number to trimmed text, to each result item.
-    /// Items with call sites get the lines of their calls, which are in <paramref name="callSiteFile"/>
-    /// when it is set, and in the item's own file otherwise. Other items get the lines of their positions.
-    /// </summary>
-    public static void Add(JsonObject result, WorkspacePaths paths, string? callSiteFile)
+    public static Locations Add(Locations locations, WorkspacePaths paths)
     {
         var files = new Dictionary<string, string[]?>(StringComparer.Ordinal);
-        foreach (var item in (result["items"] as JsonArray ?? []).OfType<JsonObject>())
+        return locations with
         {
-            var (file, positions) = Targets(item, paths, callSiteFile);
-            if (file is null || Read(file, files) is not { } text)
-            {
-                continue;
-            }
-
-            var lines = new JsonObject();
-            foreach (
-                var line in positions
-                    .Select(position => position![0]!.GetValue<int>())
-                    .Where(line => line >= 1 && line <= text.Length)
-                    .Distinct()
-                    .Order()
-            )
-            {
-                lines[line.ToString(CultureInfo.InvariantCulture)] = Trim(text[line - 1]);
-            }
-
-            item["lines"] = lines;
-        }
+            Files =
+            [
+                .. locations.Files.Select(file =>
+                    file with
+                    {
+                        Lines = LinesOf(
+                            Read(paths.ResultFilePath(file.File), files),
+                            file.Positions
+                        ),
+                    }
+                ),
+            ],
+        };
     }
 
-    private static (string? File, JsonArray Positions) Targets(
-        JsonObject item,
-        WorkspacePaths paths,
-        string? callSiteFile
-    )
+    /// <summary>
+    /// Items with call sites get the lines of their calls, which are in <paramref name="callSiteFile"/>
+    /// when it is set, and in the item's own file otherwise. Other items get the line of their position.
+    /// </summary>
+    public static SymbolList Add(SymbolList symbols, WorkspacePaths paths, string? callSiteFile)
     {
-        if (item["calls"] is JsonArray calls)
+        var files = new Dictionary<string, string[]?>(StringComparer.Ordinal);
+        return symbols with
         {
-            return (callSiteFile ?? WorkspaceFile(item, paths), calls);
-        }
-
-        if (item["positions"] is JsonArray positions)
-        {
-            return (WorkspaceFile(item, paths), positions);
-        }
-
-        return item["position"] is JsonArray position
-            ? (WorkspaceFile(item, paths), new JsonArray(position.DeepClone()))
-            : (null, []);
+            Items =
+            [
+                .. symbols.Items.Select(item =>
+                {
+                    var ownFile = item.File is null ? null : paths.ResultFilePath(item.File);
+                    var (file, positions) =
+                        item.Calls.Count > 0
+                            ? (callSiteFile ?? ownFile, item.Calls)
+                            : (ownFile, item.Position is { } position ? [position] : []);
+                    return item with { Lines = LinesOf(Read(file, files), positions) };
+                }),
+            ],
+        };
     }
 
-    private static string? WorkspaceFile(JsonObject item, WorkspacePaths paths) =>
-        item["file"]?.GetValue<string>() is { } file ? paths.ResultFilePath(file) : null;
+    private static Dictionary<int, string>? LinesOf(
+        string[]? text,
+        IEnumerable<SourcePosition> positions
+    ) =>
+        text is null
+            ? null
+            : positions
+                .Select(position => position.Line)
+                .Where(line => line >= 1 && line <= text.Length)
+                .Distinct()
+                .ToDictionary(line => line, line => Trim(text[line - 1]));
 
-    private static string[]? Read(string file, Dictionary<string, string[]?> files)
+    private static string[]? Read(string? file, Dictionary<string, string[]?> files)
     {
+        if (file is null)
+        {
+            return null;
+        }
+
         if (!files.TryGetValue(file, out var text))
         {
             try

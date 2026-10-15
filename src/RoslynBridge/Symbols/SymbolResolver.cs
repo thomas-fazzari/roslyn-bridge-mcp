@@ -434,13 +434,22 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
         return files;
     }
 
-    private JsonArray Candidates(IEnumerable<SymbolDeclaration> declarations) =>
+    private List<SymbolItem> Candidates(IEnumerable<SymbolDeclaration> declarations) =>
         [
             .. declarations
                 .OrderBy(declaration => declaration.Name, StringComparer.Ordinal)
                 .ThenBy(declaration => declaration.File, StringComparer.Ordinal)
                 .Take(MaximumCandidates)
-                .Select(declaration => (JsonNode)declaration.ToJson(paths)),
+                .Select(declaration => new SymbolItem(
+                    declaration.Name,
+                    declaration.Kind is { } kind && LspSymbolKinds.TryGetName(kind, out var name)
+                        ? name
+                        : null
+                )
+                {
+                    File = paths.RelativePath(declaration.File),
+                    Position = new SourcePosition(declaration.Line, declaration.Character),
+                }),
         ];
 
     private readonly record struct DeclaredSymbol(

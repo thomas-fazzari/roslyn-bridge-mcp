@@ -166,7 +166,7 @@ public sealed class WorkspaceEditServiceTests : IDisposable
 
         var preview = await service.PreviewAsync(edit, snapshot, TestCt);
         preview["proposalId"] = "proposal";
-        var rendered = ResponseText(LspTool.Response(LspAction.Rename, preview));
+        var rendered = ResponseText(LspTool.Response(LspAction.Rename, new JsonResult(preview)));
 
         preview["fileCount"]!.GetValue<int>().Should().Be(fileCount);
         rendered.Should().Contain("files shown");

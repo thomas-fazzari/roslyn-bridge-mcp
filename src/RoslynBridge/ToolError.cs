@@ -1,15 +1,17 @@
 // Copyright (C) RoslynBridge contributors
 // SPDX-License-Identifier: GPL-3.0-only
 
-using System.Text.Json.Nodes;
-
 namespace RoslynBridge;
 
 /// <summary>
 /// An expected failure, reported to the client as the structured error of a tool response.
 /// </summary>
 /// <param name="Candidates">Values the client can send instead, such as the symbols an ambiguous name matches.</param>
-internal sealed record ToolError(string Code, string Message, JsonArray? Candidates = null)
+internal sealed record ToolError(
+    string Code,
+    string Message,
+    IReadOnlyList<SymbolItem>? Candidates = null
+)
 {
     public static ToolError InvalidRequest(string message) =>
         new(ErrorCodes.InvalidRequest, message);

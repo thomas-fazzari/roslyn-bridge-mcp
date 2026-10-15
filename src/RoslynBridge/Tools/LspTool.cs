@@ -74,7 +74,7 @@ internal sealed partial class LspTool(
     {
         if (request.Action is LspAction.Status)
         {
-            return Response(request.Action, Status());
+            return Response(request.Action, new JsonResult(Status()));
         }
 
         await _gate.WaitAsync(cancellationToken);
@@ -198,7 +198,7 @@ internal sealed partial class LspTool(
             }
         );
 
-    private async Task<Result<JsonNode?>> DispatchAsync(
+    private async Task<Result<ToolResult>> DispatchAsync(
         LspRequest request,
         CancellationToken cancellationToken
     )
@@ -214,7 +214,7 @@ internal sealed partial class LspTool(
         {
             changes.Clear();
             await session.ReloadAsync(cancellationToken);
-            return new JsonObject { ["running"] = true };
+            return new JsonResult(new JsonObject { ["running"] = true });
         }
 
         await session.EnsureStartedAsync(cancellationToken);
@@ -225,8 +225,10 @@ internal sealed partial class LspTool(
 
         return request.Action switch
         {
-            LspAction.Capabilities => session.Capabilities?.DeepClone(),
-            LspAction.Diagnostics => await queries.DiagnosticsAsync(request, cancellationToken),
+            LspAction.Capabilities => new JsonResult(session.Capabilities?.DeepClone()),
+            LspAction.Diagnostics => AsJson(
+                await queries.DiagnosticsAsync(request, cancellationToken)
+            ),
             LspAction.Symbols => await queries.SymbolsAsync(request, cancellationToken),
             LspAction.Definition
             or LspAction.TypeDefinition
@@ -237,11 +239,12 @@ internal sealed partial class LspTool(
             or LspAction.Callees
             or LspAction.Supertypes
             or LspAction.Subtypes => await queries.NavigationAsync(request, cancellationToken),
-            LspAction.Source => await queries.SourceAsync(request, cancellationToken),
-            LspAction.Members => await queries.MembersAsync(request, cancellationToken),
-            LspAction.Rename or LspAction.RenameFile or LspAction.CodeActions =>
-                await changes.ExecuteAsync(request, cancellationToken),
-            LspAction.Request => await RawRequestAsync(request, cancellationToken),
+            LspAction.Source => AsJson(await queries.SourceAsync(request, cancellationToken)),
+            LspAction.Members => AsJson(await queries.MembersAsync(request, cancellationToken)),
+            LspAction.Rename or LspAction.RenameFile or LspAction.CodeActions => AsJson(
+                await changes.ExecuteAsync(request, cancellationToken)
+            ),
+            LspAction.Request => AsJson(await RawRequestAsync(request, cancellationToken)),
             _ => throw new InvalidOperationException($"Unsupported LSP action: {request.Action}."),
         };
     }
@@ -311,9 +314,12 @@ internal sealed partial class LspTool(
         return isLifecycle || isSynchronization || method is LspMethods.WorkspaceApplyEdit;
     }
 
+    private static Result<ToolResult> AsJson(Result<JsonNode?> result) =>
+        result.Error is { } error ? error : new JsonResult(result.Value);
+
     internal static CallToolResult Response(
         LspAction action,
-        JsonNode? result,
+        ToolResult? result,
         bool preserveApplication = false
     )
     {
@@ -368,7 +374,7 @@ internal sealed partial class LspTool(
             .Append(
                 ResultText.Render(
                     action,
-                    exception.Result,
+                    new JsonResult(exception.Result),
                     application: true,
                     ResultText.MaximumResponseCharacters - text.Length
                 )

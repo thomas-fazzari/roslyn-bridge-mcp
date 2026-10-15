@@ -23,23 +23,22 @@ public sealed class LspResultsExtensionsTests
             Location("First.cs", 20, 8)
         );
 
-        var result = locations.ToCompactLocations(
+        var result = locations.ToLocations(
             _paths,
             LspRequest.DefaultResultLimit,
             skipGenerated: false
         );
 
-        result["total"]!.GetValue<int>().Should().Be(3);
-        result["truncated"]!.GetValue<bool>().Should().BeFalse();
-        var items = result["items"]!.AsArray();
-        items.Should().HaveCount(2);
-        items[0]!["file"]!.GetValue<string>().Should().Be("First.cs");
-        JsonNode
-            .DeepEquals(items[0]!["positions"], JsonNode.Parse("[[1,5],[21,9]]"))
-            .Should()
-            .BeTrue();
-        items[1]!["file"]!.GetValue<string>().Should().Be("Second.cs");
-        JsonNode.DeepEquals(items[1]!["positions"], JsonNode.Parse("[[11,3]]")).Should().BeTrue();
+        result.Total.Should().Be(3);
+        result.Truncated.Should().BeFalse();
+        result.Files.Should().HaveCount(2);
+        result.Files[0].File.Should().Be("First.cs");
+        result
+            .Files[0]
+            .Positions.Should()
+            .Equal(new SourcePosition(1, 5), new SourcePosition(21, 9));
+        result.Files[1].File.Should().Be("Second.cs");
+        result.Files[1].Positions.Should().Equal(new SourcePosition(11, 3));
         locations.Should().HaveCount(4);
         locations[0]!["range"].Should().NotBeNull();
     }
@@ -53,12 +52,11 @@ public sealed class LspResultsExtensionsTests
             Location("Second.cs", 2, 0)
         );
 
-        var result = locations.ToCompactLocations(_paths, 2, skipGenerated: false);
+        var result = locations.ToLocations(_paths, 2, skipGenerated: false);
 
-        result["total"]!.GetValue<int>().Should().Be(3);
-        result["truncated"]!.GetValue<bool>().Should().BeTrue();
-        result["items"]!.AsArray().Should().ContainSingle();
-        result["items"]![0]!["positions"]!.AsArray().Should().HaveCount(2);
+        result.Total.Should().Be(3);
+        result.Truncated.Should().BeTrue();
+        result.Files.Should().ContainSingle().Which.Positions.Should().HaveCount(2);
     }
 
     [Theory]
@@ -78,18 +76,18 @@ public sealed class LspResultsExtensionsTests
             };
         }
 
-        var result = location.ToCompactLocations(
+        var result = location.ToLocations(
             _paths,
             LspRequest.DefaultResultLimit,
             skipGenerated: false
         );
 
-        result["total"]!.GetValue<int>().Should().Be(1);
-        result["truncated"]!.GetValue<bool>().Should().BeFalse();
-        JsonNode
-            .DeepEquals(result["items"]![0]!["positions"], JsonNode.Parse("[[5,9]]"))
-            .Should()
-            .BeTrue();
+        result.Total.Should().Be(1);
+        result
+            .Files.Should()
+            .ContainSingle()
+            .Which.Positions.Should()
+            .Equal(new SourcePosition(5, 9));
     }
 
     [Theory]
@@ -99,15 +97,14 @@ public sealed class LspResultsExtensionsTests
     {
         JsonNode? locations = array ? new JsonArray() : null;
 
-        var result = locations.ToCompactLocations(
+        var result = locations.ToLocations(
             _paths,
             LspRequest.DefaultResultLimit,
             skipGenerated: false
         );
 
-        result["items"]!.AsArray().Should().BeEmpty();
-        result["total"]!.GetValue<int>().Should().Be(0);
-        result["truncated"]!.GetValue<bool>().Should().BeFalse();
+        result.Files.Should().BeEmpty();
+        result.Total.Should().Be(0);
     }
 
     [Theory]
@@ -117,13 +114,13 @@ public sealed class LspResultsExtensionsTests
     {
         var location = new JsonObject { ["uri"] = value, ["range"] = Range(0, 0) };
 
-        var result = location.ToCompactLocations(
+        var result = location.ToLocations(
             _paths,
             LspRequest.DefaultResultLimit,
             skipGenerated: false
         );
 
-        result["items"]![0]!["file"]!.GetValue<string>().Should().Be(value);
+        result.Files.Should().ContainSingle().Which.File.Should().Be(value);
     }
 
     [Fact]
@@ -138,15 +135,15 @@ public sealed class LspResultsExtensionsTests
             }
         );
 
-        var result = locations.ToCompactLocations(
+        var result = locations.ToLocations(
             _paths,
             LspRequest.DefaultResultLimit,
             skipGenerated: true
         );
 
-        result["total"]!.GetValue<int>().Should().Be(1);
-        result["generated"]!.GetValue<int>().Should().Be(1);
-        result["items"]!.AsArray().Should().ContainSingle();
+        result.Total.Should().Be(1);
+        result.Generated.Should().Be(1);
+        result.Files.Should().ContainSingle();
     }
 
     [Fact]
@@ -199,17 +196,25 @@ public sealed class LspResultsExtensionsTests
             }
         );
 
-        var result = symbols.ToCompactSymbols(_paths, LspRequest.DefaultResultLimit);
+        var result = symbols.ToSymbolList(_paths, LspRequest.DefaultResultLimit);
 
-        JsonNode
-            .DeepEquals(
-                result["items"],
-                JsonNode.Parse(
-                    """[{"name":"IGreeter","kind":"interface","position":[3,18],"end":[3,2],"children":[{"name":"Greet(string) : string","kind":"method","position":[5,12],"end":[5,6]}]}]"""
-                )
-            )
-            .Should()
-            .BeTrue(result.ToJsonString());
+        result
+            .Items.Should()
+            .BeEquivalentTo([
+                new SymbolItem("IGreeter", "interface")
+                {
+                    Position = new(3, 18),
+                    End = new(3, 2),
+                    Children =
+                    [
+                        new SymbolItem("Greet(string) : string", "method")
+                        {
+                            Position = new(5, 12),
+                            End = new(5, 6),
+                        },
+                    ],
+                },
+            ]);
     }
 
     [Fact]
@@ -241,15 +246,11 @@ public sealed class LspResultsExtensionsTests
             }
         );
 
-        var result = symbols.ToCompactSymbols(_paths, 2);
+        var result = symbols.ToSymbolList(_paths, 2);
 
-        result["total"]!.GetValue<int>().Should().Be(3);
-        result["truncated"]!.GetValue<bool>().Should().BeTrue();
-        result["items"]![0]!["children"]!
-            .AsArray()
-            .Select(child => child!["name"]!.GetValue<string>())
-            .Should()
-            .Equal("First");
+        result.Total.Should().Be(3);
+        result.Truncated.Should().BeTrue();
+        result.Items[0].Children.Select(child => child.Name).Should().Equal("First");
     }
 
     [Fact]
@@ -266,19 +267,20 @@ public sealed class LspResultsExtensionsTests
             new JsonObject { ["name"] = "Other", ["kind"] = 5 }
         );
 
-        var result = symbols.ToCompactSymbols(_paths, 1);
+        var result = symbols.ToSymbolList(_paths, 1);
 
-        result["total"]!.GetValue<int>().Should().Be(2);
-        result["truncated"]!.GetValue<bool>().Should().BeTrue();
-        JsonNode
-            .DeepEquals(
-                result["items"],
-                JsonNode.Parse(
-                    """[{"name":"Greeter","kind":"class","container":"Application","file":"Application/Greeter.cs","position":[6,22]}]"""
-                )
-            )
-            .Should()
-            .BeTrue(result.ToJsonString());
+        result.Total.Should().Be(2);
+        result.Truncated.Should().BeTrue();
+        result
+            .Items.Should()
+            .BeEquivalentTo([
+                new SymbolItem("Greeter", "class")
+                {
+                    Container = "Application",
+                    File = "Application/Greeter.cs",
+                    Position = new(6, 22),
+                },
+            ]);
     }
 
     [Fact]
@@ -299,12 +301,12 @@ public sealed class LspResultsExtensionsTests
             }
         );
 
-        var result = calls.ToCompactHierarchy(_paths, LspRequest.DefaultResultLimit);
+        var result = calls.ToRelatedSymbols(_paths, LspRequest.DefaultResultLimit);
 
-        var item = result["items"]![0]!;
-        item["file"]!.GetValue<string>().Should().Be("Consumer.cs");
-        JsonNode.DeepEquals(item["position"], JsonNode.Parse("[7,26]")).Should().BeTrue();
-        JsonNode.DeepEquals(item["calls"], JsonNode.Parse("[[7,59],[8,3]]")).Should().BeTrue();
+        var item = result.Items.Should().ContainSingle().Which;
+        item.File.Should().Be("Consumer.cs");
+        item.Position.Should().Be(new SourcePosition(7, 26));
+        item.Calls.Should().Equal(new SourcePosition(7, 59), new SourcePosition(8, 3));
     }
 
     [Theory]
@@ -318,9 +320,7 @@ public sealed class LspResultsExtensionsTests
             ["range"] = Range(0, 0),
         };
 
-        var result = hover.ToCompactHover();
-
-        result["text"]!.GetValue<string>().Should().Be("```csharp\nvoid Greet()\n```");
+        hover.ToHoverText().Should().Be("```csharp\nvoid Greet()\n```");
     }
 
     private static JsonObject Location(string file, int line, int character) =>

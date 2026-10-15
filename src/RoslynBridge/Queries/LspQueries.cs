@@ -20,7 +20,7 @@ internal sealed partial class LspQueries(
     private static readonly TimeSpan _projectAttachTimeout = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan _projectAttachPollInterval = TimeSpan.FromMilliseconds(200);
 
-    public async Task<Result<JsonNode?>> NavigationAsync(
+    public async Task<Result<ToolResult>> NavigationAsync(
         LspRequest request,
         CancellationToken cancellationToken
     )
@@ -63,23 +63,18 @@ internal sealed partial class LspQueries(
         var result = await session.RequestAsync(method, parameters, cancellationToken);
         if (request.Action is LspAction.Hover)
         {
-            return result.ToCompactHover();
+            return new HoverText(result.ToHoverText());
         }
 
-        var locations = result.ToCompactLocations(
+        var locations = result.ToLocations(
             paths,
             request.Limit,
             skipGenerated: request.Action is LspAction.References
         );
-        if (request.Context)
-        {
-            SourceLines.Add(locations, paths, callSiteFile: null);
-        }
-
-        return locations;
+        return request.Context ? SourceLines.Add(locations, paths) : locations;
     }
 
-    private async Task<JsonObject> HierarchyAsync(
+    private async Task<SymbolList> HierarchyAsync(
         LspRequest request,
         JsonObject position,
         CancellationToken cancellationToken
@@ -128,65 +123,65 @@ internal sealed partial class LspQueries(
             }
         }
 
-        var result = related.ToCompactHierarchy(paths, request.Limit);
-        if (accesses > 0)
+        var result = await NameSymbolsAsync(
+            related.ToRelatedSymbols(paths, request.Limit) with
+            {
+                Accesses = accesses,
+            },
+            cancellationToken
+        );
+        if (!request.Context)
         {
-            result["accesses"] = accesses;
+            return result;
         }
 
-        await NameSymbolsAsync(result, cancellationToken);
-        if (request.Context)
-        {
-            // Outgoing call sites are in the requested document, not in the callee's file
-            var callSiteFile =
-                request.Action is LspAction.Callees
-                    ? paths.TryGetWorkspaceFile(
-                        position["textDocument"]!["uri"]!.GetValue<string>()
-                    )
-                    : null;
-            SourceLines.Add(result, paths, callSiteFile);
-        }
-
-        return result;
+        // Outgoing call sites are in the requested document, not in the callee's file
+        var callSiteFile =
+            request.Action is LspAction.Callees
+                ? paths.TryGetWorkspaceFile(position["textDocument"]!["uri"]!.GetValue<string>())
+                : null;
+        return SourceLines.Add(result, paths, callSiteFile);
     }
 
     /// <summary>
     /// Replaces the name and container Roslyn reports with a symbol name that navigate and edit accept.
     /// Items without a declaration in a workspace file keep Roslyn's name.
     /// </summary>
-    private async Task NameSymbolsAsync(JsonObject result, CancellationToken cancellationToken)
+    private async Task<SymbolList> NameSymbolsAsync(
+        SymbolList symbols,
+        CancellationToken cancellationToken
+    )
     {
-        var positions = new List<(JsonObject Item, (string File, int Line, int Character) Key)>();
-        foreach (var item in (result["items"] as JsonArray ?? []).OfType<JsonObject>())
-        {
-            if (
-                item["file"]?.GetValue<string>() is { } file
-                && paths.ResultFilePath(file) is { } path
-                && item["position"] is JsonArray position
-            )
-            {
-                positions.Add(
-                    (item, (path, position[0]!.GetValue<int>(), position[1]!.GetValue<int>()))
-                );
-            }
-        }
-
+        var keys = symbols.Items.Select(DeclarationKey).ToList();
         var names = await resolver.NamesAsync(
-            positions.Select(position => position.Key),
+            keys.Where(key => key.HasValue).Select(key => key!.Value),
             cancellationToken
         );
-        foreach (var (item, key) in positions)
+        return symbols with
         {
-            if (names.TryGetValue(key, out var name))
-            {
-                item.Remove("name");
-                item.Remove("detail");
-                item["symbol"] = name;
-            }
-        }
+            Items =
+            [
+                .. symbols.Items.Zip(
+                    keys,
+                    (item, key) =>
+                        key is { } found && names.TryGetValue(found, out var name)
+                            ? item with
+                            {
+                                Name = name,
+                                Detail = null,
+                            }
+                            : item
+                ),
+            ],
+        };
     }
 
-    public async Task<JsonNode?> SymbolsAsync(
+    private (string File, int Line, int Character)? DeclarationKey(SymbolItem item) =>
+        item is { File: { } file, Position: { } position } && paths.ResultFilePath(file) is { } path
+            ? (path, position.Line, position.Character)
+            : null;
+
+    public async Task<SymbolList> SymbolsAsync(
         LspRequest request,
         CancellationToken cancellationToken
     )
@@ -198,7 +193,7 @@ internal sealed partial class LspQueries(
                 new JsonObject { ["query"] = request.Query ?? string.Empty },
                 cancellationToken
             );
-            return symbols.ToCompactSymbols(paths, request.Limit);
+            return symbols.ToSymbolList(paths, request.Limit);
         }
 
         var uri = await session.OpenDocumentAsync(request.File, cancellationToken);
@@ -207,7 +202,7 @@ internal sealed partial class LspQueries(
             Document(uri),
             cancellationToken
         );
-        return documentSymbols.ToCompactSymbols(paths, request.Limit);
+        return documentSymbols.ToSymbolList(paths, request.Limit);
     }
 
     public async Task<Result<JsonNode?>> DiagnosticsAsync(

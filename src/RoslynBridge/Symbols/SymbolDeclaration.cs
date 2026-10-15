@@ -2,8 +2,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 using System.Diagnostics;
-using System.Text.Json.Nodes;
-using RoslynBridge.Lsp;
 
 namespace RoslynBridge.Symbols;
 
@@ -24,18 +22,4 @@ internal sealed record SymbolDeclaration(
     int Character,
     int FirstLine,
     int LastLine
-)
-{
-    public JsonObject ToJson(WorkspacePaths paths)
-    {
-        var json = new JsonObject { ["symbol"] = Name };
-        if (Kind is { } kind && LspSymbolKinds.TryGetName(kind, out var kindName))
-        {
-            json["kind"] = kindName;
-        }
-
-        json["file"] = paths.RelativePath(File);
-        json["position"] = new JsonArray(Line, Character);
-        return json;
-    }
-}
+);

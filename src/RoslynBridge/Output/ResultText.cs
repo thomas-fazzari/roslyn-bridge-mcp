@@ -6,6 +6,7 @@ using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using RoslynBridge.Queries;
 using RoslynBridge.Requests;
 
 namespace RoslynBridge.Output;
@@ -27,52 +28,48 @@ internal static partial class ResultText
     };
 
     /// <param name="budget">Characters a preview or receipt may use. They drop trailing files to fit.</param>
-    public static string Render(LspAction action, JsonNode? result, bool application, int budget)
+    public static string Render(LspAction action, ToolResult? result, bool application, int budget)
     {
         var text = new StringBuilder();
-        if (application && result is JsonObject receipt)
+        switch (result)
         {
-            AppendReceipt(text, receipt, budget);
-            return Finish(text);
+            case HoverText hover:
+                return hover.Text;
+            case Locations locations:
+                AppendLocations(text, locations);
+                return Finish(text);
+            case SymbolList symbols:
+                AppendSymbols(text, symbols);
+                return Finish(text);
+            case JsonResult { Value: JsonObject receipt } when application:
+                AppendReceipt(text, receipt, budget);
+                return Finish(text);
+            case JsonResult:
+                break;
+            default:
+                throw new InvalidOperationException($"No renderer for {result?.GetType().Name}.");
         }
 
+        var json = ((JsonResult)result).Value;
         switch (action)
         {
             case LspAction.Status or LspAction.Reload:
-                AppendFields(text, (JsonObject)result!);
+                AppendFields(text, (JsonObject)json!);
                 break;
             case LspAction.Diagnostics:
-                AppendDiagnostics(text, (JsonObject)result!);
-                break;
-            case LspAction.Symbols:
-                AppendSymbols(text, (JsonObject)result!);
-                break;
-            case LspAction.Definition
-            or LspAction.TypeDefinition
-            or LspAction.Implementation
-            or LspAction.References:
-                AppendLocations(text, (JsonObject)result!);
-                break;
-            case LspAction.Hover:
-                text.Append(result?["text"]?.GetValue<string>());
-                break;
-            case LspAction.Callers
-            or LspAction.Callees
-            or LspAction.Supertypes
-            or LspAction.Subtypes:
-                AppendRelated(text, (JsonObject)result!);
+                AppendDiagnostics(text, (JsonObject)json!);
                 break;
             case LspAction.Source:
-                AppendSource(text, (JsonObject)result!);
+                AppendSource(text, (JsonObject)json!);
                 break;
             case LspAction.Members:
-                AppendMembers(text, (JsonObject)result!);
+                AppendMembers(text, (JsonObject)json!);
                 break;
             case LspAction.Rename or LspAction.RenameFile or LspAction.CodeActions:
-                AppendChange(text, (JsonObject)result!, budget);
+                AppendChange(text, (JsonObject)json!, budget);
                 break;
             default:
-                text.Append(Json(result));
+                text.Append(Json(json));
                 break;
         }
 
@@ -88,7 +85,7 @@ internal static partial class ResultText
         }
 
         text.Append(": ").Append(OneLine(error.Message)).Append('\n');
-        foreach (var candidate in (error.Candidates ?? []).OfType<JsonObject>())
+        foreach (var candidate in error.Candidates ?? [])
         {
             AppendSymbol(text, candidate, indent: string.Empty);
         }
@@ -160,7 +157,12 @@ internal static partial class ResultText
         }
 
         text.Append(summary).Append('\n');
-        AppendTruncation(text, result, "diagnostics");
+        AppendTruncation(
+            text,
+            Int(result, "total"),
+            result["truncated"]?.GetValue<bool>() is true,
+            "diagnostics"
+        );
         if (result["miscellaneousFiles"] is JsonArray { Count: > 0 } miscellaneous)
         {
             text.Append("incomplete: not in a project, no semantic diagnostics:");
@@ -173,90 +175,77 @@ internal static partial class ResultText
         }
     }
 
-    private static void AppendSymbols(StringBuilder text, JsonObject result)
+    private static void AppendSymbols(StringBuilder text, SymbolList symbols)
     {
-        foreach (var symbol in Items(result))
+        foreach (var symbol in symbols.Items)
         {
             AppendSymbolTree(text, symbol, indent: string.Empty);
         }
 
-        AppendEmptyOrTruncation(text, result, "symbols");
+        AppendEmptyOrTruncation(text, symbols.Total, symbols.Truncated, "symbols");
+        if (symbols.Accesses > 0)
+        {
+            text.Append(
+                CultureInfo.InvariantCulture,
+                $"{symbols.Accesses} property, field or constant accesses omitted\n"
+            );
+        }
     }
 
-    private static void AppendSymbolTree(StringBuilder text, JsonObject symbol, string indent)
+    // A symbol line, then its call sites or source lines, then its members indented below it
+    private static void AppendSymbolTree(StringBuilder text, SymbolItem symbol, string indent)
     {
         AppendSymbol(text, symbol, indent);
-        foreach (var child in (symbol["children"] as JsonArray ?? []).OfType<JsonObject>())
+        if (symbol.Lines is { } lines)
+        {
+            AppendSourceLines(text, LinePositions(symbol), lines);
+        }
+        else if (symbol.Calls.Count > 0)
+        {
+            text.Append(Indent)
+                .Append("calls ")
+                .AppendJoin(' ', symbol.Calls.Select(Position))
+                .Append('\n');
+        }
+
+        foreach (var child in symbol.Children)
         {
             AppendSymbolTree(text, child, indent + Indent);
         }
     }
 
-    private static void AppendLocations(StringBuilder text, JsonObject result)
+    // Source lines belong to the call sites when there are some, and to the declaration otherwise
+    private static IEnumerable<SourcePosition> LinePositions(SymbolItem symbol)
     {
-        foreach (var item in Items(result))
+        if (symbol.Calls.Count > 0)
         {
-            var positions = item["positions"]!.AsArray();
-            text.Append(item["file"]!.GetValue<string>());
-            if (item["lines"] is JsonObject lines)
+            return symbol.Calls;
+        }
+
+        return symbol.Position is { } position ? [position] : [];
+    }
+
+    private static void AppendLocations(StringBuilder text, Locations locations)
+    {
+        foreach (var file in locations.Files)
+        {
+            text.Append(file.File);
+            if (file.Lines is { } lines)
             {
                 text.Append('\n');
-                AppendSourceLines(text, positions, lines);
+                AppendSourceLines(text, file.Positions, lines);
                 continue;
             }
 
-            foreach (var position in positions)
-            {
-                text.Append(' ').Append(Position(position!));
-            }
-
-            text.Append('\n');
+            text.Append(' ').AppendJoin(' ', file.Positions.Select(Position)).Append('\n');
         }
 
-        AppendEmptyOrTruncation(text, result, "locations");
-
-        if (Int(result, "generated") is > 0 and var generated)
+        AppendEmptyOrTruncation(text, locations.Total, locations.Truncated, "locations");
+        if (locations.Generated > 0)
         {
             text.Append(
                 CultureInfo.InvariantCulture,
-                $"generated code: {generated} more omitted. Use lsp request to list them.\n"
-            );
-        }
-    }
-
-    private static void AppendRelated(StringBuilder text, JsonObject result)
-    {
-        foreach (var item in Items(result))
-        {
-            AppendSymbol(text, item, indent: string.Empty);
-            var calls = item["calls"] as JsonArray;
-            if (item["lines"] is JsonObject lines)
-            {
-                AppendSourceLines(
-                    text,
-                    calls ?? new JsonArray(item["position"]?.DeepClone()),
-                    lines
-                );
-            }
-            else if (calls is { Count: > 0 })
-            {
-                text.Append(Indent).Append("calls");
-                foreach (var call in calls)
-                {
-                    text.Append(' ').Append(Position(call!));
-                }
-
-                text.Append('\n');
-            }
-        }
-
-        AppendEmptyOrTruncation(text, result, "symbols");
-
-        if (Int(result, "accesses") is > 0 and var accesses)
-        {
-            text.Append(
-                CultureInfo.InvariantCulture,
-                $"{accesses} property, field or constant accesses omitted\n"
+                $"generated code: {locations.Generated} more omitted. Use lsp request to list them.\n"
             );
         }
     }
@@ -317,13 +306,16 @@ internal static partial class ResultText
         AppendEmptyOrTruncation(text, result, "members");
     }
 
-    private static void AppendSourceLines(StringBuilder text, JsonArray positions, JsonObject lines)
+    private static void AppendSourceLines(
+        StringBuilder text,
+        IEnumerable<SourcePosition> positions,
+        IReadOnlyDictionary<int, string> lines
+    )
     {
-        foreach (var position in positions.OfType<JsonArray>())
+        foreach (var position in positions)
         {
             text.Append(Indent).Append(Position(position));
-            var line = position[0]!.GetValue<int>().ToString(CultureInfo.InvariantCulture);
-            if (lines[line]?.GetValue<string>() is { Length: > 0 } source)
+            if (lines.TryGetValue(position.Line, out var source) && source.Length > 0)
             {
                 text.Append(' ').Append(source);
             }
@@ -332,7 +324,8 @@ internal static partial class ResultText
         }
     }
 
-    private static void AppendSymbol(StringBuilder text, JsonObject symbol, string indent)
+    // location kind name, with the detail and container when Roslyn reports them
+    private static void AppendSymbol(StringBuilder text, SymbolItem symbol, string indent)
     {
         text.Append(indent);
         if (Location(symbol) is { } location)
@@ -340,18 +333,18 @@ internal static partial class ResultText
             text.Append(location).Append(' ');
         }
 
-        if (symbol["kind"]?.GetValue<string>() is { } kind)
+        if (symbol.Kind is { } kind)
         {
             text.Append(kind).Append(' ');
         }
 
-        text.Append((symbol["symbol"] ?? symbol["name"])?.GetValue<string>());
-        if (symbol["detail"]?.GetValue<string>() is { } detail)
+        text.Append(symbol.Name);
+        if (symbol.Detail is { } detail)
         {
             text.Append(" : ").Append(detail);
         }
 
-        if (symbol["container"]?.GetValue<string>() is { } container)
+        if (symbol.Container is { } container)
         {
             text.Append(" in ").Append(container);
         }
@@ -359,15 +352,15 @@ internal static partial class ResultText
         text.Append('\n');
     }
 
-    private static string? Location(JsonObject symbol)
+    private static string? Location(SymbolItem symbol)
     {
-        var position = symbol["position"] is JsonArray value ? Position(value) : null;
-        if (position is not null && symbol["end"] is JsonArray end)
+        var position = symbol.Position is { } first ? Position(first) : null;
+        if (position is not null && symbol.End is { } end)
         {
             position += "-" + Position(end);
         }
 
-        return (symbol["file"]?.GetValue<string>(), position) switch
+        return (symbol.File, position) switch
         {
             ({ } file, { } start) => $"{file}:{start}",
             ({ } file, null) => file,
@@ -375,24 +368,41 @@ internal static partial class ResultText
         };
     }
 
-    private static void AppendEmptyOrTruncation(StringBuilder text, JsonObject result, string noun)
+    private static void AppendEmptyOrTruncation(
+        StringBuilder text,
+        JsonObject result,
+        string noun
+    ) =>
+        AppendEmptyOrTruncation(
+            text,
+            Int(result, "total"),
+            result["truncated"]?.GetValue<bool>() is true,
+            noun
+        );
+
+    private static void AppendEmptyOrTruncation(
+        StringBuilder text,
+        int total,
+        bool truncated,
+        string noun
+    )
     {
-        if (Int(result, "total") == 0)
+        if (total == 0)
         {
             text.Append("no ").Append(noun).Append('\n');
             return;
         }
 
-        AppendTruncation(text, result, noun);
+        AppendTruncation(text, total, truncated, noun);
     }
 
-    private static void AppendTruncation(StringBuilder text, JsonObject result, string noun)
+    private static void AppendTruncation(StringBuilder text, int total, bool truncated, string noun)
     {
-        if (result["truncated"]?.GetValue<bool>() is true)
+        if (truncated)
         {
             text.Append(
                 CultureInfo.InvariantCulture,
-                $"truncated: {Int(result, "total")} {noun} in total. Raise limit or narrow the query.\n"
+                $"truncated: {total} {noun} in total. Raise limit or narrow the query.\n"
             );
         }
     }
@@ -401,6 +411,9 @@ internal static partial class ResultText
         (result[name] as JsonArray ?? []).OfType<JsonObject>();
 
     private static string Position(JsonNode position) => Position(position[0]!, position[1]!);
+
+    private static string Position(SourcePosition position) =>
+        string.Create(CultureInfo.InvariantCulture, $"{position.Line}:{position.Character}");
 
     private static string Position(JsonNode line, JsonNode character) =>
         string.Create(
