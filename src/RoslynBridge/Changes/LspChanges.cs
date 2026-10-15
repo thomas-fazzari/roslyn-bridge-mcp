@@ -13,7 +13,7 @@ using RoslynBridge.Results;
 namespace RoslynBridge.Changes;
 
 [DebuggerDisplay("{_pending.Count} pending proposals")]
-internal sealed class LspChanges(
+internal sealed partial class LspChanges(
     RoslynSession session,
     WorkspacePaths paths,
     WorkspaceEditService edits,
@@ -133,80 +133,6 @@ internal sealed class LspChanges(
         );
     }
 
-    private async Task<Result<ToolResult>> CodeActionsAsync(
-        LspRequest request,
-        CancellationToken cancellationToken
-    )
-    {
-        var snapshot = await CaptureAsync(cancellationToken);
-        var located = await queries.PositionAsync(request, cancellationToken);
-        if (located.Error is { } error)
-        {
-            return error;
-        }
-
-        if (!HasValidEnd(request))
-        {
-            return ToolError.InvalidRequest("The selection end must follow its start.");
-        }
-
-        var position = located.Value;
-        var uri = position["textDocument"]!["uri"]!.GetValue<string>();
-        var report = await queries.FileDiagnosticsAsync(uri, cancellationToken);
-        snapshot = WithDocumentVersions(snapshot);
-        var start = position["position"]!.DeepClone();
-        var parameters = new JsonObject
-        {
-            ["textDocument"] = position["textDocument"]!.DeepClone(),
-            ["range"] = new JsonObject { ["start"] = start, ["end"] = EndPosition(request, start) },
-            ["context"] = new JsonObject
-            {
-                ["diagnostics"] = report["items"]?.DeepClone() ?? new JsonArray(),
-            },
-        };
-        var actions =
-            await session.RequestAsync(
-                LspMethods.TextDocumentCodeAction,
-                parameters,
-                cancellationToken
-            ) as JsonArray
-            ?? [];
-        var pending = new PendingChange(
-            request.Action,
-            snapshot,
-            Edit: null,
-            Command: null,
-            actions
-        );
-        if (request.ActionIndex is not null)
-        {
-            return await SelectActionAsync(pending, request, cancellationToken);
-        }
-
-        if (request.Apply)
-        {
-            return ToolError.InvalidRequest("Choose actionIndex before applying a code action.");
-        }
-
-        return new ActionListing(
-            Remember(pending),
-            [
-                .. actions
-                    .Take(request.Limit)
-                    .Select(
-                        (action, index) =>
-                            new ListedAction(
-                                index,
-                                action?["kind"]?.GetValue<string>(),
-                                action?["title"]?.GetValue<string>() ?? string.Empty
-                            )
-                    ),
-            ],
-            actions.Count,
-            actions.Count > request.Limit
-        );
-    }
-
     private async Task<Result<ToolResult>> UseProposalAsync(
         LspRequest request,
         CancellationToken cancellationToken
@@ -232,59 +158,6 @@ internal sealed class LspChanges(
         }
 
         return result;
-    }
-
-    private async Task<Result<ToolResult>> SelectActionAsync(
-        PendingChange pending,
-        LspRequest request,
-        CancellationToken cancellationToken
-    )
-    {
-        var actions = pending.Actions!;
-        if (request.ActionIndex is not >= 0 || request.ActionIndex >= actions.Count)
-        {
-            return ToolError.InvalidRequest(
-                "Select a valid actionIndex from the code action listing."
-            );
-        }
-
-        // CompleteAsync rejects a stale snapshot before any preview or write
-        if (actions[request.ActionIndex.Value]?.DeepClone() is not JsonObject action)
-        {
-            return ToolError.InvalidLspData("Roslyn returned an invalid code action.");
-        }
-
-        if (action["data"] is not null)
-        {
-            if (
-                await session.RequestAsync(LspMethods.CodeActionResolve, action, cancellationToken)
-                is not JsonObject resolved
-            )
-            {
-                return ToolError.InvalidLspData("Roslyn could not resolve the code action.");
-            }
-
-            action = resolved;
-        }
-
-        var command = action["command"] switch
-        {
-            JsonObject value => value,
-            JsonValue => action,
-            _ => null,
-        };
-        var selected = new PendingChange(
-            request.Action,
-            pending.Snapshot,
-            action["edit"] as JsonObject,
-            command
-        );
-        if (selected.Edit is null && selected.Command is null)
-        {
-            return ToolError.InvalidLspData("The selected action contains no edit or command.");
-        }
-
-        return await CompleteAsync(selected, request.Apply, cancellationToken);
     }
 
     internal async Task<ToolResult> CompleteAsync(
@@ -475,21 +348,6 @@ internal sealed class LspChanges(
         _pending.Add(id, change);
         return id;
     }
-
-    // A request with an end also has a line and character, because a symbol cannot take one
-    private static bool HasValidEnd(LspRequest request) =>
-        request is { EndLine: null, EndCharacter: null }
-        || (
-            request.EndLine > 0
-            && request.EndCharacter > 0
-            && request.EndLine >= request.Line
-            && (request.EndLine != request.Line || request.EndCharacter >= request.Character)
-        );
-
-    private static JsonNode EndPosition(LspRequest request, JsonNode start) =>
-        request is { EndLine: { } line, EndCharacter: { } character }
-            ? new JsonObject { ["line"] = line - 1, ["character"] = character - 1 }
-            : start.DeepClone();
 
     private static JsonArray ToDocumentChanges(JsonObject edit)
     {

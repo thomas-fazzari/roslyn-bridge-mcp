@@ -29,7 +29,7 @@ src/Calculator.cs
   12:9 error CS0246 The type or namespace name 'Foo' could not be found
 
 12:9 is the one-based line and character of the start. Pass them unchanged
-to the edit tool's code_actions. severity is error, warning, information or hint.
+to the edit tool's code_actions, or pass the code as its diagnostic. severity is error, warning, information or hint.
 Clean files are not listed.
 
 A summary line follows the files:

@@ -31,6 +31,8 @@ internal sealed record LspRequest
 
     public string? NewName { get; init; }
 
+    public string? Diagnostic { get; init; }
+
     public int? ActionIndex { get; init; }
 
     public bool Apply { get; init; }

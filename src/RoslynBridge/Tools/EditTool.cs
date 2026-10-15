@@ -36,6 +36,10 @@ internal sealed class EditTool(LspTool lsp)
             int? endCharacter = null,
         [Description("New symbol name, or the workspace-relative destination for rename_file.")]
             string? newName = null,
+        [Description(
+            "Diagnostic code, such as CS0246, whose fixes code_actions lists. Targets its first occurrence in file, or on line. Replaces the position."
+        )]
+            string? diagnostic = null,
         [Description("Zero-based index of a code action from a fresh listing.")]
             int? actionIndex = null,
         [Description("Proposal identifier returned by a previous preview or listing.")]
@@ -63,6 +67,7 @@ internal sealed class EditTool(LspTool lsp)
                 EndLine = endLine,
                 EndCharacter = endCharacter,
                 NewName = newName,
+                Diagnostic = diagnostic,
                 ActionIndex = actionIndex,
                 ProposalId = proposalId,
                 Apply = apply,

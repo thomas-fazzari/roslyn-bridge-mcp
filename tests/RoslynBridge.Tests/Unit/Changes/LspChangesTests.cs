@@ -138,7 +138,109 @@ public sealed class LspChangesTests : IDisposable
         Task Apply() => changes.CompleteAsync(pending, apply: true, TestCt);
     }
 
+    [Fact]
+    public async Task ListingFlattensNestedActionsAndResolvesFixAllByScopeAsync()
+    {
+        var path = await WriteFileAsync(_root, "Source.cs", "class A {}");
+        JsonNode? fixAll = null;
+        await using var session = CreateSession(
+            _root,
+            FakeServer(server =>
+                server.Handle = (method, parameters) =>
+                {
+                    if (method is LspMethods.CodeActionResolveFixAll)
+                    {
+                        fixAll = parameters;
+                        return Task.FromResult<JsonNode?>(
+                            new JsonObject
+                            {
+                                ["edit"] = WorkspaceChanges(path, TextEdit(0, 6, 0, 7, "B")),
+                            }
+                        );
+                    }
+
+                    return Task.FromResult<JsonNode?>(CodeActions());
+                }
+            )
+        );
+        await session.EnsureStartedAsync(TestCt);
+        var (changes, _) = CreateChanges(session);
+
+        var listing = (ActionListing)
+            (
+                await changes.ExecuteAsync(
+                    new LspRequest
+                    {
+                        Action = LspAction.CodeActions,
+                        File = path,
+                        Line = 1,
+                        Character = 7,
+                    },
+                    TestCt
+                )
+            ).Value!;
+        var preview = (ProposalPreview)
+            (
+                await changes.ExecuteAsync(
+                    new LspRequest
+                    {
+                        Action = LspAction.CodeActions,
+                        ProposalId = listing.ProposalId,
+                        ActionIndex = 2,
+                    },
+                    TestCt
+                )
+            ).Value!;
+
+        listing
+            .Actions.Select(action => action.Title)
+            .Should()
+            .Equal(
+                "Wrapping > Wrap call chain",
+                "Fix All: Rename (Document)",
+                "Fix All: Rename (Project)"
+            );
+        fixAll!["scope"]!.GetValue<string>().Should().Be("Project");
+        preview.Command.Should().BeNull();
+        preview.Files.Should().ContainSingle();
+    }
+
     public void Dispose() => Directory.Delete(_root, recursive: true);
+
+    private static JsonArray CodeActions()
+    {
+        var wrap = new JsonObject
+        {
+            ["title"] = "Wrap call chain",
+            ["data"] = new JsonObject
+            {
+                ["CodeActionPath"] = new JsonArray("Wrapping", "Wrap call chain"),
+            },
+        };
+        var fixAllData = new JsonObject
+        {
+            ["CodeActionPath"] = new JsonArray("Rename"),
+            ["FixAllFlavors"] = new JsonArray("Document", "Project"),
+        };
+        return
+        [
+            new JsonObject
+            {
+                ["title"] = "Wrapping",
+                ["data"] = new JsonObject { ["NestedCodeActions"] = new JsonArray(wrap) },
+            },
+            new JsonObject
+            {
+                ["title"] = "Fix All: Rename",
+                ["command"] = new JsonObject
+                {
+                    ["command"] = "roslyn.client.fixAllCodeAction",
+                    ["arguments"] = new JsonArray(fixAllData.DeepClone()),
+                },
+                ["data"] = fixAllData,
+            },
+        ];
+    }
 
     private (LspChanges Changes, WorkspaceEditService Edits) CreateChanges(RoslynSession session)
     {

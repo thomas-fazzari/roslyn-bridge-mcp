@@ -51,6 +51,15 @@ public sealed partial class RoslynMcpTests
 
     private static string[] Lines(string text) => text.Split('\n');
 
+    private static int ActionIndex(string listing, Func<string, bool> match)
+    {
+        var action = Lines(listing).Should().ContainSingle(line => match(line), listing).Which;
+        return int.Parse(
+            action[..action.IndexOf(' ', StringComparison.Ordinal)],
+            CultureInfo.InvariantCulture
+        );
+    }
+
     // The lines of one impact section, up to the next section header
     private static IEnumerable<string> Section(string[] lines, string name) =>
         lines

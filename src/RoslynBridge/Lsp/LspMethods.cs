@@ -13,6 +13,7 @@ internal static class LspMethods
     public const string ClientRegisterCapability = "client/registerCapability";
     public const string ClientUnregisterCapability = "client/unregisterCapability";
     public const string CodeActionResolve = "codeAction/resolve";
+    public const string CodeActionResolveFixAll = "codeAction/resolveFixAll";
     public const string CompletionItemResolve = "completionItem/resolve";
     public const string TextDocumentCodeAction = "textDocument/codeAction";
     public const string TextDocumentCodeLens = "textDocument/codeLens";

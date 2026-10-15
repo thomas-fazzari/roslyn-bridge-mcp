@@ -108,6 +108,11 @@ For code actions, request the listing, then send its proposal ID and zero-based 
 Apply the preview with its new proposal ID. Set `endLine` and `endCharacter` when an action needs a selection.
 Some Roslyn commands reveal their edits only when executed.
 
+To fix a diagnostic without its position, pass its code as `diagnostic` with `file`, and optionally `line`.
+The listing then holds only the fixes for its first occurrence.
+Nested actions appear as one entry per choice, titled with their menu path, such as `Suppress or configure issues > Configure IDE0005 severity > None`.
+A fix-all action appears once per scope, such as `Fix All: Remove unnecessary usings (Document)`, and fixes every occurrence in that scope.
+
 `apply: true` also works without a preview: on a fresh `rename`, on a code action listing with `actionIndex`, or on a fresh `code_actions` request with `actionIndex`.
 
 A preview lists each file operation, followed by its changed excerpts with their one-based start:

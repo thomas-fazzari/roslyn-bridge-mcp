@@ -14,9 +14,20 @@ internal sealed record PendingChange(
     WorkspaceSnapshot Snapshot,
     JsonObject? Edit,
     JsonObject? Command,
-    JsonArray? Actions = null,
+    IReadOnlyList<CodeActionChoice>? Actions = null,
     bool RenamesFiles = false
 )
 {
     public DateTimeOffset CreatedAt { get; } = DateTimeOffset.UtcNow;
 }
+
+/// <summary>
+/// One selectable entry of a code action listing.
+/// </summary>
+/// <param name="Scope">The fix-all scope, for an entry that fixes every occurrence in it.</param>
+internal sealed record CodeActionChoice(
+    string Title,
+    string? Kind,
+    JsonObject Action,
+    string? Scope
+);

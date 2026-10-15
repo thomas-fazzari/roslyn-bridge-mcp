@@ -50,6 +50,7 @@ internal sealed partial class LspTool(
         LspMethods.TextDocumentSignatureHelp,
         LspMethods.TextDocumentCodeAction,
         LspMethods.CodeActionResolve,
+        LspMethods.CodeActionResolveFixAll,
         LspMethods.TextDocumentPrepareRename,
         LspMethods.TextDocumentRename,
         LspMethods.TextDocumentDiagnostic,

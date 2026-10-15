@@ -35,6 +35,10 @@ edit {"action":"code_actions","file":"src/Calculator.cs","line":12,"character":9
 For a selection, also pass endLine and endCharacter, both one-based.
 Available actions depend on the installed Roslyn version and loaded project.
 
+To fix a diagnostic, pass its code instead of a position. Add line to pick
+an occurrence. The listing then holds only fixes for that diagnostic:
+edit {"action":"code_actions","file":"src/Calculator.cs","diagnostic":"IDE0005"}
+
 2. Choose an action from the returned listing. Resolve its preview using the
 listing's proposalId and the action's zero-based index:
 edit {"action":"code_actions","proposalId":"ID_FROM_LISTING","actionIndex":0}
@@ -50,6 +54,10 @@ Some command-based actions reveal their edits only during execution.
 A listing starts with "proposal ID", then one line per action: its zero-based
 index, its kind when Roslyn gives one, and its title:
 0 quickfix using System.Collections.Generic;
+1 quickfix Fix All: Remove unnecessary usings (Document)
+2 quickfix Suppress or configure issues > Configure IDE0005 severity > None
+A fix-all entry fixes every occurrence in the scope in parentheses. A title with
+">" is a choice inside a nested action.
 
 A preview starts with "proposal ID: N files, not applied". Each file operation
 follows (change, create, delete, or rename OLD -> NEW), then its excerpts:

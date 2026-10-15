@@ -729,15 +729,11 @@ public sealed partial class RoslynMcpTests
         await using var workspace = await RoslynTestWorkspace.CreateAsync(cancellationToken);
         var request = await workspace.AtAsync(LspAction.CodeActions, ProblemsFile, "List<string>");
         var listing = await workspace.CallAsync(request);
-        var action = Lines(listing)
-            .Should()
-            .ContainSingle(line => line.EndsWith(" " + title, StringComparison.Ordinal))
-            .Which;
         request = request with
         {
-            ActionIndex = int.Parse(
-                action[..action.IndexOf(' ', StringComparison.Ordinal)],
-                CultureInfo.InvariantCulture
+            ActionIndex = ActionIndex(
+                listing,
+                line => line.EndsWith(" " + title, StringComparison.Ordinal)
             ),
         };
 
@@ -766,5 +762,39 @@ public sealed partial class RoslynMcpTests
         var diagnostics = await DiagnosticsAsync(workspace);
         diagnostics.Should().NotContain(item => item.Code == "CS0246");
         diagnostics.Should().Contain(item => item.Code == "CS8603");
+    }
+
+    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    public async Task FixesEveryOccurrenceOfADiagnosticInADocumentAsync()
+    {
+        const string file = "Application/Usings.cs";
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var workspace = await RoslynTestWorkspace.CreateAsync(cancellationToken);
+        await workspace.WriteFileAsync(
+            file,
+            "using System.IO;\nusing System.Text;\n\nnamespace Sample.Application;\n\npublic static class Usings;\n"
+        );
+        var request = new LspRequest
+        {
+            Action = LspAction.CodeActions,
+            File = file,
+            Diagnostic = "IDE0005",
+        };
+
+        var listing = await workspace.CallAsync(request);
+        var applied = await workspace.CallAsync(
+            ApplyProposal(LspAction.CodeActions, listing) with
+            {
+                ActionIndex = ActionIndex(
+                    listing,
+                    line =>
+                        line.Contains("Fix All", StringComparison.Ordinal)
+                        && line.EndsWith(" (Document)", StringComparison.Ordinal)
+                ),
+            }
+        );
+
+        AssertApplied(applied);
+        (await workspace.ReadFileAsync(file)).Should().NotContain("using");
     }
 }
