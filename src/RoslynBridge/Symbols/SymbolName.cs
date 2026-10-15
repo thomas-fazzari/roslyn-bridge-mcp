@@ -3,12 +3,13 @@
 
 using System.Buffers;
 using System.Collections.Immutable;
+using System.Globalization;
 
 namespace RoslynBridge.Symbols;
 
 /// <summary>
 /// A dotted C# symbol name with an optional parameter list, such as <c>Sample.Box&lt;T&gt;.Put(int)</c>.
-/// Generic arguments are ignored when names are compared.
+/// Segments keep the generic arity, as in <c>Box`1</c>, and drop the argument names.
 /// </summary>
 internal sealed record SymbolName(ImmutableArray<string> Segments, string? Parameters)
 {
@@ -45,7 +46,7 @@ internal sealed record SymbolName(ImmutableArray<string> Segments, string? Param
         }
 
         var segments = SplitAtTopLevel(name, '.')
-            .Select(segment => StripGenericArguments(segment).Trim())
+            .Select(segment => WithArity(segment.Trim()))
             .ToImmutableArray();
         return segments.Any(segment =>
             segment.Length == 0 || segment.AsSpan().ContainsAny(_brackets)
@@ -66,15 +67,33 @@ internal sealed record SymbolName(ImmutableArray<string> Segments, string? Param
 
     /// <summary>
     /// Returns whether this requested name selects a declared symbol.
-    /// The requested segments must end the declared segments, and a requested parameter list must be equal.
+    /// The requested segments must end the declared segments, and a requested parameter list must match.
+    /// A loose match also accepts a segment without its generic arity and a parameter type without its trailing <c>?</c>.
     /// </summary>
-    public bool Selects(SymbolName declared) =>
+    public bool Selects(SymbolName declared, bool exact) =>
         Segments.Length <= declared.Segments.Length
-        && declared.Segments[^Segments.Length..].SequenceEqual(Segments, StringComparer.Ordinal)
-        && (
-            Parameters is null
-            || string.Equals(Parameters, declared.Parameters, StringComparison.Ordinal)
-        );
+        && Segments
+            .Zip(declared.Segments[^Segments.Length..])
+            .All(pair => SegmentSelects(pair.First, pair.Second, exact))
+        && (Parameters is null || ParametersSelect(Parameters, declared.Parameters, exact));
+
+    /// <summary>
+    /// Returns a segment without its generic arity, as written in source.
+    /// </summary>
+    public static string BaseName(string segment)
+    {
+        var arity = segment.IndexOf('`', StringComparison.Ordinal);
+        return arity < 0 ? segment : segment[..arity];
+    }
+
+    /// <summary>
+    /// Removes a trailing parameter list, as in <c>Run(int)</c>.
+    /// </summary>
+    public static string WithoutParameters(string text)
+    {
+        var open = text.Length > 0 && text[^1] is ')' or ']' ? MatchingOpen(text) : -1;
+        return open < 0 ? text : text[..open];
+    }
 
     /// <summary>
     /// Appends a member name to the name of its container.
@@ -82,13 +101,45 @@ internal sealed record SymbolName(ImmutableArray<string> Segments, string? Param
     public SymbolName Append(SymbolName member) =>
         new([.. Segments, .. member.Segments], member.Parameters);
 
+    private static bool SegmentSelects(string requested, string declared, bool exact) =>
+        string.Equals(requested, declared, StringComparison.Ordinal)
+        || (
+            !exact
+            && !requested.Contains('`', StringComparison.Ordinal)
+            && string.Equals(requested, BaseName(declared), StringComparison.Ordinal)
+        );
+
+    private static bool ParametersSelect(string requested, string? declared, bool exact)
+    {
+        if (exact || declared is null)
+        {
+            return string.Equals(requested, declared, StringComparison.Ordinal);
+        }
+
+        var requestedTypes = SplitAtTopLevel(requested[1..^1], ',').ToArray();
+        var declaredTypes = SplitAtTopLevel(declared[1..^1], ',').ToArray();
+        return requestedTypes.Length == declaredTypes.Length
+            && requestedTypes
+                .Zip(declaredTypes)
+                .All(pair =>
+                    string.Equals(pair.First, pair.Second, StringComparison.Ordinal)
+                    || string.Equals(pair.First + "?", pair.Second, StringComparison.Ordinal)
+                );
+    }
+
     private static string Normalize(string parameters) =>
         string.Concat(parameters.Where(character => !char.IsWhiteSpace(character)));
 
-    private static string StripGenericArguments(string segment)
+    private static string WithArity(string segment)
     {
         var open = segment.IndexOf('<', StringComparison.Ordinal);
-        return open > 0 && segment[^1] == '>' ? segment[..open] : segment;
+        if (open <= 0 || segment[^1] != '>')
+        {
+            return segment;
+        }
+
+        var arity = SplitAtTopLevel(segment[(open + 1)..^1], ',').Count();
+        return $"{segment[..open]}`{arity.ToString(CultureInfo.InvariantCulture)}";
     }
 
     private static int MatchingOpen(string text)

@@ -11,10 +11,11 @@ public sealed class SymbolNameTests
     [InlineData("Put(int) : void", new[] { "Put" }, "(int)")]
     [InlineData("Value : T", new[] { "Value" }, null)]
     [InlineData("this[int] : string", new[] { "this" }, "[int]")]
-    [InlineData("Map<TResult>(Func<T, TResult>) : TResult", new[] { "Map" }, "(Func<T,TResult>)")]
-    [InlineData("Box<T>", new[] { "Box" }, null)]
+    [InlineData("Map<TResult>(Func<T, TResult>) : TResult", new[] { "Map`1" }, "(Func<T,TResult>)")]
+    [InlineData("Box<T>", new[] { "Box`1" }, null)]
+    [InlineData("Pair<TKey, TValue>", new[] { "Pair`2" }, null)]
     [InlineData("Sample.Application", new[] { "Sample", "Application" }, null)]
-    [InlineData("Sample.Box<T>.Put( int )", new[] { "Sample", "Box", "Put" }, "(int)")]
+    [InlineData("Sample.Box<T>.Put( int )", new[] { "Sample", "Box`1", "Put" }, "(int)")]
     [InlineData("operator <(Money, Money) : bool", new[] { "operator <" }, "(Money,Money)")]
     [InlineData("operator >>(Money, int) : Money", new[] { "operator >>" }, "(Money,int)")]
     [InlineData(
@@ -36,18 +37,26 @@ public sealed class SymbolNameTests
     }
 
     [Theory]
-    [InlineData("Put", true)]
-    [InlineData("Box.Put", true)]
-    [InlineData("Sample.Application.Box.Put", true)]
-    [InlineData("Box<T>.Put(int)", true)]
-    [InlineData("Box.Put(string)", false)]
-    [InlineData("ox.Put", false)]
-    [InlineData("Other.Box.Put", false)]
-    public void SelectsDeclarationsByTrailingSegmentsAndParameters(string requested, bool selected)
+    [InlineData("Put", true, true)]
+    [InlineData("Box.Put", false, true)]
+    [InlineData("Sample.Application.Box.Put", false, true)]
+    [InlineData("Box<T>.Put(string?)", true, true)]
+    [InlineData("Box<U>.Put(string)", false, true)]
+    [InlineData("Box<T, U>.Put", false, false)]
+    [InlineData("Box.Put(int)", false, false)]
+    [InlineData("ox.Put", false, false)]
+    [InlineData("Other.Box.Put", false, false)]
+    public void SelectsExactlyOrLooselyByTrailingSegmentsAndParameters(
+        string requested,
+        bool exact,
+        bool loose
+    )
     {
-        var declared = SymbolName.Parse("Sample.Application.Box<T>.Put(int)")!;
+        var declared = SymbolName.Parse("Sample.Application.Box<T>.Put(string?)")!;
+        var name = SymbolName.Parse(requested)!;
 
-        SymbolName.Parse(requested)!.Selects(declared).Should().Be(selected);
+        name.Selects(declared, exact: true).Should().Be(exact);
+        name.Selects(declared, exact: false).Should().Be(loose);
     }
 
     [Theory]

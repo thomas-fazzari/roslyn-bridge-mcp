@@ -12,7 +12,7 @@ namespace RoslynBridge.Lsp;
 internal static class LspSymbolKinds
 {
     internal const int Namespace = 3;
-    private const int Method = 6;
+    internal const int Method = 6;
     private const int Constructor = 9;
     private const int Function = 12;
     private const int Operator = 25;

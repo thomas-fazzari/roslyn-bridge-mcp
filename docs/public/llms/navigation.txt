@@ -8,7 +8,9 @@ navigate {"action":"references","symbol":"Calculator.Add"}
 
 symbol matches the end of the fully qualified name: Add, Calculator.Add or
 MyApp.Math.Calculator.Add. A parameter list selects an overload: Calculator.Add(int, int).
-Generic arguments are optional: Box.Put and Box<T>.Put are the same name.
+Generic arguments are optional. When Box and Box<T> both exist, Box.Put names
+the non-generic one, and Box<T>.Put the generic one. A parameter type also
+matches its nullable form: Add(string) selects Add(string?).
 A constructor needs its parameter list: Calculator(ILogger).
 Partial declarations in one project count as one symbol. Same-named types in
 different projects are separate symbols.

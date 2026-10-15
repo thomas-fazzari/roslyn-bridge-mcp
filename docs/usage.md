@@ -36,6 +36,9 @@ Arguments are passed directly to each tool:
 
 `navigate` and `edit` accept a `symbol` name instead of a position, for example `Calculator.Add`.
 The name matches the end of the fully qualified name. A parameter list selects an overload, as in `Calculator.Add(int, int)`.
+
+Generic arguments are optional unless a generic and a non-generic type share the name. A parameter type also matches its nullable form
+
 A constructor needs its parameter list. An ambiguous name returns the error `ambiguous_symbol` with up to 20 candidates, one per line.
 Each candidate symbol can be sent back unchanged. When candidates share a name, send the symbol with the candidate's file.
 

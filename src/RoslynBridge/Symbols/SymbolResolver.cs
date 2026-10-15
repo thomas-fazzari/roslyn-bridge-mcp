@@ -36,12 +36,11 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
         var files = file is null
             ? await CandidateFilesAsync(requested, cancellationToken)
             : [paths.Resolve(file)];
-        var declarations = new List<SymbolDeclaration>();
-        foreach (var candidate in files)
-        {
-            var documentSymbols = await DocumentSymbolsAsync(candidate, cancellationToken);
-            declarations.AddRange(FindDeclarations(documentSymbols, candidate, requested));
-        }
+        var declarations = FindDeclarations(
+                await DocumentSymbolsAsync(files, cancellationToken),
+                requested
+            )
+            .ToList();
 
         var symbols = DistinctSymbols(
             declarations,
@@ -164,25 +163,24 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
         CancellationToken cancellationToken
     )
     {
+        var wanted = positions.ToHashSet();
+        var documents = await DocumentSymbolsAsync(
+            wanted.Select(position => position.File).Distinct(StringComparer.Ordinal),
+            cancellationToken
+        );
         var names = new Dictionary<(string File, int Line, int Character), string>();
-        foreach (var file in positions.GroupBy(position => position.File, StringComparer.Ordinal))
+
+        foreach (var (file, symbols) in documents)
         {
-            var declarations = Declarations(
-                    await DocumentSymbolsAsync(file.Key, cancellationToken),
-                    file.Key,
-                    container: null,
-                    containerDisplay: null
-                )
-                .ToList();
-            foreach (var position in file)
+            foreach (
+                var declared in Declarations(symbols, file, container: null, containerDisplay: null)
+            )
             {
-                var match = declarations.FirstOrDefault(declared =>
-                    declared.Declaration.Line == position.Line
-                    && declared.Declaration.Character == position.Character
-                );
-                if (match.Declaration is not null)
+                var declaration = declared.Declaration;
+                var position = (file, declaration.Line, declaration.Character);
+                if (wanted.Contains(position))
                 {
-                    names[position] = match.Declaration.Name;
+                    names.TryAdd(position, declaration.Name);
                 }
             }
         }
@@ -191,33 +189,68 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
     }
 
     /// <summary>
-    /// Returns the declarations in a document symbol tree that <paramref name="requested"/> selects.
+    /// Returns the declarations in document symbol trees that <paramref name="requested"/> selects.
+    /// Exact matches win over loose ones, so every returned name selects only its own declaration.
     /// A constructor is selected only when the request includes its parameter list.
     /// </summary>
     internal static IEnumerable<SymbolDeclaration> FindDeclarations(
-        JsonArray documentSymbols,
-        string file,
+        IEnumerable<(string File, JsonArray Symbols)> documents,
         SymbolName requested
-    ) =>
-        Declarations(documentSymbols, file, container: null, containerDisplay: null)
-            .Where(declared =>
-                requested.Selects(declared.Name)
-                && (!declared.IsConstructor || requested.Parameters is not null)
+    )
+    {
+        var candidates = documents
+            .SelectMany(document =>
+                Declarations(
+                    document.Symbols,
+                    document.File,
+                    container: null,
+                    containerDisplay: null
+                )
             )
-            .Select(declared => declared.Declaration);
+            .Where(declared => !declared.IsConstructor || requested.Parameters is not null)
+            .ToList();
+        var exact = candidates
+            .Where(declared => requested.Selects(declared.Name, exact: true))
+            .ToList();
+        var selected =
+            exact.Count > 0
+                ? exact
+                : candidates.Where(declared => requested.Selects(declared.Name, exact: false));
 
-    private async Task<JsonArray> DocumentSymbolsAsync(
-        string file,
+        return selected.Select(declared => declared.Declaration);
+    }
+
+    // Opening a document changes the session, so only the symbol requests run concurrently
+    private async Task<List<(string File, JsonArray Symbols)>> DocumentSymbolsAsync(
+        IEnumerable<string> files,
         CancellationToken cancellationToken
     )
     {
-        var uri = await session.OpenDocumentAsync(file, cancellationToken);
-        var symbols = await session.RequestAsync(
-            LspMethods.TextDocumentDocumentSymbol,
-            new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = uri } },
-            cancellationToken
-        );
-        return symbols as JsonArray ?? [];
+        var documents = new List<(string File, JsonArray Symbols)>();
+        // Batches stay within the open documents the session keeps
+        foreach (var batch in files.Chunk(RoslynSession.MaximumOpenDocuments))
+        {
+            var uris = new List<string>(batch.Length);
+            foreach (var file in batch)
+            {
+                uris.Add(await session.OpenDocumentAsync(file, cancellationToken));
+            }
+
+            var symbols = await Task.WhenAll(
+                uris.Select(uri =>
+                    session.RequestAsync(
+                        LspMethods.TextDocumentDocumentSymbol,
+                        new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = uri } },
+                        cancellationToken
+                    )
+                )
+            );
+            documents.AddRange(
+                batch.Zip(symbols, (file, result) => (file, result as JsonArray ?? []))
+            );
+        }
+
+        return documents;
     }
 
     // Namespaces only qualify their members, so they are not declarations here
@@ -240,10 +273,22 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
                 continue;
             }
 
+            var kind = symbol["kind"]?.GetValue<int>();
+            var children = symbol["children"] as JsonArray ?? [];
+            // Members of an extension block are named as members of its enclosing class
+            if (IsExtensionBlock(member, kind))
+            {
+                foreach (var declared in Declarations(children, file, container, containerDisplay))
+                {
+                    yield return declared;
+                }
+
+                continue;
+            }
+
             var name = container is null ? member : container.Append(member);
             var display = SymbolName.WithoutType(rawName);
             display = containerDisplay is null ? display : $"{containerDisplay}.{display}";
-            var kind = symbol["kind"]?.GetValue<int>();
             if (
                 kind is not LspSymbolKinds.Namespace
                 && symbol["selectionRange"]?["start"] is { } start
@@ -262,38 +307,56 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
                 );
             }
 
-            if (symbol["children"] is JsonArray children)
+            // A container's parameter list is not part of its members' names, as for local functions
+            foreach (
+                var declared in Declarations(
+                    children,
+                    file,
+                    name with
+                    {
+                        Parameters = null,
+                    },
+                    SymbolName.WithoutParameters(display)
+                )
+            )
             {
-                foreach (var declared in Declarations(children, file, name, display))
-                {
-                    yield return declared;
-                }
+                yield return declared;
             }
         }
     }
 
+    private static bool IsExtensionBlock(SymbolName member, int? kind) =>
+        member is { Segments: ["extension"], Parameters: not null }
+        && kind is not LspSymbolKinds.Method;
+
     private static bool IsConstructor(SymbolName member, SymbolName? container) =>
         container is not null
         && member.Parameters is not null
-        && string.Equals(member.Segments[^1], container.Segments[^1], StringComparison.Ordinal);
+        && string.Equals(
+            member.Segments[^1],
+            SymbolName.BaseName(container.Segments[^1]),
+            StringComparison.Ordinal
+        );
 
     private async Task<IReadOnlyCollection<string>> CandidateFilesAsync(
         SymbolName requested,
         CancellationToken cancellationToken
     )
     {
+        var segments = requested.Segments.Select(SymbolName.BaseName).ToArray();
         var results = await session.RequestAsync(
             LspMethods.WorkspaceSymbol,
-            new JsonObject { ["query"] = string.Join('.', requested.Segments) },
+            new JsonObject { ["query"] = string.Join('.', segments) },
             cancellationToken
         );
         var files = new SortedSet<string>(StringComparer.Ordinal);
         foreach (var result in results as JsonArray ?? [])
         {
             if (
-                string.Equals(
-                    result?["name"]?.GetValue<string>(),
-                    requested.Segments[^1],
+                SymbolName.Parse(result?["name"]?.GetValue<string>() ?? string.Empty) is { } found
+                && string.Equals(
+                    SymbolName.BaseName(found.Segments[^1]),
+                    segments[^1],
                     StringComparison.Ordinal
                 )
                 && result?["location"]?["uri"]?.GetValue<string>() is { } uri
