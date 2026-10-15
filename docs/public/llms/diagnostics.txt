@@ -51,7 +51,8 @@ When the result is truncated, split the selection into narrower requests.
 Omitted files are not necessarily clean when the result is truncated.
 Report the checked scope. A failed, incomplete or truncated response cannot
 establish that the workspace is clean.
-After applying changes, rerun diagnostics on the affected files.
+After writing files yourself, rerun diagnostics on them. An edit applied
+through the edit tool already reports the diagnostics of its changed files.
 A clean diagnostic report does not replace tests or validate runtime behavior.
 
 After a timeout, narrow the selection. If a single-file retry also times out,

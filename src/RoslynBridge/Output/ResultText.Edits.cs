@@ -120,23 +120,26 @@ internal static partial class ResultText
             );
         }
 
-        if (receipt.CommandExecuted is not { } executed)
+        if (receipt.CommandExecuted is { } executed)
         {
-            return;
+            text.Append(executed ? "command executed" : "command not executed");
+            if (receipt.CommandResult is { } value)
+            {
+                var commandResult = Json(value);
+                text.Append(
+                    text.Length + commandResult.Length + 10 <= budget
+                        ? $", result {commandResult}"
+                        : ", result omitted: too large to show"
+                );
+            }
+
+            text.Append('\n');
         }
 
-        text.Append(executed ? "command executed" : "command not executed");
-        if (receipt.CommandResult is { } value)
+        if (receipt.Diagnostics is { } diagnostics)
         {
-            var commandResult = Json(value);
-            text.Append(
-                text.Length + commandResult.Length + 10 <= budget
-                    ? $", result {commandResult}"
-                    : ", result omitted: too large to show"
-            );
+            AppendDiagnostics(text, diagnostics);
         }
-
-        text.Append('\n');
     }
 
     // kind path, or rename old -> new

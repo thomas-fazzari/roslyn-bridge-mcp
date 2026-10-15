@@ -1,7 +1,6 @@
 // Copyright (C) RoslynBridge contributors
 // SPDX-License-Identifier: GPL-3.0-only
 
-using System.Diagnostics;
 using System.Globalization;
 using System.Text.Json.Nodes;
 using Microsoft.Extensions.FileSystemGlobbing;
@@ -19,8 +18,6 @@ internal sealed partial class LspQueries(
 )
 {
     private const int MaximumDiagnosticFiles = 1000;
-    private static readonly TimeSpan _projectAttachTimeout = TimeSpan.FromSeconds(10);
-    private static readonly TimeSpan _projectAttachPollInterval = TimeSpan.FromMilliseconds(200);
 
     public async Task<Result<ToolResult>> NavigationAsync(
         LspRequest request,
@@ -254,14 +251,25 @@ internal sealed partial class LspQueries(
             );
         }
 
+        return await DiagnosticsAsync(files, request.Severity, request.Limit, cancellationToken);
+    }
+
+    /// <param name="files">Full paths of C# files.</param>
+    public async Task<DiagnosticReport> DiagnosticsAsync(
+        IReadOnlyCollection<string> files,
+        DiagnosticSeverity severity,
+        int limit,
+        CancellationToken cancellationToken
+    )
+    {
         await session.SynchronizeNewFilesAsync(files, cancellationToken);
-        var scanned = new List<ScannedFile>(files.Length);
+        var scanned = new List<ScannedFile>(files.Count);
         foreach (var batch in files.Chunk(RoslynSession.MaximumOpenDocuments))
         {
             scanned.AddRange(await ScanAsync(batch, cancellationToken));
         }
 
-        return Report(scanned, request);
+        return Report(scanned, severity, limit);
     }
 
     private async Task<IEnumerable<ScannedFile>> ScanAsync(
@@ -272,7 +280,7 @@ internal sealed partial class LspQueries(
         // Each open discards diagnostics of earlier solution versions, so the batch opens before any pull
         var uris = await session.OpenDocumentsAsync(batch, cancellationToken);
 
-        var miscellaneous = await WaitForProjectsAsync(batch, uris, cancellationToken);
+        var miscellaneous = await session.WaitForProjectsAsync(batch, cancellationToken);
         var reports = await Task.WhenAll(
             uris.Select(uri => FileDiagnosticsAsync(uri, cancellationToken))
         );
@@ -281,22 +289,26 @@ internal sealed partial class LspQueries(
                 new ScannedFile(
                     file,
                     reports[index]["items"] as JsonArray ?? [],
-                    miscellaneous.Contains(uris[index])
+                    miscellaneous.Contains(file)
                 )
         );
     }
 
-    private DiagnosticReport Report(List<ScannedFile> scanned, LspRequest request)
+    private DiagnosticReport Report(
+        List<ScannedFile> scanned,
+        DiagnosticSeverity severity,
+        int limit
+    )
     {
         var files = new List<FileDiagnostics>();
-        var remaining = request.Limit;
+        var remaining = limit;
         var total = 0;
         var belowSeverity = 0;
         var filesWithDiagnostics = 0;
         foreach (var file in scanned)
         {
             var diagnostics = file
-                .Reported.Where(diagnostic => diagnostic!.Severity() <= request.Severity)
+                .Reported.Where(diagnostic => diagnostic!.Severity() <= severity)
                 .ToList();
             belowSeverity += file.Reported.Count - diagnostics.Count;
             total += diagnostics.Count;
@@ -327,69 +339,13 @@ internal sealed partial class LspQueries(
             filesWithDiagnostics,
             total,
             belowSeverity,
-            total > request.Limit,
+            total > limit,
             [
                 .. scanned
                     .Where(file => file.Miscellaneous)
                     .Select(file => paths.RelativePath(file.Path)),
             ]
         );
-    }
-
-    /// <summary>
-    /// Returns the documents outside every project, after waiting for Roslyn to attach new files.
-    /// Roslyn treats a new file as a miscellaneous file, without semantic diagnostics,
-    /// until its project picks the file up.
-    /// </summary>
-    private async Task<HashSet<string>> WaitForProjectsAsync(
-        string[] files,
-        List<string> uris,
-        CancellationToken cancellationToken
-    )
-    {
-        var outside = new HashSet<string>(StringComparer.Ordinal);
-        var pending = Enumerable.Range(0, uris.Count).ToList();
-        var started = Stopwatch.GetTimestamp();
-        while (true)
-        {
-            var states = await Task.WhenAll(
-                pending.Select(async index =>
-                    (
-                        Index: index,
-                        Miscellaneous: await IsMiscellaneousAsync(uris[index], cancellationToken)
-                    )
-                )
-            );
-            pending = [];
-            foreach (var (index, _) in states.Where(state => state.Miscellaneous))
-            {
-                // A file that existed at load and is still outside a project stays there
-                if (session.IsCreatedFile(files[index]))
-                {
-                    pending.Add(index);
-                }
-                else
-                {
-                    outside.Add(uris[index]);
-                }
-            }
-
-            if (pending.Count == 0 || Stopwatch.GetElapsedTime(started) >= _projectAttachTimeout)
-            {
-                outside.UnionWith(pending.Select(index => uris[index]));
-                return outside;
-            }
-
-            await Task.Delay(_projectAttachPollInterval, cancellationToken);
-        }
-    }
-
-    private async Task<bool> IsMiscellaneousAsync(string uri, CancellationToken cancellationToken)
-    {
-        // Servers without the extension cannot report the state, so the file is not held back
-        var contexts = await session.ProjectContextsAsync(uri, cancellationToken);
-        return contexts.Count > 0
-            && contexts.All(context => context?["_vs_is_miscellaneous"]?.GetValue<bool>() is true);
     }
 
     public async Task<JsonObject> FileDiagnosticsAsync(

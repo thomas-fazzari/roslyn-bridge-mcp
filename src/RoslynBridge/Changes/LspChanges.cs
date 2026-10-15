@@ -127,7 +127,7 @@ internal sealed partial class LspChanges(
         );
         edit = new JsonObject { ["documentChanges"] = changes };
         return await CompleteAsync(
-            new PendingChange(request.Action, snapshot, edit, Command: null, RenamesFiles: true),
+            new PendingChange(request.Action, snapshot, edit, Command: null),
             request.Apply,
             cancellationToken
         );
@@ -187,16 +187,10 @@ internal sealed partial class LspChanges(
             : EditApplicationPhase.Command;
         try
         {
-            // The reload after a rename replaces a didRenameFiles notification
-            var filesChanged = change.RenamesFiles || result.ChangesMembership;
             if (change.Command is not null)
             {
                 result = result with { CommandExecuted = false };
-                var commandResult = await ExecuteCommandAsync(
-                    change.Command,
-                    filesChanged,
-                    cancellationToken
-                );
+                var commandResult = await ExecuteCommandAsync(change.Command, cancellationToken);
                 result = result.Merge(commandResult) with
                 {
                     CommandResult = commandResult.CommandResult,
@@ -204,7 +198,7 @@ internal sealed partial class LspChanges(
             }
             else
             {
-                await RefreshAfterChangesAsync(filesChanged, cancellationToken);
+                await SynchronizeAsync(result, cancellationToken);
             }
         }
         catch (EditApplicationException exception)
@@ -223,10 +217,8 @@ internal sealed partial class LspChanges(
         };
     }
 
-    /// <param name="filesChanged">Whether earlier writes changed which files exist, so Roslyn must reload.</param>
     public async Task<EditReceipt> ExecuteCommandAsync(
         JsonObject command,
-        bool filesChanged,
         CancellationToken cancellationToken
     )
     {
@@ -268,10 +260,7 @@ internal sealed partial class LspChanges(
 
         try
         {
-            await RefreshAfterChangesAsync(
-                filesChanged || callbacks.ChangesFileMembership,
-                cancellationToken
-            );
+            await SynchronizeAsync(result, cancellationToken);
         }
         catch (Exception exception)
         {
@@ -306,19 +295,38 @@ internal sealed partial class LspChanges(
                 exception
             );
 
-    private async Task RefreshAfterChangesAsync(
-        bool filesChanged,
-        CancellationToken cancellationToken
-    )
+    /// <summary>
+    /// Sends the written files to Roslyn without waiting for the file watcher, then waits for
+    /// Roslyn to attach created C# files to their projects. Reloads Roslyn when one stays outside.
+    /// </summary>
+    private async Task SynchronizeAsync(EditReceipt receipt, CancellationToken cancellationToken)
     {
-        if (filesChanged)
+        var written = receipt
+            .Operations.SelectMany(operation =>
+                operation.OldPath is { } oldPath
+                    ? [operation.Path, oldPath]
+                    : (string[])[operation.Path]
+            )
+            .Select(paths.Resolve)
+            .ToList();
+        await session.SynchronizeFilesAsync(written, cancellationToken);
+
+        string[] created =
+        [
+            .. receipt
+                .Operations.Where(operation =>
+                    operation.Kind is FileOperation.Create or FileOperation.Rename
+                )
+                .Select(operation => paths.Resolve(operation.Path))
+                .Where(path => RoslynSession.IsCSharpFile(path) && File.Exists(path)),
+        ];
+        if (
+            created.Length != 0
+            && (await session.WaitForProjectsAsync(created, cancellationToken)).Count != 0
+        )
         {
             _pending.Clear();
             await session.ReloadAsync(cancellationToken);
-        }
-        else
-        {
-            await session.SynchronizeAsync(cancellationToken);
         }
     }
 

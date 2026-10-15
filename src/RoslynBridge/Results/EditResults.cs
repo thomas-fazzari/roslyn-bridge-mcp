@@ -15,8 +15,6 @@ internal sealed record FileOperation(string Path, string Kind, string? OldPath =
     public const string Create = "create";
     public const string Rename = "rename";
     public const string Delete = "delete";
-
-    public bool ChangesMembership => Kind is Create or Delete or Rename;
 }
 
 /// <summary>
@@ -49,12 +47,12 @@ internal sealed record EditReceipt(bool Applied, IReadOnlyList<FileOperation> Op
 
     public JsonNode? CommandResult { get; init; }
 
+    public DiagnosticReport? Diagnostics { get; init; }
+
     public bool Partial => !Applied && Operations.Count > 0;
 
     public int FileCount =>
         Operations.Select(operation => operation.Path).Distinct(StringComparer.Ordinal).Count();
-
-    public bool ChangesMembership => Operations.Any(operation => operation.ChangesMembership);
 
     /// <summary>
     /// Appends the operations of a later application, such as a command's edits.

@@ -9,7 +9,7 @@ using RoslynBridge.Queries;
 using RoslynBridge.Requests;
 using RoslynBridge.Results;
 using RoslynBridge.Symbols;
-using RoslynBridge.Tools;
+using RoslynBridge.Tests.Fakes;
 using StreamJsonRpc;
 using static RoslynBridge.Tests.Unit.TestHelpers;
 
@@ -98,28 +98,22 @@ public sealed class LspChangesTests : IDisposable
     }
 
     [Fact]
-    public async Task ReloadFailureAfterRenamePreservesTheCompletedWriteAsync()
+    public async Task SynchronizeFailureAfterAWritePreservesTheCompletedWriteAsync()
     {
-        var path = await WriteFileAsync(_root, "Source.cs", "class A {}");
-        // Reload after the rename fails fast on a missing server
-        await using var session = CreateSession(
-            _root,
-            RoslynProcess.Start,
-            new BridgeOptions
-            {
-                WorkspaceRoot = _root,
-                ServerPath = Path.Combine(_root, "missing-server"),
-            }
-        );
+        var source = await WriteFileAsync(_root, "Source.cs", "class A {}");
+        var destination = Path.Combine(_root, "Renamed.cs");
+        var servers = new List<FakeRoslynServer>();
+        await using var session = CreateSession(_root, FakeServer(servers.Add));
+        await session.EnsureStartedAsync(TestCt);
         var changes = CreateChanges(session);
-        var snapshot = Snapshot(_root);
         var pending = new PendingChange(
             LspAction.RenameFile,
-            snapshot,
-            WorkspaceChanges(path, TextEdit(0, 6, 0, 7, "B")),
-            Command: null,
-            RenamesFiles: true
+            Snapshot(_root),
+            DocumentChanges(RenameFile(source, destination)),
+            Command: null
         );
+
+        servers[0].Crash();
 
         var failure = await FluentActions
             .Awaiting(Apply)
@@ -127,12 +121,9 @@ public sealed class LspChangesTests : IDisposable
             .ThrowAsync<EditApplicationException>();
 
         failure.Which.Phase.Should().Be(EditApplicationPhase.Synchronize);
-        ErrorCode(LspTool.ApplicationFailure(failure.Which, cancellationRequested: false))
-            .Should()
-            .Be(ErrorCodes.Io);
         failure.Which.Result.Applied.Should().BeTrue();
-        failure.Which.Result.FileCount.Should().Be(1);
-        await AssertFileTextAsync(path, "class B {}");
+        File.Exists(source).Should().BeFalse();
+        await AssertFileTextAsync(destination, "class A {}");
         return;
 
         Task Apply() => changes.CompleteAsync(pending, apply: true, TestCt);

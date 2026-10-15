@@ -22,6 +22,7 @@ namespace RoslynBridge.Tools;
 
 internal sealed partial class LspTool(
     BridgeOptions options,
+    WorkspacePaths paths,
     RoslynSession session,
     LspQueries queries,
     LspChanges changes,
@@ -138,7 +139,52 @@ internal sealed partial class LspTool(
         return Failure(new ToolError(FailureCode(exception), exception.Message));
     }
 
-    // Expected failures mapped as structured errors (anything else is a bridge bug)
+    /// <summary>
+    /// Adds the diagnostics of the changed files to an applied edit, so checking it needs no further call.
+    /// </summary>
+    private async Task<Result<ToolResult>> WithDiagnosticsAsync(
+        Result<ToolResult> result,
+        CancellationToken cancellationToken
+    )
+    {
+        if (result.Value is not EditReceipt { Synchronized: true } receipt)
+        {
+            return result;
+        }
+
+        string[] files =
+        [
+            .. receipt
+                .Operations.Select(operation => paths.Resolve(operation.Path))
+                .Distinct(StringComparer.Ordinal)
+                .Where(path => RoslynSession.IsCSharpFile(path) && File.Exists(path)),
+        ];
+        if (files.Length is 0 or > RoslynSession.MaximumOpenDocuments)
+        {
+            return receipt;
+        }
+
+        try
+        {
+            return receipt with
+            {
+                Diagnostics = await queries.DiagnosticsAsync(
+                    files,
+                    DiagnosticSeverity.Warning,
+                    LspRequest.DefaultResultLimit,
+                    cancellationToken
+                ),
+            };
+        }
+        // The edit is already applied, so a failed check returns the receipt without diagnostics
+        catch (Exception exception)
+            when (IsReported(exception) || exception is OperationCanceledException)
+        {
+            OperationFailed(logger, LspAction.Diagnostics, exception);
+            return receipt;
+        }
+    }
+
     private static bool IsReported(Exception exception) =>
         exception
             is ToolErrorException
@@ -218,8 +264,8 @@ internal sealed partial class LspTool(
                 request,
                 cancellationToken
             ),
-            _ when request.Action.IsChange => await changes.ExecuteAsync(
-                request,
+            _ when request.Action.IsChange => await WithDiagnosticsAsync(
+                await changes.ExecuteAsync(request, cancellationToken),
                 cancellationToken
             ),
             LspAction.Request => await RawRequestAsync(request, cancellationToken),
@@ -265,11 +311,7 @@ internal sealed partial class LspTool(
 
         if (request.Method is LspMethods.WorkspaceExecuteCommand)
         {
-            return await changes.ExecuteCommandAsync(
-                request.Parameters ?? [],
-                filesChanged: false,
-                cancellationToken
-            );
+            return await changes.ExecuteCommandAsync(request.Parameters ?? [], cancellationToken);
         }
 
         return new JsonResult(

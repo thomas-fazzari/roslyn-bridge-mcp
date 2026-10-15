@@ -27,11 +27,8 @@ internal sealed class CommandEdits(
     private int _activeCallbacks;
     private bool _accepting = true;
     private bool _applied = true;
-    private bool _changesFileMembership;
 
     public Exception? Failure => _failure;
-
-    public bool ChangesFileMembership => _changesFileMembership;
 
     public bool HasChanges => _paths.Count != 0;
 
@@ -182,7 +179,6 @@ internal sealed class CommandEdits(
         {
             _receipts.Add(receipt);
             _paths.UnionWith(receipt.Operations.Select(operation => operation.Path));
-            _changesFileMembership |= receipt.ChangesMembership;
         }
     }
 

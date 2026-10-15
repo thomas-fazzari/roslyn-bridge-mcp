@@ -77,8 +77,9 @@ Proposals expire after five minutes. Reload discards them.
 A change to a file the proposal edits, or to a project, props, solution or
 editorconfig file, makes it stale. Changes to other source files do not.
 On stale_edit, request a new preview against current files. Do not retry the old ID.
-After applying, inspect the result and rerun diagnostics on affected files.
-File creation, deletion and renaming trigger a Roslyn reload before the next request.
+After applying, read the errors and warnings that end the result.
+After a file creation or rename, the bridge waits for Roslyn to attach the new
+file to its project, and reloads Roslyn only if that takes too long.
 
 An application result starts with a status line, then one line per completed
 file operation, in order:
@@ -92,6 +93,13 @@ result. On a later failure, the response starts with "error CODE: message" and
 the receipt. Read both before retrying. The next request reloads Roslyn after
 an application failure. Large receipts end with "truncated: N more operations
 not shown" or "result omitted".
+A successful result ends with the diagnostics of the changed C# files, in the
+format of diagnostics.txt, for example:
+src/Calculator.cs
+  12:9 warning CS8603 Possible null reference return.
+2 files checked, 1 diagnostic in 1 file
+Without that summary line, the check was skipped. Run diagnostics on the
+changed files then.
 
 Edits must remain inside the workspace. Symlinks below its root are rejected.
 Each file replacement is atomic. A failed multi-file operation can leave partial

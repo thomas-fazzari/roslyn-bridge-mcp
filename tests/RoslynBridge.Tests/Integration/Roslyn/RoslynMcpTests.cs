@@ -711,6 +711,10 @@ public sealed partial class RoslynMcpTests
         };
         var applied = await workspace.CallAsync(applyRequest);
         AssertApplied(applied);
+
+        Diagnostics(applied).Should().Contain(item => item.Code == "CS8603");
+        Diagnostics(applied).Should().NotContain(item => item.Code == "CS0246");
+
         if (mode is not ApplyWithoutProposal)
         {
             AssertError(await workspace.CallRawAsync(applyRequest), ErrorCodes.InvalidRequest);

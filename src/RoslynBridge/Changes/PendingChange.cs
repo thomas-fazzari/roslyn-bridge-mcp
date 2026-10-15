@@ -14,8 +14,7 @@ internal sealed record PendingChange(
     WorkspaceSnapshot Snapshot,
     JsonObject? Edit,
     JsonObject? Command,
-    IReadOnlyList<CodeActionChoice>? Actions = null,
-    bool RenamesFiles = false
+    IReadOnlyList<CodeActionChoice>? Actions = null
 )
 {
     public DateTimeOffset CreatedAt { get; } = DateTimeOffset.UtcNow;

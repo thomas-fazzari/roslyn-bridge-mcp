@@ -138,8 +138,10 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
         var sharedNames = declarations
             .GroupBy(declaration => declaration.Name, StringComparer.Ordinal)
             .Where(group =>
-                group.DistinctBy(declaration => declaration.File, StringComparer.Ordinal).Count()
-                > 1
+                group
+                    .DistinctBy(declaration => declaration.File, StringComparer.Ordinal)
+                    .Skip(1)
+                    .Any()
             );
         foreach (
             var file in sharedNames

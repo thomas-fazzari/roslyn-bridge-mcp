@@ -4,7 +4,6 @@
 using System.Collections.Concurrent;
 using System.Text;
 using System.Text.Json.Nodes;
-using StreamJsonRpc;
 
 namespace RoslynBridge.Lsp;
 
@@ -29,11 +28,6 @@ internal sealed partial class RoslynSession
 
     private FileSystemWatcher? _watcher;
     private int _scanRequested;
-
-    /// <summary>
-    /// Whether the file appeared after Roslyn loaded the workspace, so its project may not include it yet.
-    /// </summary>
-    public bool IsCreatedFile(string path) => _createdFiles.Contains(path);
 
     public Dictionary<string, int> CopyDocumentVersions() =>
         _documents.ToDictionary(
@@ -117,31 +111,6 @@ internal sealed partial class RoslynSession
         return uris;
     }
 
-    /// <summary>
-    /// Returns the project contexts of an open document, or none when the server lacks the extension.
-    /// </summary>
-    public async Task<JsonArray> ProjectContextsAsync(
-        string uri,
-        CancellationToken cancellationToken
-    )
-    {
-        JsonNode? result;
-        try
-        {
-            result = await RequestAsync(
-                LspMethods.TextDocumentGetProjectContexts,
-                new JsonObject { ["_vs_textDocument"] = new JsonObject { ["uri"] = uri } },
-                cancellationToken
-            );
-        }
-        catch (RemoteInvocationException)
-        {
-            return [];
-        }
-
-        return result?["_vs_projectContexts"] as JsonArray ?? [];
-    }
-
     public async Task SynchronizeAsync(CancellationToken cancellationToken)
     {
         foreach (var path in _documents.Keys.ToArray())
@@ -154,21 +123,33 @@ internal sealed partial class RoslynSession
     }
 
     /// <summary>
-    /// Announces requested files that the file watcher has not reported yet.
-    /// Without the creation notice, Roslyn keeps a new file outside its project.
+    /// Sends files the bridge wrote, created or deleted, without waiting for the file watcher.
     /// </summary>
-    public async Task SynchronizeNewFilesAsync(
+    public async Task SynchronizeFilesAsync(
         IEnumerable<string> files,
         CancellationToken cancellationToken
     )
     {
-        foreach (var file in files.Where(file => !_workspaceFiles.ContainsKey(file)))
+        foreach (var file in files)
         {
             QueueFile(file);
         }
 
         await SynchronizeAsync(cancellationToken);
     }
+
+    /// <summary>
+    /// Announces requested files that the file watcher has not reported yet.
+    /// Without the creation notice, Roslyn keeps a new file outside its project.
+    /// </summary>
+    public Task SynchronizeNewFilesAsync(
+        IEnumerable<string> files,
+        CancellationToken cancellationToken
+    ) =>
+        SynchronizeFilesAsync(
+            files.Where(file => !_workspaceFiles.ContainsKey(file)),
+            cancellationToken
+        );
 
     /// <summary>
     /// Compares every watched file with what Roslyn last received and sends the differences,

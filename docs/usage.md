@@ -131,13 +131,15 @@ These limits leave the proposed edit unchanged.
 
 Proposals expire after five minutes. A proposal becomes stale when a file it edits changes, or when a project, props, solution or editorconfig file changes.
 Then `stale_edit` requires a new preview. Changes to other source files keep the proposal valid.
-Reloading also discards proposals. Applied file creation, deletion and renaming reload Roslyn before the next request.
+Reloading also discards proposals. After an applied file creation or rename, the bridge waits for Roslyn to attach the new file to its project, and reloads Roslyn only if that takes too long.
 
 Application results contain a compact receipt, without source excerpts.
 The first line says whether the writes finished and whether Roslyn was refreshed. One line per completed operation follows, so a path can appear more than once.
 If a later step fails, the response starts with the error and the failed step, followed by the receipt of completed writes.
 Inspect both before retrying. The next request reloads Roslyn after an application failure.
 Large receipts keep their totals and end with a `truncated:` line when some operations are omitted. An oversized command result is omitted.
+A successful receipt ends with the errors and warnings of the changed C# files, in the `diagnostics` format, so checking the edit needs no further call.
+The check is skipped above 128 changed files or when it fails. Run `diagnostics` on the changed files then.
 
 ## Limits
 

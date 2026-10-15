@@ -273,6 +273,7 @@ public sealed class LspToolTests : IDisposable
         var queries = new LspQueries(session, paths, new SymbolResolver(session, paths));
         return new LspTool(
             options,
+            paths,
             session,
             queries,
             new LspChanges(session, paths, new WorkspaceEditService(paths), queries),
