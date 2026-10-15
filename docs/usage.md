@@ -19,13 +19,13 @@ Available fixes and refactorings depend on the installed Roslyn version and proj
 
 ## Tools
 
-| Tool          | Arguments                                                                                                                                                                        | Result                                                                        |
-| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| `diagnostics` | `file` path or glob, `severity`                                                                                                                                                  | Errors, warnings and suggestions                                              |
-| `navigate`    | `action` (`definition`, `type_definition`, `implementation`, `references`, `callers`, `callees`, `supertypes`, `subtypes`, `hover`), and `symbol` or `file`, `line`, `character` | Locations, related symbols or hover text                                      |
-| `symbols`     | `file` or `query`                                                                                                                                                                | Document or workspace symbols                                                 |
-| `edit`        | `action` (`rename`, `rename_file`, `code_actions`) and its inputs                                                                                                                | Edit previews, then applied changes                                           |
-| `lsp`         | `action` (`status`, `capabilities`, `reload`, `request`), `method`, `parameters`                                                                                                 | Session state, a fresh session or a raw Language Server Protocol (LSP) result |
+| Tool          | Arguments                                                                                                                                                                                             | Result                                                                        |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `diagnostics` | `file` path or glob, `severity`                                                                                                                                                                       | Errors, warnings and suggestions                                              |
+| `navigate`    | `action` (`definition`, `type_definition`, `implementation`, `references`, `callers`, `callees`, `supertypes`, `subtypes`, `hover`, `source`, `members`), and `symbol` or `file`, `line`, `character` | Locations, related symbols, hover text, source or members                     |
+| `symbols`     | `file` or `query`                                                                                                                                                                                     | Document or workspace symbols                                                 |
+| `edit`        | `action` (`rename`, `rename_file`, `code_actions`) and its inputs                                                                                                                                     | Edit previews, then applied changes                                           |
+| `lsp`         | `action` (`status`, `capabilities`, `reload`, `request`), `method`, `parameters`                                                                                                                      | Session state, a fresh session or a raw Language Server Protocol (LSP) result |
 
 `diagnostics`, `navigate` and `symbols` are read-only. `edit` and `lsp` can write files.
 Arguments are passed directly to each tool:
@@ -72,6 +72,9 @@ Set `context` to show each position on its own line with its trimmed source line
 For `callers`, call sites are in the caller's file. For `callees`, they are in the requested file.
 `callees` lists calls only, and counts the property, field and constant accesses it leaves out.
 `references` leaves out source-generated code and counts the omitted occurrences.
+`source` returns each declaration's saved text, documentation comment included, after a `file:first-last kind name` header. A partial type returns every part.
+`members` returns the type, then the members it declares grouped by file, with names relative to the type.
+Both also accept a `file` and `line` alone, and then use the innermost declaration around that line.
 `hover` returns plain text. `symbols` uses the same symbol lines. For a file, they give the declaration end after a dash, as in `5:18-9:2`, and are indented under their container.
 A final `truncated:` line gives the total when `limit` omitted results.
 

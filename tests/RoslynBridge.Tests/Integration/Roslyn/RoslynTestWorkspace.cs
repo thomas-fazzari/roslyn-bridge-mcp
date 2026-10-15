@@ -194,7 +194,9 @@ internal sealed class RoslynTestWorkspace : IAsyncDisposable
             or LspAction.Callers
             or LspAction.Callees
             or LspAction.Supertypes
-            or LspAction.Subtypes => (
+            or LspAction.Subtypes
+            or LspAction.Source
+            or LspAction.Members => (
                 NavigateTool.Name,
                 new[] { "action", "symbol", "file", "line", "character", "context", "limit" }
             ),
@@ -217,6 +219,7 @@ internal sealed class RoslynTestWorkspace : IAsyncDisposable
             ),
             _ => (ServerTool.Name, ["action", "method", "parameters", "apply"]),
         };
+
         var values = new Dictionary<string, object?>(StringComparer.Ordinal)
         {
             ["action"] = JsonSerializer
@@ -241,6 +244,7 @@ internal sealed class RoslynTestWorkspace : IAsyncDisposable
             ["context"] = request.Context ? true : null,
             ["limit"] = request.Limit,
         };
+
         return (
             tool,
             parameters

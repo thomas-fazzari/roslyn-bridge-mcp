@@ -61,4 +61,10 @@ internal enum LspAction
 
     [JsonStringEnumMemberName("subtypes")]
     Subtypes = 17,
+
+    [JsonStringEnumMemberName("source")]
+    Source = 18,
+
+    [JsonStringEnumMemberName("members")]
+    Members = 19,
 }

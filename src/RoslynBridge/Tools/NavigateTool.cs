@@ -22,7 +22,7 @@ internal sealed class NavigateTool(LspTool lsp)
         OpenWorld = false
     )]
     [Description(
-        "Find the definition, type definition, implementations, references, callers, callees, supertypes or subtypes of a C# symbol, or read its hover information. Name the symbol, or give its one-based position."
+        "Find the definition, type definition, implementations, references, callers, callees, supertypes or subtypes of a C# symbol, read its hover information or source, or list a type's members. Name the symbol, or give its one-based position."
     )]
     public Task<CallToolResult> NavigateAsync(
         [Description("Navigation to perform.")] NavigationAction action,
@@ -49,7 +49,9 @@ internal sealed class NavigateTool(LspTool lsp)
                     NavigationAction.Callers => LspAction.Callers,
                     NavigationAction.Callees => LspAction.Callees,
                     NavigationAction.Supertypes => LspAction.Supertypes,
-                    _ => LspAction.Subtypes,
+                    NavigationAction.Subtypes => LspAction.Subtypes,
+                    NavigationAction.Source => LspAction.Source,
+                    _ => LspAction.Members,
                 },
                 Symbol = symbol,
                 File = file,
@@ -90,4 +92,10 @@ internal enum NavigationAction
 
     [JsonStringEnumMemberName("subtypes")]
     Subtypes = 8,
+
+    [JsonStringEnumMemberName("source")]
+    Source = 9,
+
+    [JsonStringEnumMemberName("members")]
+    Members = 10,
 }

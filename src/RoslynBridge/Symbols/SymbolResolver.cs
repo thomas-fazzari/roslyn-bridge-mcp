@@ -18,11 +18,12 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
     internal const int MaximumCandidates = 20;
 
     /// <summary>
-    /// Returns the workspace file and one-based position of the declaration named by <paramref name="text"/>,
+    /// Returns the declarations of the symbol named by <paramref name="text"/>,
     /// searching only <paramref name="file"/> when it is given.
+    /// A partial type has one declaration per part. The first one is where navigation starts.
     /// An ambiguous name returns an error that lists the candidate symbols.
     /// </summary>
-    public async Task<Result<SymbolDeclaration>> ResolveAsync(
+    public async Task<Result<IReadOnlyList<SymbolDeclaration>>> ResolveAsync(
         string text,
         string? file,
         CancellationToken cancellationToken
@@ -42,13 +43,18 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
             )
             .ToList();
 
-        var symbols = DistinctSymbols(
-            declarations,
-            await ProjectsByFileAsync(declarations, cancellationToken)
-        );
+        var projectsByFile = await ProjectsByFileAsync(declarations, cancellationToken);
+        var symbols = DistinctSymbols(declarations, projectsByFile);
         if (symbols.Count == 1)
         {
-            return symbols[0];
+            var symbol = symbols[0];
+            return declarations
+                .Where(declaration =>
+                    string.Equals(declaration.Name, symbol.Name, StringComparison.Ordinal)
+                    && SharesProject(symbol.File, declaration.File, projectsByFile)
+                )
+                .OrderBy(declaration => declaration != symbol)
+                .ToList();
         }
 
         if (symbols.Count == 0)
@@ -189,6 +195,60 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
     }
 
     /// <summary>
+    /// Returns the innermost declaration whose lines contain <paramref name="line"/>, or null outside any.
+    /// </summary>
+    public async Task<SymbolDeclaration?> DeclarationAtAsync(
+        string file,
+        int line,
+        CancellationToken cancellationToken
+    )
+    {
+        var documents = await DocumentSymbolsAsync([file], cancellationToken);
+        return Declarations(documents[0].Symbols, file, container: null, containerDisplay: null)
+            .Select(declared => declared.Declaration)
+            .Where(declaration => declaration.FirstLine <= line && line <= declaration.LastLine)
+            .MinBy(declaration => declaration.LastLine - declaration.FirstLine);
+    }
+
+    /// <summary>
+    /// Returns the members declared directly in the parts of a type, in file and line order.
+    /// Members of its extension blocks count as its own.
+    /// </summary>
+    public async Task<IReadOnlyList<SymbolDeclaration>> MembersAsync(
+        IReadOnlyList<SymbolDeclaration> parts,
+        CancellationToken cancellationToken
+    )
+    {
+        var type = SymbolName.Parse(parts[0].Name)!;
+        var documents = await DocumentSymbolsAsync(
+            parts
+                .Select(part => part.File)
+                .Distinct(StringComparer.Ordinal)
+                .Order(StringComparer.Ordinal),
+            cancellationToken
+        );
+        return
+        [
+            .. documents
+                .SelectMany(document =>
+                    Declarations(
+                        document.Symbols,
+                        document.File,
+                        container: null,
+                        containerDisplay: null
+                    )
+                )
+                .Where(declared =>
+                    declared.Name.Segments.Length == type.Segments.Length + 1
+                    && declared
+                        .Name.Segments[..type.Segments.Length]
+                        .SequenceEqual(type.Segments, StringComparer.Ordinal)
+                )
+                .Select(declared => declared.Declaration),
+        ];
+    }
+
+    /// <summary>
     /// Returns the declarations in document symbol trees that <paramref name="requested"/> selects.
     /// Exact matches win over loose ones, so every returned name selects only its own declaration.
     /// A constructor is selected only when the request includes its parameter list.
@@ -292,6 +352,7 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
             if (
                 kind is not LspSymbolKinds.Namespace
                 && symbol["selectionRange"]?["start"] is { } start
+                && symbol["range"] is { } range
             )
             {
                 yield return new DeclaredSymbol(
@@ -299,10 +360,13 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
                     IsConstructor(member, container),
                     new SymbolDeclaration(
                         display,
+                        rawName.Trim(),
                         kind,
                         file,
                         start["line"]!.GetValue<int>() + 1,
-                        start["character"]!.GetValue<int>() + 1
+                        start["character"]!.GetValue<int>() + 1,
+                        range["start"]!["line"]!.GetValue<int>() + 1,
+                        range["end"]!["line"]!.GetValue<int>() + 1
                     )
                 );
             }

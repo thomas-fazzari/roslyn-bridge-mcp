@@ -336,6 +336,80 @@ public sealed partial class RoslynMcpTests
     }
 
     [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    public async Task ReadsSourceAndMembersAcrossPartialDeclarationsAsync()
+    {
+        const string ledgerFile = "Application/Ledger.cs";
+        const string totalsFile = "Application/Ledger.Totals.cs";
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var workspace = await RoslynTestWorkspace.CreateAsync(cancellationToken);
+        await StartRoslynAsync(workspace);
+        await workspace.WriteFileAsync(
+            ledgerFile,
+            "namespace Sample.Application;\n\npublic partial class Ledger\n{\n"
+                + "    /// <summary>Adds an amount.</summary>\n"
+                + "    public void Add(decimal amount) => Total += amount;\n}\n"
+        );
+        await workspace.WriteFileAsync(
+            totalsFile,
+            "namespace Sample.Application;\n\npublic partial class Ledger\n{\n"
+                + "    public decimal Total { get; private set; }\n}\n"
+        );
+        await workspace.CallAsync(
+            new LspRequest { Action = LspAction.Diagnostics, File = "Application/Ledger*.cs" }
+        );
+
+        var members = Lines(
+            await workspace.CallAsync(
+                new LspRequest { Action = LspAction.Members, Symbol = "Ledger" }
+            )
+        );
+        members[0].Should().Be("class Sample.Application.Ledger");
+        members.Should().Contain([ledgerFile, totalsFile]);
+        members
+            .Should()
+            .Contain(line =>
+                line.EndsWith(" method Add(decimal) : void", StringComparison.Ordinal)
+            );
+        members
+            .Should()
+            .Contain(line => line.EndsWith(" property Total : decimal", StringComparison.Ordinal));
+
+        var source = await workspace.CallAsync(
+            new LspRequest { Action = LspAction.Source, Symbol = "Ledger.Add" }
+        );
+        Lines(source)[0]
+            .Should()
+            .Be($"{ledgerFile}:5-6 method Sample.Application.Ledger.Add(decimal)");
+        source
+            .Should()
+            .Contain("/// <summary>Adds an amount.</summary>")
+            .And.Contain("Total += amount;");
+
+        var parts = await workspace.CallAsync(
+            new LspRequest { Action = LspAction.Source, Symbol = "Ledger" }
+        );
+        Lines(parts)
+            .Where(line =>
+                line.Contains(" class Sample.Application.Ledger", StringComparison.Ordinal)
+            )
+            .Select(line => line[..line.IndexOf(':', StringComparison.Ordinal)])
+            .Should()
+            .BeEquivalentTo([ledgerFile, totalsFile]);
+
+        var enclosing = await workspace.CallAsync(
+            new LspRequest
+            {
+                Action = LspAction.Source,
+                File = ConsumerFile,
+                Line = 7,
+            }
+        );
+        Lines(enclosing)[0]
+            .Should()
+            .StartWith($"{ConsumerFile}:7-7 method Sample.Application.Consumer.Run(");
+    }
+
+    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
     public async Task ReloadGetsTheStartupBudgetAsync()
     {
         var cancellationToken = TestContext.Current.CancellationToken;

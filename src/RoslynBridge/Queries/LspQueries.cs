@@ -10,7 +10,7 @@ using RoslynBridge.Symbols;
 
 namespace RoslynBridge.Queries;
 
-internal sealed class LspQueries(
+internal sealed partial class LspQueries(
     RoslynSession session,
     WorkspacePaths paths,
     SymbolResolver resolver
@@ -418,7 +418,7 @@ internal sealed class LspQueries(
                 return error;
             }
 
-            var declaration = resolved.Value;
+            var declaration = resolved.Value[0];
             return (declaration.File, declaration.Line, declaration.Character);
         }
 

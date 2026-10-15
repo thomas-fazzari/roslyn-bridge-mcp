@@ -101,8 +101,8 @@ public sealed class SymbolResolverTests
     {
         var declarations = new[]
         {
-            new SymbolDeclaration("Program", 5, "/workspace/App/Program.cs", 1, 1),
-            new SymbolDeclaration("Program", 5, "/workspace/Lib/Program.cs", 1, 1),
+            new SymbolDeclaration("Program", "Program", 5, "/workspace/App/Program.cs", 1, 1, 1, 9),
+            new SymbolDeclaration("Program", "Program", 5, "/workspace/Lib/Program.cs", 1, 1, 1, 9),
         };
         var projects = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal)
         {
@@ -125,6 +125,11 @@ public sealed class SymbolResolverTests
         {
             ["name"] = name,
             ["kind"] = kind,
+            ["range"] = new JsonObject
+            {
+                ["start"] = position.DeepClone(),
+                ["end"] = position.DeepClone(),
+            },
             ["selectionRange"] = new JsonObject
             {
                 ["start"] = position,

@@ -64,6 +64,12 @@ internal static partial class ResultText
             or LspAction.Subtypes:
                 AppendRelated(text, (JsonObject)result!);
                 break;
+            case LspAction.Source:
+                AppendSource(text, (JsonObject)result!);
+                break;
+            case LspAction.Members:
+                AppendMembers(text, (JsonObject)result!);
+                break;
             case LspAction.Rename or LspAction.RenameFile or LspAction.CodeActions:
                 AppendChange(text, (JsonObject)result!);
                 break;
@@ -255,6 +261,62 @@ internal static partial class ResultText
                 $"{accesses} property, field or constant accesses omitted\n"
             );
         }
+    }
+
+    // A header per declaration, file:first-last kind name, then its saved text
+    private static void AppendSource(StringBuilder text, JsonObject result)
+    {
+        foreach (var part in Items(result))
+        {
+            var lines = part["lines"]!;
+            text.Append(part["file"]!.GetValue<string>())
+                .Append(
+                    CultureInfo.InvariantCulture,
+                    $":{lines[0]!.GetValue<int>()}-{lines[1]!.GetValue<int>()} "
+                )
+                .Append(part["kind"]?.GetValue<string>())
+                .Append(' ')
+                .Append(part["symbol"]!.GetValue<string>())
+                .Append('\n')
+                .Append(part["text"]!.GetValue<string>());
+        }
+
+        if (Int(result, "omittedLines") is > 0 and var omitted)
+        {
+            text.Append(
+                CultureInfo.InvariantCulture,
+                $"truncated: {omitted} more lines. Use members, then source on one member.\n"
+            );
+        }
+    }
+
+    // The type once, then its members grouped by file, with names relative to the type
+    private static void AppendMembers(StringBuilder text, JsonObject result)
+    {
+        text.Append(result["kind"]?.GetValue<string>())
+            .Append(' ')
+            .Append(result["symbol"]!.GetValue<string>())
+            .Append('\n');
+        string? file = null;
+        foreach (var member in Items(result))
+        {
+            var memberFile = member["file"]!.GetValue<string>();
+            if (!string.Equals(memberFile, file, StringComparison.Ordinal))
+            {
+                file = memberFile;
+                text.Append(file).Append('\n');
+            }
+
+            text.Append(Indent)
+                .Append(Position(member["position"]!))
+                .Append(' ')
+                .Append(member["kind"]?.GetValue<string>())
+                .Append(' ')
+                .Append(member["symbol"]!.GetValue<string>())
+                .Append('\n');
+        }
+
+        AppendEmptyOrTruncation(text, result, "members");
     }
 
     private static void AppendSourceLines(StringBuilder text, JsonArray positions, JsonObject lines)

@@ -76,13 +76,7 @@ internal static class SourceLines
         {
             try
             {
-                var source = File.ReadAllText(file);
-                text =
-                [
-                    .. TextEdits
-                        .GetLines(source)
-                        .Select(line => source.Substring(line.Start, line.Length)),
-                ];
+                text = ReadLines(file);
             }
             catch (Exception exception)
                 when (exception is IOException or UnauthorizedAccessException)
@@ -94,6 +88,16 @@ internal static class SourceLines
         }
 
         return text;
+    }
+
+    /// <summary>Returns the lines of a saved file, without their line breaks.</summary>
+    public static string[] ReadLines(string file)
+    {
+        var source = File.ReadAllText(file);
+        return
+        [
+            .. TextEdits.GetLines(source).Select(line => source.Substring(line.Start, line.Length)),
+        ];
     }
 
     private static string Trim(string line)

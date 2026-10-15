@@ -73,6 +73,8 @@ public sealed class ToolSchemaTests
             "callees",
             "supertypes",
             "subtypes",
+            "source",
+            "members",
         }
     )]
     [InlineData(SymbolsTool.Name, new string[0], null)]
