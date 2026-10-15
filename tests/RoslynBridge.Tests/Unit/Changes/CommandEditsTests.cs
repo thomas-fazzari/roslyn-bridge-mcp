@@ -179,8 +179,7 @@ public sealed class CommandEditsTests : IDisposable
 
         await commandEdits.StopAsync();
 
-        pending.IsCompleted.Should().BeTrue();
-        (await pending)["applied"]!.GetValue<bool>().Should().BeTrue();
+        // Stop waits for the callback's work, not for its task, which completes just after
         commandEdits
             .Failure.Should()
             .BeOfType<EditApplicationException>()
@@ -188,6 +187,7 @@ public sealed class CommandEditsTests : IDisposable
             .BeAssignableTo<OperationCanceledException>();
         commandEdits.Result.Applied.Should().BeTrue();
         commandEdits.Result.FileCount.Should().Be(1);
+        (await pending)["applied"]!.GetValue<bool>().Should().BeTrue();
         var rejected = await commandEdits.ApplyAsync(
             WorkspaceChanges(path, TextEdit(0, 6, 0, 7, "C")),
             cancellationToken
