@@ -72,23 +72,25 @@ internal sealed class EditedDocument(string path, byte[]? original)
         Content = bytes;
     }
 
-    public JsonObject Describe(WorkspacePaths paths)
+    public FilePreview Describe(WorkspacePaths paths)
     {
         var preview = TextPreview.Create(Decode(Original), Decode(Content));
-        return new JsonObject
+        var kind = (Original, Content, CaseOnlyRename) switch
         {
-            ["path"] = paths.RelativePath(Path),
-            ["oldPath"] = CaseOnlyRename ? paths.RelativePath(OriginalPath) : null,
-            ["kind"] = (Original, Content, CaseOnlyRename) switch
-            {
-                (null, _, _) => WorkspaceEditService.CreateFileOperation,
-                (_, null, _) => WorkspaceEditService.DeleteFileOperation,
-                (_, _, true) => WorkspaceEditService.RenameFileOperation,
-                _ => WorkspaceEditService.ChangeFileOperation,
-            },
-            ["changes"] = preview.Changes,
-            ["previewTruncated"] = preview.Truncated,
+            (null, _, _) => WorkspaceEditService.CreateFileOperation,
+            (_, null, _) => WorkspaceEditService.DeleteFileOperation,
+            (_, _, true) => WorkspaceEditService.RenameFileOperation,
+            _ => WorkspaceEditService.ChangeFileOperation,
         };
+        return new FilePreview(
+            new FileOperation(
+                paths.RelativePath(Path),
+                kind,
+                CaseOnlyRename ? paths.RelativePath(OriginalPath) : null
+            ),
+            preview.Changes,
+            preview.Truncated
+        );
     }
 
     private string Decode(byte[]? content)

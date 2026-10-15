@@ -29,7 +29,7 @@ internal sealed class LspChanges(
 
     public void Clear() => _pending.Clear();
 
-    public async Task<Result<JsonNode?>> ExecuteAsync(
+    public async Task<Result<ToolResult>> ExecuteAsync(
         LspRequest request,
         CancellationToken cancellationToken
     )
@@ -50,7 +50,7 @@ internal sealed class LspChanges(
         };
     }
 
-    private async Task<Result<JsonNode?>> RenameAsync(
+    private async Task<Result<ToolResult>> RenameAsync(
         LspRequest request,
         CancellationToken cancellationToken
     )
@@ -85,7 +85,7 @@ internal sealed class LspChanges(
         );
     }
 
-    private async Task<Result<JsonNode?>> RenameFileAsync(
+    private async Task<Result<ToolResult>> RenameFileAsync(
         LspRequest request,
         CancellationToken cancellationToken
     )
@@ -132,7 +132,7 @@ internal sealed class LspChanges(
         );
     }
 
-    private async Task<Result<JsonNode?>> CodeActionsAsync(
+    private async Task<Result<ToolResult>> CodeActionsAsync(
         LspRequest request,
         CancellationToken cancellationToken
     )
@@ -187,30 +187,26 @@ internal sealed class LspChanges(
             return ToolError.InvalidRequest("Choose actionIndex before applying a code action.");
         }
 
-        var listing = new JsonArray();
-        for (var index = 0; index < Math.Min(actions.Count, request.Limit); index++)
-        {
-            listing.Add(
-                (JsonNode)
-                    new JsonObject
-                    {
-                        ["index"] = index,
-                        ["title"] = actions[index]?["title"]?.DeepClone(),
-                        ["kind"] = actions[index]?["kind"]?.DeepClone(),
-                    }
-            );
-        }
-
-        return new JsonObject
-        {
-            ["proposalId"] = Remember(pending),
-            ["actions"] = listing,
-            ["total"] = actions.Count,
-            ["truncated"] = actions.Count > request.Limit,
-        };
+        return new ActionListing(
+            Remember(pending),
+            [
+                .. actions
+                    .Take(request.Limit)
+                    .Select(
+                        (action, index) =>
+                            new ListedAction(
+                                index,
+                                action?["kind"]?.GetValue<string>(),
+                                action?["title"]?.GetValue<string>() ?? string.Empty
+                            )
+                    ),
+            ],
+            actions.Count,
+            actions.Count > request.Limit
+        );
     }
 
-    private async Task<Result<JsonNode?>> UseProposalAsync(
+    private async Task<Result<ToolResult>> UseProposalAsync(
         LspRequest request,
         CancellationToken cancellationToken
     )
@@ -237,7 +233,7 @@ internal sealed class LspChanges(
         return result;
     }
 
-    private async Task<Result<JsonNode?>> SelectActionAsync(
+    private async Task<Result<ToolResult>> SelectActionAsync(
         PendingChange pending,
         LspRequest request,
         CancellationToken cancellationToken
@@ -290,7 +286,7 @@ internal sealed class LspChanges(
         return await CompleteAsync(selected, request.Apply, cancellationToken);
     }
 
-    internal async Task<JsonObject> CompleteAsync(
+    internal async Task<ToolResult> CompleteAsync(
         PendingChange change,
         bool apply,
         CancellationToken cancellationToken
@@ -299,10 +295,8 @@ internal sealed class LspChanges(
         var edit = change.Edit ?? [];
         if (!apply)
         {
-            var preview = await edits.PreviewAsync(edit, change.Snapshot, cancellationToken);
-            preview["proposalId"] = Remember(change);
-            preview["command"] = change.Command?.DeepClone();
-            return preview;
+            var files = await edits.PreviewAsync(edit, change.Snapshot, cancellationToken);
+            return new ProposalPreview(Remember(change), files, change.Command?.DeepClone());
         }
 
         var result = await edits.ApplyAsync(edit, change.Snapshot, cancellationToken);
@@ -312,17 +306,19 @@ internal sealed class LspChanges(
         try
         {
             // The reload after a rename replaces a didRenameFiles notification
-            var filesChanged = change.RenamesFiles || ChangesFileMembership(result);
+            var filesChanged = change.RenamesFiles || result.ChangesMembership;
             if (change.Command is not null)
             {
-                result["commandExecuted"] = false;
+                result = result with { CommandExecuted = false };
                 var commandResult = await ExecuteCommandAsync(
                     change.Command,
                     cancellationToken,
                     filesChanged
                 );
-                result = MergeApplicationResults(result, commandResult);
-                result["commandResult"] = commandResult["commandResult"]?.DeepClone();
+                result = result.Merge(commandResult) with
+                {
+                    CommandResult = commandResult.CommandResult,
+                };
             }
             else
             {
@@ -331,23 +327,21 @@ internal sealed class LspChanges(
         }
         catch (EditApplicationException exception)
         {
-            throw ApplicationFailure(
-                MergeApplicationResults(result, exception.Result),
-                exception.Phase,
-                exception
-            );
+            throw ApplicationFailure(result.Merge(exception.Result), exception.Phase, exception);
         }
         // A failure before any write leaves the workspace unchanged, so it needs no reload
-        catch (Exception exception) when (result["fileCount"]!.GetValue<int>() != 0)
+        catch (Exception exception) when (result.Operations.Count != 0)
         {
             throw ApplicationFailure(result, phase, exception);
         }
 
-        result["synchronized"] = true;
-        return result;
+        return result with
+        {
+            Synchronized = true,
+        };
     }
 
-    public async Task<JsonObject> ExecuteCommandAsync(
+    public async Task<EditReceipt> ExecuteCommandAsync(
         JsonObject command,
         CancellationToken cancellationToken,
         bool filesChanged = false
@@ -378,8 +372,7 @@ internal sealed class LspChanges(
             await callbacks.DisposeAsync();
         }
 
-        var result = callbacks.Result;
-        result["commandExecuted"] = commandExecuted;
+        var result = callbacks.Result with { CommandExecuted = commandExecuted };
         failure = callbacks.Failure ?? failure;
         if (failure is not null)
         {
@@ -403,30 +396,15 @@ internal sealed class LspChanges(
             throw ApplicationFailure(result, EditApplicationPhase.Synchronize, exception);
         }
 
-        result["commandResult"] = commandResult;
-        result["synchronized"] = true;
-        return result;
-    }
-
-    private static JsonObject MergeApplicationResults(JsonObject first, JsonObject second)
-    {
-        var merged = EditReceipt.Create(
-            first["applied"]!.GetValue<bool>() && second["applied"]!.GetValue<bool>(),
-            first["files"]!
-                .AsArray()
-                .Concat(second["files"]!.AsArray())
-                .Select(file => file!.DeepClone())
-        );
-        if (second.TryGetPropertyValue("commandExecuted", out var commandExecuted))
+        return result with
         {
-            merged["commandExecuted"] = commandExecuted?.DeepClone();
-        }
-
-        return merged;
+            CommandResult = commandResult,
+            Synchronized = true,
+        };
     }
 
     private static EditApplicationException ApplicationFailure(
-        JsonObject result,
+        EditReceipt result,
         EditApplicationPhase phase,
         Exception exception
     ) =>
@@ -445,9 +423,6 @@ internal sealed class LspChanges(
                 failedOperation: null,
                 exception
             );
-
-    private static bool ChangesFileMembership(JsonObject result) =>
-        result["files"]!.AsArray().Any(file => EditReceipt.IsFileMembershipChange(file!));
 
     private async Task RefreshAfterChangesAsync(
         bool filesChanged,

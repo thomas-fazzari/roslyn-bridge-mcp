@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 using System.Text;
-using System.Text.Json.Nodes;
 using RoslynBridge.Editing;
 
 namespace RoslynBridge.Tests.Unit.Editing;
@@ -28,9 +27,9 @@ public sealed class EditedDocumentTests
 
         var result = document.Describe(new WorkspacePaths("."));
 
-        result["changes"]![0]!["before"]!["text"]!.GetValue<string>().Should().Be(prefix);
-        result["changes"]![0]!["after"]!["text"]!.GetValue<string>().Should().Be(replacement);
-        result["previewTruncated"]!.GetValue<bool>().Should().BeTrue();
+        result.Changes[0].Before.Should().Be(prefix);
+        result.Changes[0].After.Should().Be(replacement);
+        result.Truncated.Should().BeTrue();
     }
 
     [Fact]
@@ -50,6 +49,6 @@ public sealed class EditedDocumentTests
             .Which.Error.Code.Should()
             .Be(ErrorCodes.InvalidRequest);
 
-        JsonObject Describe() => document.Describe(new WorkspacePaths("."));
+        FilePreview Describe() => document.Describe(new WorkspacePaths("."));
     }
 }

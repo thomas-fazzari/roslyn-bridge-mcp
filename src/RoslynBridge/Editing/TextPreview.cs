@@ -1,7 +1,6 @@
 // Copyright (C) RoslynBridge contributors
 // SPDX-License-Identifier: GPL-3.0-only
 
-using System.Text.Json.Nodes;
 using DiffPlex;
 
 namespace RoslynBridge.Editing;
@@ -12,9 +11,9 @@ internal static class TextPreview
     internal const int MaximumDiffLines = 2_000;
     private const int ContextCharacters = 80;
 
-    public static (JsonArray Changes, bool Truncated) Create(string before, string after)
+    public static (List<TextChange> Changes, bool Truncated) Create(string before, string after)
     {
-        var changes = new JsonArray();
+        var changes = new List<TextChange>();
         if (StringComparer.Ordinal.Equals(before, after))
         {
             return (changes, false);
@@ -28,9 +27,7 @@ internal static class TextPreview
 
         if (!CanCompareLines(oldText, newText))
         {
-            changes.Add(
-                (JsonNode)DescribeChange(oldText, newText, origin, origin, ref remaining).Change
-            );
+            changes.Add(DescribeChange(oldText, newText, origin, origin, ref remaining).Change);
             return (changes, true);
         }
 
@@ -72,7 +69,7 @@ internal static class TextPreview
                 break;
             }
 
-            changes.Add((JsonNode)preview.Change);
+            changes.Add(preview.Change);
             truncated |= preview.Truncated;
         }
 
@@ -97,11 +94,11 @@ internal static class TextPreview
         return chunks;
     }
 
-    private static (JsonObject Change, bool Truncated) DescribeChange(
+    private static (TextChange Change, bool Truncated) DescribeChange(
         string before,
         string after,
-        Position beforeOrigin,
-        Position afterOrigin,
+        SourcePosition beforeOrigin,
+        SourcePosition afterOrigin,
         ref int remaining
     )
     {
@@ -117,22 +114,10 @@ internal static class TextPreview
         remaining -= beforeLimit + afterLimit;
         var truncated = beforeLimit < before.Length || afterLimit < after.Length;
         return (
-            new JsonObject
-            {
-                ["before"] = DescribeRange(before[..beforeLimit], beforeOrigin),
-                ["after"] = DescribeRange(after[..afterLimit], afterOrigin),
-            },
+            new TextChange(beforeOrigin, before[..beforeLimit], afterOrigin, after[..afterLimit]),
             truncated
         );
     }
-
-    private static JsonObject DescribeRange(string text, Position start) =>
-        new()
-        {
-            ["startLine"] = start.Line,
-            ["startCharacter"] = start.Character,
-            ["text"] = text,
-        };
 
     private static (int Start, int BeforeEnd, int AfterEnd) ChangedWindow(
         string before,
@@ -175,7 +160,11 @@ internal static class TextPreview
     private static int LineOffset(string text, List<(int Start, int Length)> lines, int line) =>
         line < lines.Count ? lines[line].Start : text.Length;
 
-    private static Position PositionAt(string text, int offset, Position origin = default)
+    private static SourcePosition PositionAt(
+        string text,
+        int offset,
+        SourcePosition origin = default
+    )
     {
         var line = Math.Max(1, origin.Line);
         var character = Math.Max(1, origin.Character);
@@ -197,8 +186,6 @@ internal static class TextPreview
             }
         }
 
-        return new Position(line, character);
+        return new SourcePosition(line, character);
     }
-
-    private readonly record struct Position(int Line, int Character);
 }

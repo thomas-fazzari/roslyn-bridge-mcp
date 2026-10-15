@@ -23,7 +23,11 @@ public sealed class ClientCallbacksTests : IDisposable
         var editor = new WorkspaceEditService(paths);
         var snapshot = await editor.CaptureAsync(TestCt);
         await using var session = CreateSession(paths);
-        session.ApplyWorkspaceEditAsync = (edit, token) => editor.ApplyAsync(edit, snapshot, token);
+        session.ApplyWorkspaceEditAsync = async (edit, token) =>
+        {
+            await editor.ApplyAsync(edit, snapshot, token);
+            return new JsonObject { ["applied"] = true };
+        };
         var callbacks = CreateCallbacks(session, paths);
 
         var response = await callbacks.ApplyEditAsync(

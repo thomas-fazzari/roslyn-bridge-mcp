@@ -6,9 +6,10 @@ using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using RoslynBridge.Changes;
+using RoslynBridge.Editing;
 using RoslynBridge.Lsp;
 using RoslynBridge.Queries;
-using RoslynBridge.Requests;
 
 namespace RoslynBridge.Output;
 
@@ -29,49 +30,44 @@ internal static partial class ResultText
     };
 
     /// <param name="budget">Characters a preview or receipt may use. They drop trailing files to fit.</param>
-    public static string Render(LspAction action, ToolResult? result, bool application, int budget)
+    public static string Render(ToolResult? result, int budget)
     {
         var text = new StringBuilder();
         switch (result)
         {
             case HoverText hover:
                 return hover.Text;
+            case JsonResult json:
+                return Json(json.Value);
             case Locations locations:
                 AppendLocations(text, locations);
-                return Finish(text);
+                break;
             case SymbolList symbols:
                 AppendSymbols(text, symbols);
-                return Finish(text);
+                break;
             case DiagnosticReport report:
                 AppendDiagnostics(text, report);
-                return Finish(text);
+                break;
             case SourceParts source:
                 AppendSource(text, source);
-                return Finish(text);
+                break;
             case TypeMembers members:
                 AppendMembers(text, members);
-                return Finish(text);
+                break;
             case SessionStatus status:
                 AppendStatus(text, status);
-                return Finish(text);
-            case JsonResult { Value: JsonObject receipt } when application:
+                break;
+            case ActionListing listing:
+                AppendActions(text, listing);
+                break;
+            case ProposalPreview preview:
+                AppendPreview(text, preview, budget);
+                break;
+            case EditReceipt receipt:
                 AppendReceipt(text, receipt, budget);
-                return Finish(text);
-            case JsonResult:
                 break;
             default:
                 throw new InvalidOperationException($"No renderer for {result?.GetType().Name}.");
-        }
-
-        var json = ((JsonResult)result).Value;
-        switch (action)
-        {
-            case LspAction.Rename or LspAction.RenameFile or LspAction.CodeActions:
-                AppendChange(text, (JsonObject)json!, budget);
-                break;
-            default:
-                text.Append(Json(json));
-                break;
         }
 
         return Finish(text);
@@ -357,18 +353,6 @@ internal static partial class ResultText
 
     private static void AppendEmptyOrTruncation(
         StringBuilder text,
-        JsonObject result,
-        string noun
-    ) =>
-        AppendEmptyOrTruncation(
-            text,
-            Int(result, "total"),
-            result["truncated"]?.GetValue<bool>() is true,
-            noun
-        );
-
-    private static void AppendEmptyOrTruncation(
-        StringBuilder text,
         int total,
         bool truncated,
         string noun
@@ -394,19 +378,8 @@ internal static partial class ResultText
         }
     }
 
-    private static IEnumerable<JsonObject> Items(JsonObject result, string name = "items") =>
-        (result[name] as JsonArray ?? []).OfType<JsonObject>();
-
     private static string Position(SourcePosition position) =>
         string.Create(CultureInfo.InvariantCulture, $"{position.Line}:{position.Character}");
-
-    private static string Position(JsonNode line, JsonNode character) =>
-        string.Create(
-            CultureInfo.InvariantCulture,
-            $"{line.GetValue<int>()}:{character.GetValue<int>()}"
-        );
-
-    private static int Int(JsonObject result, string name) => result[name]?.GetValue<int>() ?? 0;
 
     private static string Count(int count, string singular, string plural) =>
         string.Create(CultureInfo.InvariantCulture, $"{count} {(count == 1 ? singular : plural)}");

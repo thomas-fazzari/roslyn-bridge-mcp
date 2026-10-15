@@ -17,16 +17,17 @@ public sealed class TextPreviewTests
 
         preview.Truncated.Should().BeFalse();
         preview.Changes.Should().ContainSingle();
-        var before = preview.Changes[0]!["before"]!;
-        var after = preview.Changes[0]!["after"]!;
-        var text = before["text"]!.GetValue<string>();
-        text.Should().EndWith("OldName");
-        after["text"]!.GetValue<string>().Should().EndWith("NewName");
-        before["startLine"]!.GetValue<int>().Should().Be(1);
-        before["startCharacter"]!
-            .GetValue<int>()
-            .Should()
-            .Be(prefix.Length + 1 - text.IndexOf("OldName", StringComparison.Ordinal));
+        var change = preview.Changes[0];
+        change.Before.Should().EndWith("OldName");
+        change.After.Should().EndWith("NewName");
+        change
+            .BeforeStart.Should()
+            .Be(
+                new SourcePosition(
+                    1,
+                    prefix.Length + 1 - change.Before.IndexOf("OldName", StringComparison.Ordinal)
+                )
+            );
     }
 
     [Theory]
@@ -49,13 +50,10 @@ public sealed class TextPreviewTests
 
         preview.Truncated.Should().BeFalse();
         preview.Changes.Should().HaveCount(2);
-        preview.Changes[0]!["before"]!["startLine"]!.GetValue<int>().Should().Be(70);
-        preview.Changes[1]!["after"]!["startLine"]!.GetValue<int>().Should().Be(110);
-        preview.Changes[0]!["before"]!["text"]!.GetValue<string>().Should().Contain("line 70");
-        preview.Changes[1]!["after"]!["text"]!
-            .GetValue<string>()
-            .Should()
-            .Contain("changed one hundred ten");
+        preview.Changes[0].BeforeStart.Line.Should().Be(70);
+        preview.Changes[1].AfterStart.Line.Should().Be(110);
+        preview.Changes[0].Before.Should().Contain("line 70");
+        preview.Changes[1].After.Should().Contain("changed one hundred ten");
     }
 
     [Fact]
@@ -65,12 +63,11 @@ public sealed class TextPreviewTests
 
         preview.Truncated.Should().BeFalse();
         preview.Changes.Should().HaveCount(2);
-        var before = preview.Changes[1]!["before"]!;
-        var after = preview.Changes[1]!["after"]!;
-        before["text"]!.GetValue<string>().Should().Be("old\n");
-        before["startLine"]!.GetValue<int>().Should().Be(3);
-        after["text"]!.GetValue<string>().Should().Be("new\n");
-        after["startLine"]!.GetValue<int>().Should().Be(4);
+        var change = preview.Changes[1];
+        change.Before.Should().Be("old\n");
+        change.BeforeStart.Line.Should().Be(3);
+        change.After.Should().Be("new\n");
+        change.AfterStart.Line.Should().Be(4);
     }
 
     [Fact]
@@ -79,11 +76,11 @@ public sealed class TextPreviewTests
         var preview = TextPreview.Create("one\nremove\nend\n", "one\nend\n");
 
         preview.Changes.Should().ContainSingle();
-        var change = preview.Changes[0]!;
-        change["before"]!["text"]!.GetValue<string>().Should().Be("remove\n");
-        change["before"]!["startLine"]!.GetValue<int>().Should().Be(2);
-        change["after"]!["text"]!.GetValue<string>().Should().BeEmpty();
-        change["after"]!["startLine"]!.GetValue<int>().Should().Be(2);
+        var change = preview.Changes[0];
+        change.Before.Should().Be("remove\n");
+        change.BeforeStart.Line.Should().Be(2);
+        change.After.Should().BeEmpty();
+        change.AfterStart.Line.Should().Be(2);
     }
 
     [Fact]
@@ -92,12 +89,8 @@ public sealed class TextPreviewTests
         var preview = TextPreview.Create("one\r\ntwo\r\nold", "one\ntwo\nnew");
 
         preview.Truncated.Should().BeFalse();
-        var before = string.Concat(
-            preview.Changes.Select(change => change!["before"]!["text"]!.GetValue<string>())
-        );
-        var after = string.Concat(
-            preview.Changes.Select(change => change!["after"]!["text"]!.GetValue<string>())
-        );
+        var before = string.Concat(preview.Changes.Select(change => change.Before));
+        var after = string.Concat(preview.Changes.Select(change => change.After));
         before.Should().Contain("one\r\n").And.Contain("old");
         after.Should().Contain("one\n").And.Contain("new").And.NotContain("\r");
     }
@@ -113,7 +106,7 @@ public sealed class TextPreviewTests
 
         preview.Truncated.Should().BeTrue();
         preview.Changes.Should().ContainSingle();
-        preview.Changes[0]!["before"]!["text"]!.GetValue<string>().Should().NotBeEmpty();
+        preview.Changes[0].Before.Should().NotBeEmpty();
     }
 
     [Fact]

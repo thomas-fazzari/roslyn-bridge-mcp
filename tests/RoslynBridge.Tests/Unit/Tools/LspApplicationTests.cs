@@ -2,11 +2,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 using System.Globalization;
-using System.Text.Json.Nodes;
+using RoslynBridge.Changes;
 using RoslynBridge.Editing;
 using RoslynBridge.Output;
 using RoslynBridge.Queries;
-using RoslynBridge.Requests;
 using RoslynBridge.Tools;
 using static RoslynBridge.Tests.Unit.TestHelpers;
 
@@ -18,42 +17,29 @@ public sealed class LspApplicationTests
     public void LargePreviewDropsTrailingFilesAndTheCommandToFit()
     {
         // Short lines cost more as text than as JSON, so the budget must hold for rendered text
-        var change = new JsonObject
-        {
-            ["before"] = new JsonObject
-            {
-                ["startLine"] = 1,
-                ["startCharacter"] = 1,
-                ["text"] = string.Concat(Enumerable.Repeat("<\n", 50)),
-            },
-            ["after"] = new JsonObject
-            {
-                ["startLine"] = 1,
-                ["startCharacter"] = 1,
-                ["text"] = string.Concat(Enumerable.Repeat(">\n", 50)),
-            },
-        };
-        var files = new JsonArray();
-        for (var index = 0; index < 1_000; index++)
-        {
-            files.Add(
-                new JsonObject
-                {
-                    ["path"] = "S.cs",
-                    ["kind"] = "change",
-                    ["changes"] = new JsonArray(change.DeepClone()),
-                }
-            );
-        }
+        var change = new TextChange(
+            new SourcePosition(1, 1),
+            string.Concat(Enumerable.Repeat("<\n", 50)),
+            new SourcePosition(1, 1),
+            string.Concat(Enumerable.Repeat(">\n", 50))
+        );
+        var files = Enumerable
+            .Repeat(
+                new FilePreview(
+                    new FileOperation("S.cs", WorkspaceEditService.ChangeFileOperation),
+                    [change],
+                    Truncated: false
+                ),
+                1_000
+            )
+            .ToList();
+        var preview = new ProposalPreview(
+            "proposal",
+            files,
+            new string('x', ResultText.MaximumResponseCharacters)
+        );
 
-        var preview = new JsonObject
-        {
-            ["proposalId"] = "proposal",
-            ["files"] = files,
-            ["command"] = new string('x', ResultText.MaximumResponseCharacters),
-        };
-
-        var response = LspTool.Response(LspAction.Rename, new JsonResult(preview));
+        var response = LspTool.Response(preview);
 
         response.IsError.Should().BeFalse();
         var text = ResponseText(response);
@@ -79,7 +65,7 @@ public sealed class LspApplicationTests
             Generated: 0
         );
 
-        var response = LspTool.Response(LspAction.References, locations);
+        var response = LspTool.Response(locations);
 
         response.IsError.Should().BeTrue();
         ErrorCode(response).Should().Be(ErrorCodes.ResultTooLarge);
@@ -88,15 +74,13 @@ public sealed class LspApplicationTests
     [Fact]
     public void LargeCommandResponsePreservesAppliedFiles()
     {
-        var result = ApplicationResult(new JsonObject { ["path"] = "Source.cs" });
-        result["commandExecuted"] = true;
-        result["commandResult"] = new string('x', ResultText.MaximumResponseCharacters);
+        var receipt = Receipt("Source.cs") with
+        {
+            CommandExecuted = true,
+            CommandResult = new string('x', ResultText.MaximumResponseCharacters),
+        };
 
-        var response = LspTool.Response(
-            LspAction.Request,
-            new JsonResult(result),
-            preserveApplication: true
-        );
+        var response = LspTool.Response(receipt);
 
         response.IsError.Should().NotBeTrue();
         var text = ResponseText(response);
@@ -111,19 +95,13 @@ public sealed class LspApplicationTests
     public void LargePathListsKeepExactPathsAndTotalCounts()
     {
         var path = new string('é', 2_000);
-        var files = Enumerable
-            .Range(0, 64)
-            .Select(index => new JsonObject
-            {
-                ["path"] = path + index.ToString(CultureInfo.InvariantCulture),
-            })
-            .ToArray();
+        var receipt = Receipt([
+            .. Enumerable
+                .Range(0, 64)
+                .Select(index => path + index.ToString(CultureInfo.InvariantCulture)),
+        ]);
 
-        var response = LspTool.Response(
-            LspAction.Rename,
-            new JsonResult(ApplicationResult(files)),
-            preserveApplication: true
-        );
+        var response = LspTool.Response(receipt);
 
         response.IsError.Should().NotBeTrue();
         var text = ResponseText(response);
@@ -140,14 +118,14 @@ public sealed class LspApplicationTests
     public void CancellationKeepsTheCompletedWriteReceipt(bool cancelled, string expectedCode)
     {
         var exception = new EditApplicationException(
-            ApplicationResult(new JsonObject { ["path"] = "Source.cs" }),
+            Receipt("Source.cs"),
             EditApplicationPhase.Synchronize,
             failedPath: null,
             failedOperation: null,
             new OperationCanceledException()
         );
 
-        var response = LspTool.ApplicationFailure(LspAction.Rename, exception, cancelled);
+        var response = LspTool.ApplicationFailure(exception, cancelled);
 
         response.IsError.Should().BeTrue();
         ErrorCode(response).Should().Be(expectedCode);
@@ -156,13 +134,14 @@ public sealed class LspApplicationTests
             .Contain("applied: 1 file, 1 operation, Roslyn not synchronized");
     }
 
-    private static JsonObject ApplicationResult(params JsonObject[] files) =>
-        EditReceipt.Create(
-            applied: true,
-            files.Select(file =>
-            {
-                file["kind"] = "change";
-                return file;
-            })
+    private static EditReceipt Receipt(params string[] paths) =>
+        new(
+            Applied: true,
+            [
+                .. paths.Select(path => new FileOperation(
+                    path,
+                    WorkspaceEditService.ChangeFileOperation
+                )),
+            ]
         );
 }

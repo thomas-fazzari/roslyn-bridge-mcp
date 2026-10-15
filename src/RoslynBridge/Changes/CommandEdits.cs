@@ -17,7 +17,7 @@ internal sealed class CommandEdits(
         CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly Lock _admission = new();
-    private readonly List<JsonObject> _receipts = [];
+    private readonly List<EditReceipt> _receipts = [];
     private readonly HashSet<string> _paths = new(StringComparer.Ordinal);
 
     private WorkspaceSnapshot _snapshot = snapshot;
@@ -34,7 +34,7 @@ internal sealed class CommandEdits(
 
     public bool HasChanges => _paths.Count != 0;
 
-    public JsonObject Result
+    public EditReceipt Result
     {
         get
         {
@@ -89,7 +89,7 @@ internal sealed class CommandEdits(
 
     private async Task<JsonObject> ApplyAndCaptureAsync(JsonObject edit, CancellationToken token)
     {
-        JsonObject receipt;
+        EditReceipt receipt;
         try
         {
             receipt = await edits.ApplyAsync(edit, _snapshot, token).ConfigureAwait(false);
@@ -97,11 +97,7 @@ internal sealed class CommandEdits(
         catch (EditApplicationException exception)
         {
             RecordReceipt(exception.Result);
-            return FailCallback(
-                exception,
-                exception.Phase,
-                applied: exception.Result["applied"]!.GetValue<bool>()
-            );
+            return FailCallback(exception, exception.Phase, applied: exception.Result.Applied);
         }
         catch (Exception exception)
         {
@@ -179,16 +175,13 @@ internal sealed class CommandEdits(
         }
     }
 
-    private void RecordReceipt(JsonObject result)
+    private void RecordReceipt(EditReceipt receipt)
     {
         lock (_admission)
         {
-            _receipts.Add(result);
-            foreach (var file in result["files"]!.AsArray().OfType<JsonObject>())
-            {
-                _paths.Add(file["path"]!.GetValue<string>());
-                _changesFileMembership |= EditReceipt.IsFileMembershipChange(file);
-            }
+            _receipts.Add(receipt);
+            _paths.UnionWith(receipt.Operations.Select(operation => operation.Path));
+            _changesFileMembership |= receipt.ChangesMembership;
         }
     }
 
@@ -217,13 +210,8 @@ internal sealed class CommandEdits(
         }
     }
 
-    private JsonObject BuildResult() =>
-        EditReceipt.Create(
-            _applied,
-            _receipts
-                .SelectMany(receipt => receipt["files"]!.AsArray())
-                .Select(file => file!.DeepClone())
-        );
+    private EditReceipt BuildResult() =>
+        new(_applied, [.. _receipts.SelectMany(receipt => receipt.Operations)]);
 
     private static JsonObject RejectedResponse() =>
         new()

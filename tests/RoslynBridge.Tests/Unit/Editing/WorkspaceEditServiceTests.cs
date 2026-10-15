@@ -4,9 +4,9 @@
 using System.Globalization;
 using System.Text;
 using System.Text.Json.Nodes;
+using RoslynBridge.Changes;
 using RoslynBridge.Editing;
 using RoslynBridge.Output;
-using RoslynBridge.Requests;
 using RoslynBridge.Tools;
 using static RoslynBridge.Tests.Unit.TestHelpers;
 
@@ -50,7 +50,7 @@ public sealed class WorkspaceEditServiceTests : IDisposable
 
         var result = await service.ApplyAsync(edit, snapshot, TestCt);
 
-        result["applied"]!.GetValue<bool>().Should().BeTrue();
+        result.Applied.Should().BeTrue();
         var bytes = await File.ReadAllBytesAsync(path, TestCt);
         bytes
             .Should()
@@ -99,13 +99,10 @@ public sealed class WorkspaceEditServiceTests : IDisposable
             (exception.InnerException is IOException or UnauthorizedAccessException)
                 .Should()
                 .BeTrue();
-            exception.Result["applied"]!.GetValue<bool>().Should().BeFalse();
-            exception.Result["fileCount"]!.GetValue<int>().Should().Be(1);
-            exception.Result["files"]![0]!["path"]!.GetValue<string>().Should().Be("First.cs");
-            exception.Result["files"]![0]!["kind"]!
-                .GetValue<string>()
-                .Should()
-                .Be(WorkspaceEditService.ChangeFileOperation);
+            exception.Result.Applied.Should().BeFalse();
+            exception
+                .Result.Operations.Should()
+                .Equal(new FileOperation("First.cs", WorkspaceEditService.ChangeFileOperation));
             await AssertFileTextAsync(first, "class Changed {}");
             File.Exists(deleted).Should().BeTrue();
         }
@@ -131,11 +128,7 @@ public sealed class WorkspaceEditServiceTests : IDisposable
             TestCt
         );
 
-        preview["fileCount"]!.GetValue<int>().Should().Be(1);
-        preview["files"]![0]!["changes"]![0]!["after"]!["text"]!
-            .GetValue<string>()
-            .Should()
-            .Be("class B {}");
+        preview.Should().ContainSingle().Which.Changes[0].After.Should().Be("class B {}");
         await AssertFileTextAsync(path, "class A {}");
     }
 
@@ -165,23 +158,19 @@ public sealed class WorkspaceEditServiceTests : IDisposable
         var snapshot = await service.CaptureAsync(TestCt);
 
         var preview = await service.PreviewAsync(edit, snapshot, TestCt);
-        preview["proposalId"] = "proposal";
-        var rendered = ResponseText(LspTool.Response(LspAction.Rename, new JsonResult(preview)));
+        var rendered = ResponseText(
+            LspTool.Response(new ProposalPreview("proposal", preview, Command: null))
+        );
 
-        preview["fileCount"]!.GetValue<int>().Should().Be(fileCount);
+        preview.Should().HaveCount(fileCount);
         rendered.Should().Contain("files shown");
         rendered.Length.Should().BeLessThanOrEqualTo(ResultText.MaximumResponseCharacters);
         await AssertFileTextAsync(Path.Combine(_root, "Source0.cs"), before);
 
         var applied = await service.ApplyAsync(edit, snapshot, TestCt);
 
-        applied["applied"]!.GetValue<bool>().Should().BeTrue();
-        applied["fileCount"]!.GetValue<int>().Should().Be(fileCount);
-        applied["files"]!
-            .AsArray()
-            .Should()
-            .HaveCount(fileCount)
-            .And.AllSatisfy(file => file!.AsObject().ContainsKey("changes").Should().BeFalse());
+        applied.Applied.Should().BeTrue();
+        applied.Operations.Should().HaveCount(fileCount);
         foreach (var path in paths)
         {
             await AssertFileTextAsync(path, after);
@@ -396,7 +385,7 @@ public sealed class WorkspaceEditServiceTests : IDisposable
 
         var result = await service.ApplyAsync(edit, snapshot, TestCt);
 
-        result["fileCount"]!.GetValue<int>().Should().Be(0);
+        result.Operations.Should().BeEmpty();
         Directory.EnumerateFiles(_root).Select(Path.GetFileName).Should().Equal("Name.cs");
     }
 

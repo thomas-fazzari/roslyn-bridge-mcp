@@ -18,7 +18,7 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
     private const int MaximumEditBytes = 64 * BytesPerMebibyte;
     private const int MaximumEditedFiles = 256;
 
-    public async Task<JsonObject> PreviewAsync(
+    public async Task<IReadOnlyList<FilePreview>> PreviewAsync(
         JsonObject edit,
         WorkspaceSnapshot snapshot,
         CancellationToken cancellationToken
@@ -26,10 +26,15 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
     {
         var documents = await PlanAsync(edit, snapshot, cancellationToken);
         await EnsureCurrentAsync(snapshot, cancellationToken);
-        return DescribePreview(documents);
+        return
+        [
+            .. documents
+                .Where(document => document.Changed)
+                .Select(document => document.Describe(paths)),
+        ];
     }
 
-    public async Task<JsonObject> ApplyAsync(
+    public async Task<EditReceipt> ApplyAsync(
         JsonObject edit,
         WorkspaceSnapshot snapshot,
         CancellationToken cancellationToken
@@ -38,7 +43,7 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
         var documents = await PlanAsync(edit, snapshot, cancellationToken);
         var temporaryFiles = new Dictionary<string, string>(StringComparer.Ordinal);
 
-        var completedOperations = new List<AppliedOperation>();
+        var completedOperations = new List<FileOperation>();
 
         var failure = await ApplyMutationsAsync(
             documents,
@@ -51,8 +56,8 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
         return CompleteApply(completedOperations, failure, cleanupFailure);
     }
 
-    private static JsonObject CompleteApply(
-        List<AppliedOperation> completedOperations,
+    private static EditReceipt CompleteApply(
+        List<FileOperation> completedOperations,
         ApplyFailure? failure,
         (Exception Exception, string Path)? cleanupFailure
     )
@@ -65,7 +70,7 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
             }
 
             throw new EditApplicationException(
-                DescribeApplied(completedOperations, applied: false),
+                new EditReceipt(Applied: false, completedOperations),
                 EditApplicationPhase.Write,
                 failure.Mutation?.Path,
                 failure.Mutation?.Operation,
@@ -75,7 +80,7 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
         if (cleanupFailure is { } cleanup)
         {
             throw new EditApplicationException(
-                DescribeApplied(completedOperations, applied: true),
+                new EditReceipt(Applied: true, completedOperations),
                 EditApplicationPhase.Cleanup,
                 cleanup.Path,
                 failedOperation: null,
@@ -83,14 +88,14 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
             );
         }
 
-        return DescribeApplied(completedOperations, applied: true);
+        return new EditReceipt(Applied: true, completedOperations);
     }
 
     private async Task<ApplyFailure?> ApplyMutationsAsync(
         List<EditedDocument> documents,
         WorkspaceSnapshot snapshot,
         Dictionary<string, string> temporaryFiles,
-        List<AppliedOperation> completedOperations,
+        List<FileOperation> completedOperations,
         CancellationToken cancellationToken
     )
     {
@@ -120,7 +125,7 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
     private void ApplyDestinationWrites(
         List<EditedDocument> documents,
         Dictionary<string, string> temporaryFiles,
-        List<AppliedOperation> completedOperations,
+        List<FileOperation> completedOperations,
         ref PendingMutation? pendingMutation
     )
     {
@@ -148,7 +153,7 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
 
     private void ApplyCaseOnlyRenames(
         List<EditedDocument> documents,
-        List<AppliedOperation> completedOperations,
+        List<FileOperation> completedOperations,
         ref PendingMutation? pendingMutation
     )
     {
@@ -172,7 +177,7 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
 
     private void ApplySourceDeletions(
         List<EditedDocument> documents,
-        List<AppliedOperation> completedOperations,
+        List<FileOperation> completedOperations,
         ref PendingMutation? pendingMutation
     )
     {
@@ -540,46 +545,10 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
         return document;
     }
 
-    private JsonObject DescribePreview(List<EditedDocument> documents)
-    {
-        var files = documents
-            .Where(document => document.Changed)
-            .Select(document => document.Describe(paths))
-            .ToArray();
-        return new JsonObject
-        {
-            ["fileCount"] = files.Length,
-            ["files"] = new JsonArray(files),
-            ["previewTruncated"] = files.Any(file => file["previewTruncated"]!.GetValue<bool>()),
-        };
-    }
-
-    private static JsonObject DescribeApplied(
-        List<AppliedOperation> completedOperations,
-        bool applied
-    ) => EditReceipt.Create(applied, completedOperations.Select(DescribeAppliedOperation));
-
-    private static JsonObject DescribeAppliedOperation(AppliedOperation operation)
-    {
-        var result = new JsonObject { ["path"] = operation.Path, ["kind"] = operation.Kind };
-        if (operation.OldPath is not null)
-        {
-            result["oldPath"] = operation.OldPath;
-        }
-
-        return result;
-    }
-
     private static string DestinationOperation(EditedDocument document) =>
         document.Original is null ? CreateFileOperation : ChangeFileOperation;
 
     private readonly record struct PendingMutation(string Path, string Operation);
-
-    private readonly record struct AppliedOperation(
-        string Path,
-        string Kind,
-        string? OldPath = null
-    );
 
     private sealed record ApplyFailure(Exception Exception, PendingMutation? Mutation);
 

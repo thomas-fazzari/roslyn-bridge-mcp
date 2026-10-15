@@ -44,8 +44,8 @@ public sealed class CommandEditsTests : IDisposable
         ((EditApplicationException)commandEdits.Failure!)
             .Phase.Should()
             .Be(EditApplicationPhase.Synchronize);
-        commandEdits.Result["fileCount"]!.GetValue<int>().Should().Be(1);
-        commandEdits.Result["files"]![0]!["path"]!.GetValue<string>().Should().Be("Source.cs");
+        commandEdits.Result.FileCount.Should().Be(1);
+        commandEdits.Result.Operations[0].Path.Should().Be("Source.cs");
         await AssertFileTextAsync(path, "class B {}");
 
         var rejected = await commandEdits.ApplyAsync(
@@ -55,7 +55,7 @@ public sealed class CommandEditsTests : IDisposable
 
         rejected["applied"]!.GetValue<bool>().Should().BeFalse();
         await AssertFileTextAsync(path, "class B {}");
-        commandEdits.Result["operationCount"]!.GetValue<int>().Should().Be(1);
+        commandEdits.Result.Operations.Count.Should().Be(1);
     }
 
     [Fact]
@@ -86,8 +86,8 @@ public sealed class CommandEditsTests : IDisposable
         first["applied"]!.GetValue<bool>().Should().BeTrue();
         second["applied"]!.GetValue<bool>().Should().BeFalse();
         commandEdits.Failure.Should().NotBeNull();
-        commandEdits.Result["fileCount"]!.GetValue<int>().Should().Be(1);
-        commandEdits.Result["operationCount"]!.GetValue<int>().Should().Be(1);
+        commandEdits.Result.FileCount.Should().Be(1);
+        commandEdits.Result.Operations.Count.Should().Be(1);
         await AssertFileTextAsync(path, "class B {}");
         File.Exists(Path.Combine(_root, "Missing.cs")).Should().BeFalse();
     }
@@ -142,7 +142,7 @@ public sealed class CommandEditsTests : IDisposable
         (await first)["applied"]!.GetValue<bool>().Should().BeTrue();
         (await second)["applied"]!.GetValue<bool>().Should().BeTrue();
         captureCalls.Should().Be(2);
-        commandEdits.Result["operationCount"]!.GetValue<int>().Should().Be(2);
+        commandEdits.Result.Operations.Count.Should().Be(2);
         await AssertFileTextAsync(firstPath, "class Changed {}");
         await AssertFileTextAsync(secondPath, "class Changed {}");
     }
@@ -186,8 +186,8 @@ public sealed class CommandEditsTests : IDisposable
             .BeOfType<EditApplicationException>()
             .Which.InnerException.Should()
             .BeAssignableTo<OperationCanceledException>();
-        commandEdits.Result["applied"]!.GetValue<bool>().Should().BeTrue();
-        commandEdits.Result["fileCount"]!.GetValue<int>().Should().Be(1);
+        commandEdits.Result.Applied.Should().BeTrue();
+        commandEdits.Result.FileCount.Should().Be(1);
         var rejected = await commandEdits.ApplyAsync(
             WorkspaceChanges(path, TextEdit(0, 6, 0, 7, "C")),
             cancellationToken

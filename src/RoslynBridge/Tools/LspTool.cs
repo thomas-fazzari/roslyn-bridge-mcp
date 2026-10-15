@@ -74,7 +74,7 @@ internal sealed partial class LspTool(
     {
         if (request.Action is LspAction.Status)
         {
-            return Response(request.Action, Status());
+            return Response(Status());
         }
 
         await _gate.WaitAsync(cancellationToken);
@@ -99,11 +99,7 @@ internal sealed partial class LspTool(
                 OperationCompleted(logger, request.Action, elapsedMilliseconds);
             }
 
-            return Response(
-                request.Action,
-                result.Value,
-                preserveApplication: IsApplicationRequest(request)
-            );
+            return Response(result.Value);
         }
         catch (EditApplicationException exception)
         {
@@ -173,7 +169,7 @@ internal sealed partial class LspTool(
         changes.Clear();
         session.RequireReload();
         OperationFailed(logger, action, exception);
-        return ApplicationFailure(action, exception, cancellationToken.IsCancellationRequested);
+        return ApplicationFailure(exception, cancellationToken.IsCancellationRequested);
     }
 
     private static bool MayRestartServer(LspRequest request) =>
@@ -185,17 +181,6 @@ internal sealed partial class LspTool(
         || (
             request.ProposalId is null
             && request.Action is LspAction.Rename or LspAction.RenameFile or LspAction.CodeActions
-        );
-
-    private static bool IsApplicationRequest(LspRequest request) =>
-        request.Apply
-        && (
-            request.Action switch
-            {
-                LspAction.Rename or LspAction.RenameFile or LspAction.CodeActions => true,
-                LspAction.Request => request.Method is LspMethods.WorkspaceExecuteCommand,
-                _ => false,
-            }
         );
 
     private async Task<Result<ToolResult>> DispatchAsync(
@@ -241,10 +226,9 @@ internal sealed partial class LspTool(
             or LspAction.Subtypes => await queries.NavigationAsync(request, cancellationToken),
             LspAction.Source => Widen(await queries.SourceAsync(request, cancellationToken)),
             LspAction.Members => Widen(await queries.MembersAsync(request, cancellationToken)),
-            LspAction.Rename or LspAction.RenameFile or LspAction.CodeActions => AsJson(
-                await changes.ExecuteAsync(request, cancellationToken)
-            ),
-            LspAction.Request => AsJson(await RawRequestAsync(request, cancellationToken)),
+            LspAction.Rename or LspAction.RenameFile or LspAction.CodeActions =>
+                await changes.ExecuteAsync(request, cancellationToken),
+            LspAction.Request => await RawRequestAsync(request, cancellationToken),
             _ => throw new InvalidOperationException($"Unsupported LSP action: {request.Action}."),
         };
     }
@@ -252,7 +236,7 @@ internal sealed partial class LspTool(
     private SessionStatus Status() =>
         new(session.IsRunning, session.IsLoading, options.WorkspaceRoot, options.ServerPath);
 
-    private async Task<Result<JsonNode?>> RawRequestAsync(
+    private async Task<Result<ToolResult>> RawRequestAsync(
         LspRequest request,
         CancellationToken cancellationToken
     )
@@ -289,7 +273,9 @@ internal sealed partial class LspTool(
             return await changes.ExecuteCommandAsync(request.Parameters ?? [], cancellationToken);
         }
 
-        return await session.RequestAsync(request.Method, request.Parameters, cancellationToken);
+        return new JsonResult(
+            await session.RequestAsync(request.Method, request.Parameters, cancellationToken)
+        );
     }
 
     private static bool IsManagedMethod(string method)
@@ -308,25 +294,14 @@ internal sealed partial class LspTool(
         return isLifecycle || isSynchronization || method is LspMethods.WorkspaceApplyEdit;
     }
 
-    private static Result<ToolResult> AsJson(Result<JsonNode?> result) =>
-        result.Error is { } error ? error : new JsonResult(result.Value);
-
     private static Result<ToolResult> Widen<T>(Result<T> result)
         where T : ToolResult => result.Error is { } error ? error : result.Value;
 
-    internal static CallToolResult Response(
-        LspAction action,
-        ToolResult? result,
-        bool preserveApplication = false
-    )
+    internal static CallToolResult Response(ToolResult? result)
     {
-        var text = ResultText.Render(
-            action,
-            result,
-            preserveApplication,
-            ResultText.MaximumResponseCharacters
-        );
-        return text.Length <= ResultText.MaximumResponseCharacters
+        var text = ResultText.Render(result, ResultText.MaximumResponseCharacters);
+        // A receipt must reach the client, and it drops trailing operations to fit
+        return text.Length <= ResultText.MaximumResponseCharacters || result is EditReceipt
             ? Text(text, isError: false)
             : Failure(
                 new ToolError(
@@ -340,7 +315,6 @@ internal sealed partial class LspTool(
     /// Reports a failed application with the step that failed and the receipt of the writes that completed.
     /// </summary>
     internal static CallToolResult ApplicationFailure(
-        LspAction action,
         EditApplicationException exception,
         bool cancellationRequested
     )
@@ -370,9 +344,7 @@ internal sealed partial class LspTool(
         text.Append('\n')
             .Append(
                 ResultText.Render(
-                    action,
-                    new JsonResult(exception.Result),
-                    application: true,
+                    exception.Result,
                     ResultText.MaximumResponseCharacters - text.Length
                 )
             );

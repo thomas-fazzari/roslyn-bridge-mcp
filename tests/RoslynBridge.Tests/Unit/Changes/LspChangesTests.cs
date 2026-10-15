@@ -36,7 +36,7 @@ public sealed class LspChangesTests : IDisposable
                 apply: false,
                 TestCt
             );
-            proposals.Add(preview["proposalId"]!.GetValue<string>());
+            proposals.Add(((ProposalPreview)preview).ProposalId);
         }
 
         var oldest = await changes.ExecuteAsync(Proposal(proposals[0]), TestCt);
@@ -46,7 +46,7 @@ public sealed class LspChangesTests : IDisposable
         foreach (var proposal in proposals[^LspChanges.MaximumPendingProposals..])
         {
             var result = await changes.ExecuteAsync(Proposal(proposal), TestCt);
-            result.Value!["proposalId"].Should().NotBeNull();
+            result.Value.Should().BeOfType<ProposalPreview>();
         }
     }
 
@@ -63,7 +63,7 @@ public sealed class LspChangesTests : IDisposable
         );
 
         var result = await changes.ExecuteAsync(
-            Proposal(preview["proposalId"]!.GetValue<string>()) with
+            Proposal(((ProposalPreview)preview).ProposalId) with
             {
                 Action = LspAction.RenameFile,
             },
@@ -126,17 +126,11 @@ public sealed class LspChangesTests : IDisposable
             .ThrowAsync<EditApplicationException>();
 
         failure.Which.Phase.Should().Be(EditApplicationPhase.Synchronize);
-        ErrorCode(
-                LspTool.ApplicationFailure(
-                    LspAction.RenameFile,
-                    failure.Which,
-                    cancellationRequested: false
-                )
-            )
+        ErrorCode(LspTool.ApplicationFailure(failure.Which, cancellationRequested: false))
             .Should()
             .Be(ErrorCodes.Io);
-        failure.Which.Result["applied"]!.GetValue<bool>().Should().BeTrue();
-        failure.Which.Result["fileCount"]!.GetValue<int>().Should().Be(1);
+        failure.Which.Result.Applied.Should().BeTrue();
+        failure.Which.Result.FileCount.Should().Be(1);
         await AssertFileTextAsync(path, "class B {}");
         return;
 
