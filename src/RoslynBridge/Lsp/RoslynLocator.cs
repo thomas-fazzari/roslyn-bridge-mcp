@@ -20,6 +20,8 @@ internal sealed class RoslynLocator(
 )
 {
     internal const string ServerName = "roslyn-language-server";
+    internal const string ServerBinaryName = "Microsoft.CodeAnalysis.LanguageServer";
+
     private const string RuntimeMajorVersion = "10.";
     private static readonly TimeSpan _listSdksTimeout = TimeSpan.FromSeconds(10);
 
@@ -46,17 +48,19 @@ internal sealed class RoslynLocator(
 
     public string FindServer(string? explicitPath)
     {
-        if (explicitPath is not null)
-        {
-            return explicitPath;
-        }
-
         var toolsHome = environment("DOTNET_CLI_HOME") ?? home;
-        return FindOnPath(ServerName)
+        var launcher =
+            explicitPath
+            ?? FindOnPath(ServerName)
             ?? ExistingFile(Path.Combine(toolsHome, ".dotnet", "tools", Executable(ServerName)))
             ?? throw new FileNotFoundException(
                 $"The Roslyn language server was not found on PATH or in ~/.dotnet/tools. Install it with `dotnet tool install -g {ServerName} --prerelease`, or pass --server."
             );
+        var server = Path.Combine(
+            Path.GetDirectoryName(RealPath(launcher))!,
+            Executable(ServerBinaryName)
+        );
+        return File.Exists(server) ? server : launcher;
     }
 
     public string FindDotnetRoot(string? explicitRoot)

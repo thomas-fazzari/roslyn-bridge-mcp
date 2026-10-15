@@ -71,6 +71,8 @@ In Claude Code, set the `MCP_TOOL_TIMEOUT` environment variable in milliseconds,
 
 Timeout arguments accept 1 to 600 seconds. Keep the client's tool timeout above the startup and request timeout sum when increasing these limits.
 
+The `roslyn-language-server` tool only starts `Microsoft.CodeAnalysis.LanguageServer` from its own folder and relays every message. When the server path resolves to that folder, the bridge starts `Microsoft.CodeAnalysis.LanguageServer` directly.
+
 MCP clients often start the bridge without your shell environment. The bridge therefore finds the .NET install that runs Roslyn itself. It uses the first directory that holds a .NET 10 runtime and an SDK, checking `DOTNET_ROOT`, the `dotnet` on `PATH`, the location registered by the .NET installer, the default install location, then `~/.dotnet`. Pass `--dotnet-root` when your install is elsewhere.
 
 ## Remove

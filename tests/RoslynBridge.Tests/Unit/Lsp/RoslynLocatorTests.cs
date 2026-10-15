@@ -114,6 +114,28 @@ public sealed class RoslynLocatorTests : IDisposable
     }
 
     [Fact]
+    public void SymlinkedToolLaunchesTheServerBinaryBesideIt()
+    {
+        var tool = CreateFile(Path.Combine(_root, "store", Server));
+        var server = CreateFile(
+            Path.Combine(_root, "store", Executable(RoslynLocator.ServerBinaryName))
+        );
+        var bin = Directory.CreateDirectory(Path.Combine(_root, "bin")).FullName;
+        try
+        {
+            File.CreateSymbolicLink(Path.Combine(bin, Server), tool);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            Assert.Skip("Creating symbolic links needs privileges on this machine.");
+        }
+
+        _environment["PATH"] = bin;
+
+        Locator().FindServer(explicitPath: null).Should().Be(server);
+    }
+
+    [Fact]
     public void MissingServerIsReported()
     {
         FluentActions.Invoking(Find).Should().Throw<FileNotFoundException>();
@@ -142,10 +164,12 @@ public sealed class RoslynLocatorTests : IDisposable
 
     public void Dispose() => Directory.Delete(_root, recursive: true);
 
-    private static string Dotnet => OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet";
+    private static string Dotnet => Executable("dotnet");
 
-    private static string Server =>
-        OperatingSystem.IsWindows() ? $"{RoslynLocator.ServerName}.exe" : RoslynLocator.ServerName;
+    private static string Server => Executable(RoslynLocator.ServerName);
+
+    private static string Executable(string name) =>
+        OperatingSystem.IsWindows() ? $"{name}.exe" : name;
 
     private RoslynLocator Locator(params string[] fixedRoots) =>
         new(name => _environment.GetValueOrDefault(name), _root, fixedRoots);
