@@ -14,8 +14,10 @@ diagnostics {"file":"src/Core/**/*.cs","limit":200}
 All C# files, only for a requested workspace audit:
 diagnostics {}
 
-Use a specific path or narrow glob. Omitting file, using "*" or "**/*.cs"
-selects all C# files. Split large audits by project or directory.
+Use a specific path or narrow glob. Braces check several files in one call:
+diagnostics {"file":"src/{Calculator,Program}.cs"}
+Omitting file, using "*" or "**/*.cs" selects all C# files. Split large audits
+by project or directory.
 
 severity sets the lowest reported severity. The default, warning, reports
 errors and warnings. Use information or hint to include analyzer suggestions:

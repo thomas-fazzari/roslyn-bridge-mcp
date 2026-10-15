@@ -261,6 +261,32 @@ public sealed class LspToolTests : IDisposable
         contextRequests.Should().Be(1);
     }
 
+    [Theory]
+    [InlineData("{A,B}.cs")]
+    [InlineData("{A.cs,Sub/*.cs}")]
+    public async Task DiagnosticsExpandBraceAlternativesAsync(string file)
+    {
+        await WriteFileAsync(_root, "A.cs", "class A {}");
+        await WriteFileAsync(_root, "B.cs", "class B {}");
+        await WriteFileAsync(_root, "Sub/B.cs", "class C {}");
+        await WriteFileAsync(_root, "Other.cs", "class D {}");
+        await using var session = CreateSession(
+            _root,
+            FakeServer(server =>
+                server.Handle = (_, _) =>
+                    Task.FromResult<JsonNode?>(new JsonObject { ["items"] = new JsonArray() })
+            )
+        );
+        using var tool = CreateTool(session);
+
+        var response = await tool.ExecuteAsync(
+            new LspRequest { Action = LspAction.Diagnostics, File = file },
+            TestCt
+        );
+
+        ResponseText(response).Should().StartWith("2 files checked");
+    }
+
     public void Dispose() => Directory.Delete(_root, recursive: true);
 
     private static LspRequest SymbolQuery() =>

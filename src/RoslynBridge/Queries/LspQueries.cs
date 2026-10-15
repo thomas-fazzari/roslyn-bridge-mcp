@@ -452,21 +452,59 @@ internal sealed partial class LspQueries(
 
     private IEnumerable<string> SelectFiles(string? file)
     {
-        if (
-            file?.Contains('*', StringComparison.Ordinal) is false
-            && !file.Contains('?', StringComparison.Ordinal)
-        )
+        var patterns = file is null or "*" ? ["**/*.cs"] : ExpandBraces(file);
+        if (patterns.TrueForAll(pattern => pattern.IndexOfAny(['*', '?']) < 0))
         {
-            return [paths.Resolve(file)];
+            return patterns.Select(paths.Resolve).Distinct(StringComparer.Ordinal);
         }
 
         var matcher = new Matcher(StringComparison.Ordinal);
-        matcher.AddInclude(file is null or "*" ? "**/*.cs" : file);
+        matcher.AddIncludePatterns(patterns);
         return matcher
             .Match(paths.Root, paths.EnumerateFiles().Select(static file => file.Path))
             .Files.Select(match => Path.GetFullPath(match.Path, paths.Root))
             .Where(RoslynSession.IsCSharpFile)
             .Order(StringComparer.Ordinal);
+    }
+
+    // The matcher has no brace alternatives, so `src/{A,B}.cs` becomes one pattern per alternative
+    private static List<string> ExpandBraces(string pattern)
+    {
+        var open = pattern.IndexOf('{', StringComparison.Ordinal);
+        if (open < 0)
+        {
+            return [pattern];
+        }
+
+        var depth = 0;
+        var start = open + 1;
+        var alternatives = new List<string>();
+        for (var index = start; index < pattern.Length; index++)
+        {
+            switch (pattern[index])
+            {
+                case '{':
+                    depth++;
+                    break;
+                case ',' when depth == 0:
+                    alternatives.Add(pattern[start..index]);
+                    start = index + 1;
+                    break;
+                case '}' when depth == 0:
+                    alternatives.Add(pattern[start..index]);
+                    return
+                    [
+                        .. alternatives.SelectMany(alternative =>
+                            ExpandBraces(pattern[..open] + alternative + pattern[(index + 1)..])
+                        ),
+                    ];
+                case '}':
+                    depth--;
+                    break;
+            }
+        }
+
+        return [pattern];
     }
 
     private sealed record ScannedFile(string Path, JsonArray Reported, bool Miscellaneous);

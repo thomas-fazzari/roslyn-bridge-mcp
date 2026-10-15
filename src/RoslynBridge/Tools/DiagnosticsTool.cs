@@ -25,7 +25,7 @@ internal sealed class DiagnosticsTool(LspTool lsp)
     )]
     public Task<CallToolResult> DiagnosticsAsync(
         [Description(
-            "Workspace-relative file path or glob. Omitting it scans every C# file in the workspace."
+            "Workspace-relative file path or glob. Braces list several, as in src/{A,B}.cs. Omitting it scans every C# file in the workspace."
         )]
             string? file = null,
         [Description(

@@ -81,7 +81,7 @@ When the sections do not all fit, the largest ones are named on a final `omitted
 `hover` returns plain text. `symbols` uses the same symbol lines. For a file, they give the declaration end after a dash, as in `5:18-9:2`, and are indented under their container.
 A final `truncated:` line gives the total when `limit` omitted results.
 
-For diagnostics, omit `file` to scan C# files or use a glob such as `src/**/*.cs`. Only `.cs` and `.csx` files are analyzed.
+For diagnostics, omit `file` to scan C# files or use a glob such as `src/**/*.cs`. Braces list alternatives, so `src/{Calculator,Program}.cs` checks two files in one call. Only `.cs` and `.csx` files are analyzed.
 `severity` defaults to `warning`, which reports errors and warnings. Set it to `information` or `hint` to include analyzer suggestions.
 Each file with diagnostics is followed by one indented line per diagnostic, then a summary:
 
