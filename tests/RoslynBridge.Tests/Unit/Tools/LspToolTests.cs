@@ -219,6 +219,48 @@ public sealed class LspToolTests : IDisposable
         ResponseText(status).Should().Contain("loading: true");
     }
 
+    [Fact]
+    public async Task FileOutsideEveryProjectSinceTheLoadIsReportedWithoutWaitingAsync()
+    {
+        await WriteFileAsync(_root, "Loose.cs", "class Loose {}");
+        var contextRequests = 0;
+        await using var session = CreateSession(
+            _root,
+            FakeServer(server =>
+                server.Handle = (method, _) =>
+                {
+                    if (method is not LspMethods.TextDocumentGetProjectContexts)
+                    {
+                        return Task.FromResult<JsonNode?>(
+                            new JsonObject { ["items"] = new JsonArray() }
+                        );
+                    }
+
+                    contextRequests++;
+                    return Task.FromResult<JsonNode?>(
+                        new JsonObject
+                        {
+                            ["_vs_projectContexts"] = new JsonArray(
+                                new JsonObject { ["_vs_is_miscellaneous"] = true }
+                            ),
+                        }
+                    );
+                }
+            )
+        );
+        using var tool = CreateTool(session);
+
+        var response = await tool.ExecuteAsync(
+            new LspRequest { Action = LspAction.Diagnostics, File = "Loose.cs" },
+            TestCt
+        );
+
+        ResponseText(response)
+            .Should()
+            .Contain("not in a project, no semantic diagnostics: Loose.cs");
+        contextRequests.Should().Be(1);
+    }
+
     public void Dispose() => Directory.Delete(_root, recursive: true);
 
     private static LspRequest SymbolQuery() =>

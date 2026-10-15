@@ -272,7 +272,7 @@ internal sealed partial class LspQueries(
         // Each open discards diagnostics of earlier solution versions, so the batch opens before any pull
         var uris = await session.OpenDocumentsAsync(batch, cancellationToken);
 
-        var miscellaneous = await WaitForProjectsAsync(uris, cancellationToken);
+        var miscellaneous = await WaitForProjectsAsync(batch, uris, cancellationToken);
         var reports = await Task.WhenAll(
             uris.Select(uri => FileDiagnosticsAsync(uri, cancellationToken))
         );
@@ -337,32 +337,47 @@ internal sealed partial class LspQueries(
     }
 
     /// <summary>
-    /// Waits until Roslyn attaches the documents to a project and returns those still outside one.
+    /// Returns the documents outside every project, after waiting for Roslyn to attach new files.
     /// Roslyn treats a new file as a miscellaneous file, without semantic diagnostics,
     /// until its project picks the file up.
     /// </summary>
     private async Task<HashSet<string>> WaitForProjectsAsync(
-        IReadOnlyList<string> uris,
+        string[] files,
+        List<string> uris,
         CancellationToken cancellationToken
     )
     {
-        var pending = new HashSet<string>(uris, StringComparer.Ordinal);
+        var outside = new HashSet<string>(StringComparer.Ordinal);
+        var pending = Enumerable.Range(0, uris.Count).ToList();
         var started = Stopwatch.GetTimestamp();
         while (true)
         {
             var states = await Task.WhenAll(
-                pending.Select(async uri =>
-                    (Uri: uri, Miscellaneous: await IsMiscellaneousAsync(uri, cancellationToken))
+                pending.Select(async index =>
+                    (
+                        Index: index,
+                        Miscellaneous: await IsMiscellaneousAsync(uris[index], cancellationToken)
+                    )
                 )
             );
-            pending = states
-                .Where(state => state.Miscellaneous)
-                .Select(state => state.Uri)
-                .ToHashSet(StringComparer.Ordinal);
+            pending = [];
+            foreach (var (index, _) in states.Where(state => state.Miscellaneous))
+            {
+                // A file that existed at load and is still outside a project stays there
+                if (session.IsCreatedFile(files[index]))
+                {
+                    pending.Add(index);
+                }
+                else
+                {
+                    outside.Add(uris[index]);
+                }
+            }
 
             if (pending.Count == 0 || Stopwatch.GetElapsedTime(started) >= _projectAttachTimeout)
             {
-                return pending;
+                outside.UnionWith(pending.Select(index => uris[index]));
+                return outside;
             }
 
             await Task.Delay(_projectAttachPollInterval, cancellationToken);

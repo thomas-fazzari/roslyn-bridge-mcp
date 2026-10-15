@@ -384,6 +384,7 @@ internal sealed partial class RoslynSession(
         _documents.Clear();
         _openedOrder.Clear();
         _workspaceFiles.Clear();
+        _createdFiles.Clear();
         _snapshotFingerprints.Clear();
         _snapshotBaselined = false;
         _watchRegistrations.Clear();

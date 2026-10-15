@@ -9,11 +9,15 @@ internal sealed partial class RoslynSession
 {
     private const int FileChangeBatchSize = 128;
 
+    // On Windows, the 8 KB default overflows on a branch switch or a restore, which forces a full rescan
+    private const int WatcherBufferBytes = 64 * 1024;
+
     private void StartWatching()
     {
         _watcher = new FileSystemWatcher(paths.Root)
         {
             IncludeSubdirectories = true,
+            InternalBufferSize = WatcherBufferBytes,
             NotifyFilter =
                 NotifyFilters.FileName
                 | NotifyFilters.DirectoryName
@@ -211,10 +215,18 @@ internal sealed partial class RoslynSession
 
             foreach (var change in batch)
             {
-                if (change.Type is not FileDeleted)
+                if (change.Type is FileDeleted)
                 {
-                    await SynchronizeClosedDocumentAsync(change.Path, cancellationToken);
+                    _createdFiles.Remove(change.Path);
+                    continue;
                 }
+
+                if (change.Type is FileCreated)
+                {
+                    _createdFiles.Add(change.Path);
+                }
+
+                await SynchronizeClosedDocumentAsync(change.Path, cancellationToken);
             }
         }
     }

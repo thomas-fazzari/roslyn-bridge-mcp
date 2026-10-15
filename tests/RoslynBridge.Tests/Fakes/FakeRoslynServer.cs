@@ -37,7 +37,8 @@ internal sealed class FakeRoslynServer : IRoslynServer
     }
 
     /// <summary>
-    /// Answers workspace/symbol and workspace/executeCommand, given the method and its parameters.
+    /// Answers workspace/symbol, diagnostic, project context and workspace/executeCommand
+    /// requests, given the method and its parameters.
     /// The default handler returns null.
     /// </summary>
     public Func<string, JsonNode?, Task<JsonNode?>> Handle { get; set; } =
@@ -119,6 +120,20 @@ internal sealed class FakeRoslynServer : IRoslynServer
         [JsonRpcMethod(LspMethods.WorkspaceSymbol, UseSingleObjectParameterDeserialization = true)]
         public Task<JsonNode?> WorkspaceSymbolAsync(JsonNode? parameters) =>
             server.Handle(LspMethods.WorkspaceSymbol, parameters);
+
+        [JsonRpcMethod(
+            LspMethods.TextDocumentDiagnostic,
+            UseSingleObjectParameterDeserialization = true
+        )]
+        public Task<JsonNode?> DiagnosticAsync(JsonNode? parameters) =>
+            server.Handle(LspMethods.TextDocumentDiagnostic, parameters);
+
+        [JsonRpcMethod(
+            LspMethods.TextDocumentGetProjectContexts,
+            UseSingleObjectParameterDeserialization = true
+        )]
+        public Task<JsonNode?> ProjectContextsAsync(JsonNode? parameters) =>
+            server.Handle(LspMethods.TextDocumentGetProjectContexts, parameters);
 
         [JsonRpcMethod(
             LspMethods.WorkspaceExecuteCommand,

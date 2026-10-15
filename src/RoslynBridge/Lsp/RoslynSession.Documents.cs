@@ -25,6 +25,7 @@ internal sealed partial class RoslynSession
     );
     private readonly ConcurrentDictionary<string, byte> _pendingFiles = new(StringComparer.Ordinal);
     private Dictionary<string, FileStamp> _workspaceFiles = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _createdFiles = new(StringComparer.Ordinal);
 
     // Fingerprints of the file contents Roslyn received at the last snapshot synchronization
     private readonly Dictionary<string, string> _snapshotFingerprints = new(StringComparer.Ordinal);
@@ -32,6 +33,11 @@ internal sealed partial class RoslynSession
 
     private FileSystemWatcher? _watcher;
     private int _scanRequested;
+
+    /// <summary>
+    /// Whether the file appeared after Roslyn loaded the workspace, so its project may not include it yet.
+    /// </summary>
+    public bool IsCreatedFile(string path) => _createdFiles.Contains(path);
 
     public Dictionary<string, int> CopyDocumentVersions() =>
         _documents.ToDictionary(
