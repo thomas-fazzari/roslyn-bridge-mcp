@@ -1,6 +1,7 @@
 // Copyright (C) RoslynBridge contributors
 // SPDX-License-Identifier: GPL-3.0-only
 
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -16,17 +17,9 @@ internal sealed partial class LspQueries
     // Keeps the text within a 32,000-character response, with room for headers
     private const int MaximumSourceCharacters = 31_000;
 
-    private static readonly LspAction[] _impactActions =
-    [
-        LspAction.References,
-        LspAction.Callers,
-        LspAction.Implementation,
-        LspAction.Subtypes,
-    ];
-
     /// <summary>
     /// Returns the saved text of each declaration of a symbol, with its documentation comment.
-    /// Lines past the response budget are only counted.
+    /// Declarations that do not fit the response budget are left out and their lines counted.
     /// </summary>
     public async Task<Result<SourceParts>> SourceAsync(
         LspRequest request,
@@ -48,20 +41,20 @@ internal sealed partial class LspQueries
             var last = Math.Min(part.LastLine, lines.Length);
             var first = DocumentationStart(lines, part.FirstLine);
             var text = new StringBuilder();
-            var line = first;
-            for (; line <= last && lines[line - 1].Length < remaining; line++)
+            for (var line = first; line <= last; line++)
             {
                 text.Append(lines[line - 1]).Append('\n');
-                remaining -= lines[line - 1].Length + 1;
             }
 
-            omitted += last - line + 1;
-            if (text.Length == 0)
+            // A part shows whole or not at all, so the text never stops inside a member
+            if (text.Length > remaining)
             {
+                omitted += last - first + 1;
                 continue;
             }
 
-            parts.Add(new SourcePart(part.ToItem(paths), first, line - 1, text.ToString()));
+            remaining -= text.Length;
+            parts.Add(new SourcePart(part.ToItem(paths), first, last, text.ToString()));
         }
 
         return new SourceParts(parts, omitted);
@@ -113,12 +106,12 @@ internal sealed partial class LspQueries
             await PositionParametersAsync(file, position, cancellationToken),
             cancellationToken
         );
-        var sections = new List<ImpactSection>(_impactActions.Length);
-        foreach (
-            var action in _impactActions.Where(action =>
-                targetsType || action is not LspAction.Subtypes
-            )
-        )
+        // A type has no callers, and its implementations are its subtypes
+        LspAction[] actions = targetsType
+            ? [LspAction.References, LspAction.Subtypes]
+            : [LspAction.References, LspAction.Callers, LspAction.Implementation];
+        var sections = new List<ImpactSection>(actions.Length);
+        foreach (var action in actions)
         {
             var section = await NavigationAsync(
                 request with
@@ -136,15 +129,39 @@ internal sealed partial class LspQueries
                 return sectionError;
             }
 
+            // Roslyn lists a member that nothing overrides as its own implementation
+            var result =
+                section.Value is Locations implementations && action is LspAction.Implementation
+                    ? Without(implementations, paths.RelativePath(paths.Resolve(file)), position)
+                    : section.Value;
             sections.Add(
                 new ImpactSection(
                     JsonNamingPolicy.SnakeCaseLower.ConvertName(action.ToString()),
-                    section.Value
+                    result
                 )
             );
         }
 
         return new ImpactReport(sections);
+    }
+
+    private static Locations Without(Locations locations, string file, SourcePosition position)
+    {
+        var files = locations
+            .Files.Select(found =>
+                string.Equals(found.File, file, StringComparison.Ordinal)
+                    ? found with
+                    {
+                        Positions = [.. found.Positions.Where(other => other != position)],
+                    }
+                    : found
+            )
+            .Where(found => found.Positions.Count > 0)
+            .ToList();
+        var removed =
+            locations.Files.Sum(found => found.Positions.Count)
+            - files.Sum(found => found.Positions.Count);
+        return locations with { Files = files, Total = locations.Total - removed };
     }
 
     // For a member, Roslyn prepares the hierarchy of its containing type, whose name lies elsewhere
@@ -206,7 +223,9 @@ internal sealed partial class LspQueries
             cancellationToken
         );
         return declaration is null
-            ? ToolError.InvalidRequest($"No declaration contains line {line}.")
+            ? ToolError.InvalidRequest(
+                string.Create(CultureInfo.InvariantCulture, $"No declaration contains line {line}.")
+            )
             : new[] { declaration };
     }
 

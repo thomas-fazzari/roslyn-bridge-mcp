@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Text.Json.Nodes;
 using RoslynBridge.Lsp;
 using RoslynBridge.Requests;
+using static RoslynBridge.Tests.Unit.TestHelpers;
 
 namespace RoslynBridge.Tests.Integration.Roslyn;
 
@@ -60,7 +61,14 @@ public sealed partial class RoslynMcpTests
         var definition = await workspace.CallAsync(definitionRequest);
         AssertSingleLocation(definition, ContractFile);
         var target = await workspace.AtAsync(LspAction.Definition, ContractFile, "Greet(");
-        definition.Should().Be($"{ContractFile} {target.Line}:{target.Character}");
+        definition
+            .Should()
+            .Be(
+                string.Create(
+                    CultureInfo.InvariantCulture,
+                    $"{ContractFile} {target.Line}:{target.Character}"
+                )
+            );
         var raw = JsonNode.Parse(
             await workspace.CallAsync(
                 new LspRequest
@@ -430,6 +438,59 @@ public sealed partial class RoslynMcpTests
             )
         );
         Section(typeImpact, "subtypes").Select(FileOf).Should().Equal(ImplementationFile);
+    }
+
+    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    public async Task RejectsFilesAndLinesItCannotAnalyzeAsync()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var workspace = await RoslynTestWorkspace.CreateAsync(cancellationToken);
+        await workspace.WriteFileAsync("README.md", "# Sample\n\n[Link](https://example.com)\n");
+
+        var markdown = await workspace.CallRawAsync(
+            new LspRequest { Action = LspAction.Diagnostics, File = "README.md" }
+        );
+        var missing = await workspace.CallRawAsync(
+            new LspRequest { Action = LspAction.Diagnostics, File = "Application/Missing.cs" }
+        );
+        var pastTheEnd = await workspace.CallRawAsync(
+            new LspRequest
+            {
+                Action = LspAction.Hover,
+                File = ConsumerFile,
+                Line = 9_999,
+                Character = 1,
+            }
+        );
+
+        AssertError(markdown, ErrorCodes.InvalidRequest);
+        AssertError(missing, ErrorCodes.InvalidRequest);
+        AssertError(pastTheEnd, ErrorCodes.InvalidRequest);
+        ResponseText(pastTheEnd).Should().Contain($"{ConsumerFile}, which has");
+    }
+
+    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    public async Task ResolvesExtensionBlockMembersByTheirClassAsync()
+    {
+        const string extensionsFile = "Application/GreetingExtensions.cs";
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var workspace = await RoslynTestWorkspace.CreateAsync(cancellationToken);
+        await StartRoslynAsync(workspace);
+        await workspace.WriteFileAsync(
+            extensionsFile,
+            "namespace Sample.Application;\n\npublic static class GreetingExtensions\n{\n"
+                + "    extension(string name)\n    {\n"
+                + "        public string Shout() => name.ToUpperInvariant();\n    }\n}\n"
+        );
+        await workspace.CallAsync(
+            new LspRequest { Action = LspAction.Diagnostics, File = extensionsFile }
+        );
+
+        var definition = await workspace.CallAsync(
+            new LspRequest { Action = LspAction.Definition, Symbol = "GreetingExtensions.Shout" }
+        );
+
+        Locations(definition).Should().Equal(extensionsFile);
     }
 
     [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]

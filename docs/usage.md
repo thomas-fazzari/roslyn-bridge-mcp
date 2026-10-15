@@ -75,13 +75,13 @@ For `callers`, call sites are in the caller's file. For `callees`, they are in t
 `source` returns each declaration's saved text, documentation comment included, after a `file:first-last kind name` header. A partial type returns every part.
 `members` returns the type, then the members it declares grouped by file, with names relative to the type.
 Both also accept a `file` and `line` alone, and then use the innermost declaration around that line.
-`impact` returns the references, callers and implementations of one symbol, plus the subtypes of a type, resolved once, as sections headed by `# action`.
+`impact` resolves a symbol once and returns, as sections headed by `# action`, the references, callers and implementations of a member, or the references and subtypes of a type.
 Each section has the shape of that action's own result, and a section that does not apply reads `# action: none`.
 When the sections do not all fit, the largest ones are named on a final `omitted to fit:` line. Request those alone.
 `hover` returns plain text. `symbols` uses the same symbol lines. For a file, they give the declaration end after a dash, as in `5:18-9:2`, and are indented under their container.
 A final `truncated:` line gives the total when `limit` omitted results.
 
-For diagnostics, omit `file` to scan C# files or use a glob such as `src/**/*.cs`.
+For diagnostics, omit `file` to scan C# files or use a glob such as `src/**/*.cs`. Only `.cs` and `.csx` files are analyzed.
 `severity` defaults to `warning`, which reports errors and warnings. Set it to `information` or `hint` to include analyzer suggestions.
 Each file with diagnostics is followed by one indented line per diagnostic, then a summary:
 

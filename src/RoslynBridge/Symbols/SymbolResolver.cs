@@ -398,15 +398,36 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
             StringComparison.Ordinal
         );
 
+    /// <summary>
+    /// Returns the workspace files that may declare the symbol. Their document symbols decide.
+    /// </summary>
     private async Task<IReadOnlyCollection<string>> CandidateFilesAsync(
         SymbolName requested,
         CancellationToken cancellationToken
     )
     {
         var segments = requested.Segments.Select(SymbolName.BaseName).ToArray();
+        var files = await FilesDeclaringAsync(
+            string.Join('.', segments),
+            segments[^1],
+            cancellationToken
+        );
+        // Roslyn matches a qualified query against containers, and an extension block member's
+        // container is the block, so retry with the member name alone
+        return files.Count == 0 && segments.Length > 1
+            ? await FilesDeclaringAsync(segments[^1], segments[^1], cancellationToken)
+            : files;
+    }
+
+    private async Task<SortedSet<string>> FilesDeclaringAsync(
+        string query,
+        string name,
+        CancellationToken cancellationToken
+    )
+    {
         var results = await session.RequestAsync(
             LspMethods.WorkspaceSymbol,
-            new JsonObject { ["query"] = string.Join('.', segments) },
+            new JsonObject { ["query"] = query },
             cancellationToken
         );
         var files = new SortedSet<string>(StringComparer.Ordinal);
@@ -416,7 +437,7 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
                 SymbolName.Parse(result?["name"]?.GetValue<string>() ?? string.Empty) is { } found
                 && string.Equals(
                     SymbolName.BaseName(found.Segments[^1]),
-                    segments[^1],
+                    name,
                     StringComparison.Ordinal
                 )
                 && result?["location"]?["uri"]?.GetValue<string>() is { } uri

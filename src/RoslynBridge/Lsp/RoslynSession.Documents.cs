@@ -43,6 +43,20 @@ internal sealed partial class RoslynSession
     public async Task<string> OpenDocumentAsync(string file, CancellationToken cancellationToken)
     {
         var path = paths.Resolve(file);
+        if (!IsCSharpFile(path))
+        {
+            throw new ToolErrorException(
+                ToolError.InvalidRequest($"Only C# files can be opened: {paths.RelativePath(path)}")
+            );
+        }
+
+        if (!File.Exists(path))
+        {
+            throw new ToolErrorException(
+                ToolError.InvalidRequest($"The file does not exist: {paths.RelativePath(path)}")
+            );
+        }
+
         var uri = new Uri(path).AbsoluteUri;
         if (_documents.TryGetValue(path, out var open))
         {
@@ -366,7 +380,7 @@ internal sealed partial class RoslynSession
         await CloseDocumentAsync(path, cancellationToken);
     }
 
-    private static bool IsCSharpFile(string path) =>
+    internal static bool IsCSharpFile(string path) =>
         path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)
         || path.EndsWith(".csx", StringComparison.OrdinalIgnoreCase);
 

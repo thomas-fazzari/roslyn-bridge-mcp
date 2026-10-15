@@ -287,7 +287,7 @@ internal static partial class ResultText
         {
             text.Append(
                 CultureInfo.InvariantCulture,
-                $"truncated: {source.OmittedLines} more lines. Use members, then source on one member.\n"
+                $"truncated: {source.OmittedLines} lines in declarations too large to show. Use members, then source on one member.\n"
             );
         }
     }

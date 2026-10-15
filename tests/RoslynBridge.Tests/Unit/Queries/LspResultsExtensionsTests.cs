@@ -264,7 +264,7 @@ public sealed class LspResultsExtensionsTests
                 ["name"] = "Greeter",
                 ["kind"] = 5,
                 ["location"] = Location("Application/Greeter.cs", 5, 21),
-                ["containerName"] = "Application",
+                ["containerName"] = "in Application",
             },
             new JsonObject { ["name"] = "Other", ["kind"] = 5 }
         );

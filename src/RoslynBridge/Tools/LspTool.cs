@@ -256,6 +256,7 @@ internal sealed partial class LspTool(
         if (
             request.Parameters?["textDocument"]?["uri"] is JsonValue uri
             && uri.TryGetValue<string>(out var documentUri)
+            && RoslynSession.IsCSharpFile(documentUri)
         )
         {
             await session.OpenDocumentAsync(documentUri, cancellationToken);

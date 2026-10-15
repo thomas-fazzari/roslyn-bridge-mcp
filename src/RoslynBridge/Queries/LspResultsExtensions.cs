@@ -153,7 +153,7 @@ internal static class LspResultsExtensions
         {
             // Roslyn often repeats the name as the detail
             Detail = Distinct(symbol["detail"], name),
-            Container = Distinct(symbol["containerName"], name),
+            Container = ContainerName(Distinct(symbol["containerName"], name)),
             File = uri is null ? null : LocationFile(uri, paths),
             Position = range?["start"] is { } start ? OneBased(start) : null,
         };
@@ -202,6 +202,10 @@ internal static class LspResultsExtensions
         && !string.Equals(text, name, StringComparison.Ordinal)
             ? text
             : null;
+
+    // Roslyn words some containers as "in Type", which the rendering already says
+    private static string? ContainerName(string? container) =>
+        container?.StartsWith("in ", StringComparison.Ordinal) is true ? container[3..] : container;
 
     private static SourcePosition OneBased(JsonNode position) =>
         new(position["line"]!.GetValue<int>() + 1, position["character"]!.GetValue<int>() + 1);

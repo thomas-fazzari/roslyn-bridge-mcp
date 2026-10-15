@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 using System.Diagnostics;
+using System.Globalization;
 using System.Text.Json.Nodes;
 using Microsoft.Extensions.FileSystemGlobbing;
 using RoslynBridge.Lsp;
@@ -67,7 +68,8 @@ internal sealed partial class LspQueries(
 
         if (request.Action is LspAction.References)
         {
-            parameters["context"] = new JsonObject { ["includeDeclaration"] = true };
+            // definition already gives the declaration, which would read as one more usage
+            parameters["context"] = new JsonObject { ["includeDeclaration"] = false };
         }
 
         var result = await session.RequestAsync(method, parameters, cancellationToken);
@@ -186,6 +188,21 @@ internal sealed partial class LspQueries(
         };
     }
 
+    private static int MatchRank(string name, string query)
+    {
+        if (string.Equals(name, query, StringComparison.Ordinal))
+        {
+            return 0;
+        }
+
+        if (string.Equals(name, query, StringComparison.OrdinalIgnoreCase))
+        {
+            return 1;
+        }
+
+        return name.StartsWith(query, StringComparison.OrdinalIgnoreCase) ? 2 : 3;
+    }
+
     private (string File, SourcePosition Position)? DeclarationKey(SymbolItem item) =>
         item is { File: { } file, Position: { } position } && paths.ResultFilePath(file) is { } path
             ? (path, position)
@@ -198,12 +215,21 @@ internal sealed partial class LspQueries(
     {
         if (request.File is null)
         {
+            var query = request.Query ?? string.Empty;
             var symbols = await session.RequestAsync(
                 LspMethods.WorkspaceSymbol,
-                new JsonObject { ["query"] = request.Query ?? string.Empty },
+                new JsonObject { ["query"] = query },
                 cancellationToken
             );
-            return symbols.ToSymbolList(paths, request.Limit);
+            // Roslyn returns fuzzy matches in file order, so exact and prefix matches come first
+            JsonNode ranked = new JsonArray([
+                .. (symbols as JsonArray ?? [])
+                    .OrderBy(symbol =>
+                        MatchRank(symbol?["name"]?.GetValue<string>() ?? string.Empty, query)
+                    )
+                    .Select(symbol => symbol?.DeepClone()),
+            ]);
+            return ranked.ToSymbolList(paths, request.Limit);
         }
 
         var uri = await session.OpenDocumentAsync(request.File, cancellationToken);
@@ -286,8 +312,10 @@ internal sealed partial class LspQueries(
             }
 
             var selected = diagnostics
-                .Take(remaining)
                 .Select(diagnostic => diagnostic!.ToDiagnostic())
+                .OrderBy(diagnostic => diagnostic.Start.Line)
+                .ThenBy(diagnostic => diagnostic.Start.Character)
+                .Take(remaining)
                 .ToList();
             remaining -= selected.Count;
             files.Add(new FileDiagnostics(paths.RelativePath(file.Path), selected));
@@ -389,6 +417,19 @@ internal sealed partial class LspQueries(
         var parameters = LspParameters.Document(
             await session.OpenDocumentAsync(file, cancellationToken)
         );
+        var lineCount = SourceLines.ReadLines(paths.Resolve(file)).Length;
+        if (position.Line > lineCount)
+        {
+            throw new ToolErrorException(
+                ToolError.InvalidRequest(
+                    string.Create(
+                        CultureInfo.InvariantCulture,
+                        $"Line {position.Line} is past the end of {paths.RelativePath(paths.Resolve(file))}, which has {lineCount} lines."
+                    )
+                )
+            );
+        }
+
         parameters["position"] = new JsonObject
         {
             ["line"] = position.Line - 1,
@@ -453,6 +494,7 @@ internal sealed partial class LspQueries(
         return matcher
             .Match(paths.Root, paths.EnumerateFiles().Select(static file => file.Path))
             .Files.Select(match => Path.GetFullPath(match.Path, paths.Root))
+            .Where(RoslynSession.IsCSharpFile)
             .Order(StringComparer.Ordinal);
     }
 
