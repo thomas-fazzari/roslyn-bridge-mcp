@@ -74,7 +74,7 @@ internal sealed partial class LspTool(
     {
         if (request.Action is LspAction.Status)
         {
-            return Response(request.Action, new JsonResult(Status()));
+            return Response(request.Action, Status());
         }
 
         await _gate.WaitAsync(cancellationToken);
@@ -214,7 +214,7 @@ internal sealed partial class LspTool(
         {
             changes.Clear();
             await session.ReloadAsync(cancellationToken);
-            return new JsonResult(new JsonObject { ["running"] = true });
+            return Status();
         }
 
         await session.EnsureStartedAsync(cancellationToken);
@@ -226,7 +226,7 @@ internal sealed partial class LspTool(
         return request.Action switch
         {
             LspAction.Capabilities => new JsonResult(session.Capabilities?.DeepClone()),
-            LspAction.Diagnostics => AsJson(
+            LspAction.Diagnostics => Widen(
                 await queries.DiagnosticsAsync(request, cancellationToken)
             ),
             LspAction.Symbols => await queries.SymbolsAsync(request, cancellationToken),
@@ -239,8 +239,8 @@ internal sealed partial class LspTool(
             or LspAction.Callees
             or LspAction.Supertypes
             or LspAction.Subtypes => await queries.NavigationAsync(request, cancellationToken),
-            LspAction.Source => AsJson(await queries.SourceAsync(request, cancellationToken)),
-            LspAction.Members => AsJson(await queries.MembersAsync(request, cancellationToken)),
+            LspAction.Source => Widen(await queries.SourceAsync(request, cancellationToken)),
+            LspAction.Members => Widen(await queries.MembersAsync(request, cancellationToken)),
             LspAction.Rename or LspAction.RenameFile or LspAction.CodeActions => AsJson(
                 await changes.ExecuteAsync(request, cancellationToken)
             ),
@@ -249,14 +249,8 @@ internal sealed partial class LspTool(
         };
     }
 
-    private JsonObject Status() =>
-        new()
-        {
-            ["running"] = session.IsRunning,
-            ["loading"] = session.IsLoading,
-            ["workspace"] = options.WorkspaceRoot,
-            ["server"] = options.ServerPath,
-        };
+    private SessionStatus Status() =>
+        new(session.IsRunning, session.IsLoading, options.WorkspaceRoot, options.ServerPath);
 
     private async Task<Result<JsonNode?>> RawRequestAsync(
         LspRequest request,
@@ -316,6 +310,9 @@ internal sealed partial class LspTool(
 
     private static Result<ToolResult> AsJson(Result<JsonNode?> result) =>
         result.Error is { } error ? error : new JsonResult(result.Value);
+
+    private static Result<ToolResult> Widen<T>(Result<T> result)
+        where T : ToolResult => result.Error is { } error ? error : result.Value;
 
     internal static CallToolResult Response(
         LspAction action,

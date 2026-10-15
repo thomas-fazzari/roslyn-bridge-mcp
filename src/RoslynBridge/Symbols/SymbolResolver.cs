@@ -440,16 +440,7 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
                 .OrderBy(declaration => declaration.Name, StringComparer.Ordinal)
                 .ThenBy(declaration => declaration.File, StringComparer.Ordinal)
                 .Take(MaximumCandidates)
-                .Select(declaration => new SymbolItem(
-                    declaration.Name,
-                    declaration.Kind is { } kind && LspSymbolKinds.TryGetName(kind, out var name)
-                        ? name
-                        : null
-                )
-                {
-                    File = paths.RelativePath(declaration.File),
-                    Position = new SourcePosition(declaration.Line, declaration.Character),
-                }),
+                .Select(declaration => declaration.ToItem(paths)),
         ];
 
     private readonly record struct DeclaredSymbol(

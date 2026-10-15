@@ -205,7 +205,7 @@ internal sealed partial class LspQueries(
         return documentSymbols.ToSymbolList(paths, request.Limit);
     }
 
-    public async Task<Result<JsonNode?>> DiagnosticsAsync(
+    public async Task<Result<DiagnosticReport>> DiagnosticsAsync(
         LspRequest request,
         CancellationToken cancellationToken
     )
@@ -219,88 +219,87 @@ internal sealed partial class LspQueries(
         }
 
         await session.SynchronizeNewFilesAsync(files, cancellationToken);
+        var scanned = new List<ScannedFile>(files.Length);
+        foreach (var batch in files.Chunk(RoslynSession.MaximumOpenDocuments))
+        {
+            scanned.AddRange(await ScanAsync(batch, cancellationToken));
+        }
 
-        var results = new JsonArray();
+        return Report(scanned, request);
+    }
+
+    private async Task<IEnumerable<ScannedFile>> ScanAsync(
+        string[] batch,
+        CancellationToken cancellationToken
+    )
+    {
+        // Each open discards diagnostics of earlier solution versions, so the batch opens before any pull
+        var uris = new List<string>(batch.Length);
+        foreach (var file in batch)
+        {
+            uris.Add(await session.OpenDocumentAsync(file, cancellationToken));
+        }
+
+        var miscellaneous = await WaitForProjectsAsync(uris, cancellationToken);
+        var reports = await Task.WhenAll(
+            uris.Select(uri => FileDiagnosticsAsync(uri, cancellationToken))
+        );
+        return batch.Select(
+            (file, index) =>
+                new ScannedFile(
+                    file,
+                    reports[index]["items"] as JsonArray ?? [],
+                    miscellaneous.Contains(uris[index])
+                )
+        );
+    }
+
+    private DiagnosticReport Report(List<ScannedFile> scanned, LspRequest request)
+    {
+        var files = new List<FileDiagnostics>();
         var remaining = request.Limit;
         var total = 0;
         var belowSeverity = 0;
         var filesWithDiagnostics = 0;
-        var miscellaneousFiles = new JsonArray();
-        foreach (var batch in files.Chunk(RoslynSession.MaximumOpenDocuments))
+        foreach (var file in scanned)
         {
-            // Each open discards diagnostics of earlier solution versions, so the batch opens before any pull
-            var uris = new List<string>(batch.Length);
-            foreach (var file in batch)
+            var diagnostics = file
+                .Reported.Where(diagnostic => diagnostic!.Severity() <= request.Severity)
+                .ToList();
+            belowSeverity += file.Reported.Count - diagnostics.Count;
+            total += diagnostics.Count;
+            if (diagnostics.Count == 0)
             {
-                uris.Add(await session.OpenDocumentAsync(file, cancellationToken));
+                continue;
             }
 
-            var miscellaneous = await WaitForProjectsAsync(uris, cancellationToken);
-            // Diagnostic pulls are read-only, so the batch runs concurrently
-            var reports = await Task.WhenAll(
-                uris.Select(uri => FileDiagnosticsAsync(uri, cancellationToken))
-            );
-
-            for (var index = 0; index < batch.Length; index++)
+            filesWithDiagnostics++;
+            if (remaining == 0)
             {
-                var file = batch[index];
-                if (miscellaneous.Contains(uris[index]))
-                {
-                    miscellaneousFiles.Add((JsonNode)paths.RelativePath(file));
-                }
-
-                var reported = reports[index]["items"] as JsonArray ?? [];
-                var diagnostics = reported
-                    .Where(diagnostic => IsReported(diagnostic!, request.Severity))
-                    .ToList();
-                belowSeverity += reported.Count - diagnostics.Count;
-                total += diagnostics.Count;
-                if (diagnostics.Count == 0)
-                {
-                    continue;
-                }
-
-                filesWithDiagnostics++;
-                if (remaining == 0)
-                {
-                    continue;
-                }
-
-                var selected = new JsonArray();
-
-                foreach (var diagnostic in diagnostics.Take(remaining))
-                {
-                    selected.Add((JsonNode)diagnostic!.ToCompactDiagnostic());
-                }
-
-                remaining -= selected.Count;
-                results.Add(
-                    (JsonNode)
-                        new JsonObject
-                        {
-                            ["file"] = paths.RelativePath(file),
-                            ["diagnostics"] = selected,
-                        }
-                );
+                continue;
             }
+
+            var selected = diagnostics
+                .Take(remaining)
+                .Select(diagnostic => diagnostic!.ToDiagnostic())
+                .ToList();
+            remaining -= selected.Count;
+            files.Add(new FileDiagnostics(paths.RelativePath(file.Path), selected));
         }
 
-        var result = new JsonObject
-        {
-            ["filesChecked"] = files.Length,
-            ["filesWithDiagnostics"] = filesWithDiagnostics,
-            ["diagnostics"] = results,
-            ["total"] = total,
-            ["belowSeverity"] = belowSeverity,
-            ["truncated"] = total > request.Limit,
-        };
-
-        if (miscellaneousFiles.Count > 0)
-        {
-            result["miscellaneousFiles"] = miscellaneousFiles;
-        }
-
-        return result;
+        return new DiagnosticReport(
+            scanned.Count,
+            files,
+            filesWithDiagnostics,
+            total,
+            belowSeverity,
+            total > request.Limit,
+            [
+                .. scanned
+                    .Where(file => file.Miscellaneous)
+                    .Select(file => paths.RelativePath(file.Path)),
+            ]
+        );
     }
 
     /// <summary>
@@ -343,9 +342,6 @@ internal sealed partial class LspQueries(
         return contexts.Count > 0
             && contexts.All(context => context?["_vs_is_miscellaneous"]?.GetValue<bool>() is true);
     }
-
-    private static bool IsReported(JsonNode diagnostic, DiagnosticSeverity minimum) =>
-        diagnostic.Severity() <= minimum;
 
     public async Task<JsonObject> FileDiagnosticsAsync(
         string uri,
@@ -444,4 +440,6 @@ internal sealed partial class LspQueries(
             .Files.Select(match => Path.GetFullPath(match.Path, paths.Root))
             .Order(StringComparer.Ordinal);
     }
+
+    private sealed record ScannedFile(string Path, JsonArray Reported, bool Miscellaneous);
 }

@@ -2,9 +2,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 using System.Text;
-using System.Text.Json.Nodes;
-using RoslynBridge.Lsp;
-using RoslynBridge.Output;
 using RoslynBridge.Requests;
 using RoslynBridge.Symbols;
 
@@ -12,14 +9,14 @@ namespace RoslynBridge.Queries;
 
 internal sealed partial class LspQueries
 {
-    // Leaves room for the part headers and the truncation line
-    private const int MaximumSourceCharacters = ResultText.MaximumResponseCharacters - 1_000;
+    // Keeps the text within a 32,000-character response, with room for headers
+    private const int MaximumSourceCharacters = 31_000;
 
     /// <summary>
     /// Returns the saved text of each declaration of a symbol, with its documentation comment.
-    /// Lines past the response budget are counted in omittedLines.
+    /// Lines past the response budget are only counted.
     /// </summary>
-    public async Task<Result<JsonNode?>> SourceAsync(
+    public async Task<Result<SourceParts>> SourceAsync(
         LspRequest request,
         CancellationToken cancellationToken
     )
@@ -30,7 +27,7 @@ internal sealed partial class LspQueries
             return error;
         }
 
-        var items = new JsonArray();
+        var parts = new List<SourcePart>();
         var remaining = MaximumSourceCharacters;
         var omitted = 0;
         foreach (var part in found.Value)
@@ -52,25 +49,16 @@ internal sealed partial class LspQueries
                 continue;
             }
 
-            var item = Declaration(part);
-            item["lines"] = new JsonArray(first, line - 1);
-            item["text"] = text.ToString();
-            items.Add((JsonNode)item);
+            parts.Add(new SourcePart(part.ToItem(paths), first, line - 1, text.ToString()));
         }
 
-        var result = new JsonObject { ["items"] = items };
-        if (omitted > 0)
-        {
-            result["omittedLines"] = omitted;
-        }
-
-        return result;
+        return new SourceParts(parts, omitted);
     }
 
     /// <summary>
     /// Returns the members declared in a type, across its partial declarations.
     /// </summary>
-    public async Task<Result<JsonNode?>> MembersAsync(
+    public async Task<Result<TypeMembers>> MembersAsync(
         LspRequest request,
         CancellationToken cancellationToken
     )
@@ -82,21 +70,16 @@ internal sealed partial class LspQueries
         }
 
         var members = await resolver.MembersAsync(found.Value, cancellationToken);
-        var result = Declaration(found.Value[0]);
-        result["items"] = new JsonArray([
-            .. members
-                .Take(request.Limit)
-                .Select(member =>
-                {
-                    var item = Declaration(member);
-                    item["symbol"] = member.Signature;
-                    item["position"] = new JsonArray(member.Line, member.Character);
-                    return (JsonNode)item;
-                }),
-        ]);
-        result["total"] = members.Count;
-        result["truncated"] = members.Count > request.Limit;
-        return result;
+        return new TypeMembers(
+            found.Value[0].ToItem(paths),
+            [
+                .. members
+                    .Take(request.Limit)
+                    .Select(member => member.ToItem(paths) with { Name = member.Signature }),
+            ],
+            members.Count,
+            members.Count > request.Limit
+        );
     }
 
     // A request names the symbol, or gives a line inside its declaration
@@ -127,21 +110,6 @@ internal sealed partial class LspQueries
         return declaration is null
             ? ToolError.InvalidRequest($"No declaration contains line {line}.")
             : new[] { declaration };
-    }
-
-    private JsonObject Declaration(SymbolDeclaration declaration)
-    {
-        var item = new JsonObject
-        {
-            ["symbol"] = declaration.Name,
-            ["file"] = paths.RelativePath(declaration.File),
-        };
-        if (declaration.Kind is { } kind && LspSymbolKinds.TryGetName(kind, out var name))
-        {
-            item["kind"] = name;
-        }
-
-        return item;
     }
 
     // Documentation comments are trivia, so the declaration range starts after them

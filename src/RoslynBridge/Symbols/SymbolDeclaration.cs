@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 using System.Diagnostics;
+using RoslynBridge.Lsp;
 
 namespace RoslynBridge.Symbols;
 
@@ -22,4 +23,15 @@ internal sealed record SymbolDeclaration(
     int Character,
     int FirstLine,
     int LastLine
-);
+)
+{
+    /// <summary>
+    /// Returns the symbol as results show it, with a workspace-relative file.
+    /// </summary>
+    public SymbolItem ToItem(WorkspacePaths paths) =>
+        new(Name, Kind is { } kind && LspSymbolKinds.TryGetName(kind, out var name) ? name : null)
+        {
+            File = paths.RelativePath(File),
+            Position = new SourcePosition(Line, Character),
+        };
+}

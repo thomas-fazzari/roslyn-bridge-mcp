@@ -423,7 +423,7 @@ public sealed partial class RoslynMcpTests
 
         var reload = await workspace.CallAsync(new LspRequest { Action = LspAction.Reload });
 
-        reload.Should().Be("running: true");
+        reload.Should().StartWith("running: true\nloading: false");
     }
 
     [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]

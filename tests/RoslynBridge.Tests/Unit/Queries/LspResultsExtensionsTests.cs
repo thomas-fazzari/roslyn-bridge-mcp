@@ -159,17 +159,18 @@ public sealed class LspResultsExtensionsTests
             ["tags"] = new JsonArray(1),
         };
 
-        var result = diagnostic.ToCompactDiagnostic();
+        var result = diagnostic.ToDiagnostic();
 
-        JsonNode
-            .DeepEquals(
-                result,
-                JsonNode.Parse(
-                    """{"line":4,"character":8,"severity":"error","code":"CS0246","message":"The type could not be found."}"""
-                )
-            )
+        result
             .Should()
-            .BeTrue(result.ToJsonString());
+            .Be(
+                new Diagnostic(
+                    new SourcePosition(4, 8),
+                    DiagnosticSeverity.Error,
+                    "CS0246",
+                    "The type could not be found."
+                )
+            );
     }
 
     [Fact]

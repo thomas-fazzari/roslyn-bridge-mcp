@@ -121,23 +121,19 @@ internal static class LspResultsExtensions
                 ? (DiagnosticSeverity)severity
                 : DiagnosticSeverity.Error;
 
-        public JsonObject ToCompactDiagnostic()
+        public Diagnostic ToDiagnostic()
         {
             var start =
                 diagnostic["range"]?["start"]
                 ?? throw new ToolErrorException(
                     ToolError.InvalidLspData("Roslyn returned a diagnostic without a range.")
                 );
-            var compact = new JsonObject
-            {
-                ["line"] = start["line"]!.GetValue<int>() + 1,
-                ["character"] = start["character"]!.GetValue<int>() + 1,
-            };
-            compact["severity"] = diagnostic.Severity().ToString().ToLowerInvariant();
-
-            compact["code"] = diagnostic["code"]?.DeepClone();
-            compact["message"] = diagnostic["message"]?.DeepClone();
-            return compact;
+            return new Diagnostic(
+                OneBased(start),
+                diagnostic.Severity(),
+                diagnostic["code"] is JsonValue code ? code.ToString() : null,
+                diagnostic["message"]?.GetValue<string>() ?? string.Empty
+            );
         }
     }
 

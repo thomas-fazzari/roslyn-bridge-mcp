@@ -6,6 +6,7 @@ using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using RoslynBridge.Lsp;
 using RoslynBridge.Queries;
 using RoslynBridge.Requests;
 
@@ -41,6 +42,18 @@ internal static partial class ResultText
             case SymbolList symbols:
                 AppendSymbols(text, symbols);
                 return Finish(text);
+            case DiagnosticReport report:
+                AppendDiagnostics(text, report);
+                return Finish(text);
+            case SourceParts source:
+                AppendSource(text, source);
+                return Finish(text);
+            case TypeMembers members:
+                AppendMembers(text, members);
+                return Finish(text);
+            case SessionStatus status:
+                AppendStatus(text, status);
+                return Finish(text);
             case JsonResult { Value: JsonObject receipt } when application:
                 AppendReceipt(text, receipt, budget);
                 return Finish(text);
@@ -53,18 +66,6 @@ internal static partial class ResultText
         var json = ((JsonResult)result).Value;
         switch (action)
         {
-            case LspAction.Status or LspAction.Reload:
-                AppendFields(text, (JsonObject)json!);
-                break;
-            case LspAction.Diagnostics:
-                AppendDiagnostics(text, (JsonObject)json!);
-                break;
-            case LspAction.Source:
-                AppendSource(text, (JsonObject)json!);
-                break;
-            case LspAction.Members:
-                AppendMembers(text, (JsonObject)json!);
-                break;
             case LspAction.Rename or LspAction.RenameFile or LspAction.CodeActions:
                 AppendChange(text, (JsonObject)json!, budget);
                 break;
@@ -109,69 +110,63 @@ internal static partial class ResultText
         return Encoding.UTF8.GetString(buffer.GetBuffer(), 0, (int)buffer.Length);
     }
 
-    private static void AppendFields(StringBuilder text, JsonObject result)
+    private static void AppendStatus(StringBuilder text, SessionStatus status)
     {
-        foreach (var (name, value) in result)
+        text.Append("running: ")
+            .Append(status.Running ? "true" : "false")
+            .Append("\nloading: ")
+            .Append(status.Loading ? "true" : "false")
+            .Append("\nworkspace: ")
+            .Append(status.Workspace)
+            .Append('\n');
+        if (status.Server is { } server)
         {
-            if (value is not null)
-            {
-                text.Append(name).Append(": ").Append(Scalar(value)).Append('\n');
-            }
+            text.Append("server: ").Append(server).Append('\n');
         }
     }
 
-    private static void AppendDiagnostics(StringBuilder text, JsonObject result)
+    private static void AppendDiagnostics(StringBuilder text, DiagnosticReport report)
     {
-        foreach (var file in Items(result, "diagnostics"))
+        foreach (var file in report.Files)
         {
-            text.Append(file["file"]!.GetValue<string>()).Append('\n');
-            foreach (var diagnostic in file["diagnostics"]!.AsArray().OfType<JsonObject>())
+            text.Append(file.File).Append('\n');
+            foreach (var diagnostic in file.Diagnostics)
             {
                 text.Append(Indent)
-                    .Append(Position(diagnostic["line"]!, diagnostic["character"]!))
+                    .Append(Position(diagnostic.Start))
                     .Append(' ')
-                    .Append(diagnostic["severity"]!.GetValue<string>());
-                if (diagnostic["code"] is { } code)
+                    .Append(diagnostic.Severity.ToString().ToLowerInvariant());
+                if (diagnostic.Code is { } code)
                 {
-                    text.Append(' ').Append(Scalar(code));
+                    text.Append(' ').Append(code);
                 }
 
-                text.Append(' ')
-                    .Append(OneLine(diagnostic["message"]?.GetValue<string>() ?? string.Empty))
-                    .Append('\n');
+                text.Append(' ').Append(OneLine(diagnostic.Message)).Append('\n');
             }
         }
 
-        var total = Int(result, "total");
-        var summary = new StringBuilder(
-            Count(Int(result, "filesChecked"), "file", "files") + " checked, "
-        );
-        summary.Append(
-            total == 0
-                ? "no diagnostics"
-                : $"{Count(total, "diagnostic", "diagnostics")} in {Count(Int(result, "filesWithDiagnostics"), "file", "files")}"
-        );
-        if (Int(result, "belowSeverity") is > 0 and var below)
+        text.Append(Count(report.FilesChecked, "file", "files"))
+            .Append(" checked, ")
+            .Append(
+                report.Total == 0
+                    ? "no diagnostics"
+                    : $"{Count(report.Total, "diagnostic", "diagnostics")} in {Count(report.FilesWithDiagnostics, "file", "files")}"
+            );
+        if (report.BelowSeverity > 0)
         {
-            summary.Append(CultureInfo.InvariantCulture, $", {below} below the severity");
+            text.Append(
+                CultureInfo.InvariantCulture,
+                $", {report.BelowSeverity} below the severity"
+            );
         }
 
-        text.Append(summary).Append('\n');
-        AppendTruncation(
-            text,
-            Int(result, "total"),
-            result["truncated"]?.GetValue<bool>() is true,
-            "diagnostics"
-        );
-        if (result["miscellaneousFiles"] is JsonArray { Count: > 0 } miscellaneous)
+        text.Append('\n');
+        AppendTruncation(text, report.Total, report.Truncated, "diagnostics");
+        if (report.MiscellaneousFiles.Count > 0)
         {
-            text.Append("incomplete: not in a project, no semantic diagnostics:");
-            foreach (var file in miscellaneous)
-            {
-                text.Append(' ').Append(file!.GetValue<string>());
-            }
-
-            text.Append('\n');
+            text.Append("incomplete: not in a project, no semantic diagnostics: ")
+                .AppendJoin(' ', report.MiscellaneousFiles)
+                .Append('\n');
         }
     }
 
@@ -251,59 +246,51 @@ internal static partial class ResultText
     }
 
     // A header per declaration, file:first-last kind name, then its saved text
-    private static void AppendSource(StringBuilder text, JsonObject result)
+    private static void AppendSource(StringBuilder text, SourceParts source)
     {
-        foreach (var part in Items(result))
+        foreach (var part in source.Parts)
         {
-            var lines = part["lines"]!;
-            text.Append(part["file"]!.GetValue<string>())
-                .Append(
-                    CultureInfo.InvariantCulture,
-                    $":{lines[0]!.GetValue<int>()}-{lines[1]!.GetValue<int>()} "
-                )
-                .Append(part["kind"]?.GetValue<string>())
+            text.Append(part.Symbol.File)
+                .Append(CultureInfo.InvariantCulture, $":{part.FirstLine}-{part.LastLine} ")
+                .Append(part.Symbol.Kind)
                 .Append(' ')
-                .Append(part["symbol"]!.GetValue<string>())
+                .Append(part.Symbol.Name)
                 .Append('\n')
-                .Append(part["text"]!.GetValue<string>());
+                .Append(part.Text);
         }
 
-        if (Int(result, "omittedLines") is > 0 and var omitted)
+        if (source.OmittedLines > 0)
         {
             text.Append(
                 CultureInfo.InvariantCulture,
-                $"truncated: {omitted} more lines. Use members, then source on one member.\n"
+                $"truncated: {source.OmittedLines} more lines. Use members, then source on one member.\n"
             );
         }
     }
 
     // The type once, then its members grouped by file, with names relative to the type
-    private static void AppendMembers(StringBuilder text, JsonObject result)
+    private static void AppendMembers(StringBuilder text, TypeMembers members)
     {
-        text.Append(result["kind"]?.GetValue<string>())
-            .Append(' ')
-            .Append(result["symbol"]!.GetValue<string>())
-            .Append('\n');
+        text.Append(members.Type.Kind).Append(' ').Append(members.Type.Name).Append('\n');
         string? file = null;
-        foreach (var member in Items(result))
+        foreach (var member in members.Members)
         {
-            var memberFile = member["file"]!.GetValue<string>();
-            if (!string.Equals(memberFile, file, StringComparison.Ordinal))
+            if (!string.Equals(member.File, file, StringComparison.Ordinal))
             {
-                file = memberFile;
+                file = member.File;
                 text.Append(file).Append('\n');
             }
 
             text.Append(Indent)
-                .Append(Position(member["position"]!))
+                .Append(Position(member.Position!.Value))
                 .Append(' ')
-                .Append(member["kind"]?.GetValue<string>())
+                .Append(member.Kind)
                 .Append(' ')
-                .Append(member["symbol"]!.GetValue<string>())
+                .Append(member.Name)
                 .Append('\n');
         }
 
-        AppendEmptyOrTruncation(text, result, "members");
+        AppendEmptyOrTruncation(text, members.Total, members.Truncated, "members");
     }
 
     private static void AppendSourceLines(
@@ -410,8 +397,6 @@ internal static partial class ResultText
     private static IEnumerable<JsonObject> Items(JsonObject result, string name = "items") =>
         (result[name] as JsonArray ?? []).OfType<JsonObject>();
 
-    private static string Position(JsonNode position) => Position(position[0]!, position[1]!);
-
     private static string Position(SourcePosition position) =>
         string.Create(CultureInfo.InvariantCulture, $"{position.Line}:{position.Character}");
 
@@ -425,9 +410,6 @@ internal static partial class ResultText
 
     private static string Count(int count, string singular, string plural) =>
         string.Create(CultureInfo.InvariantCulture, $"{count} {(count == 1 ? singular : plural)}");
-
-    private static string Scalar(JsonNode value) =>
-        value is JsonValue scalar && scalar.TryGetValue<string>(out var text) ? text : Json(value);
 
     private static string OneLine(string text) => text.ReplaceLineEndings(" ").Trim();
 
