@@ -67,7 +67,9 @@ src/Consumer.cs:7:26 method MyApp.Consumer.Run(IGreeter)
 
 Set `context` to show each position on its own line with its trimmed source line.
 For `callers`, call sites are in the caller's file. For `callees`, they are in the requested file.
-`hover` returns its Markdown text. `symbols` uses the same symbol lines, indented under their container for a file.
+`callees` lists calls only, and counts the property, field and constant accesses it leaves out.
+`references` leaves out source-generated code and counts the omitted occurrences.
+`hover` returns plain text. `symbols` uses the same symbol lines. For a file, they give the declaration end after a dash, as in `5:18-9:2`, and are indented under their container.
 A final `truncated:` line gives the total when `limit` omitted results.
 
 For diagnostics, omit `file` to scan C# files or use a glob such as `src/**/*.cs`.
@@ -96,6 +98,8 @@ The `edit` tool returns an edit preview whose first line holds its proposal ID. 
 For code actions, request the listing, then send its proposal ID and zero-based `actionIndex` to resolve a preview.
 Apply the preview with its new proposal ID. Set `endLine` and `endCharacter` when an action needs a selection.
 Some Roslyn commands reveal their edits only when executed.
+
+`apply: true` also works without a preview: on a fresh `rename`, on a code action listing with `actionIndex`, or on a fresh `code_actions` request with `actionIndex`.
 
 A preview lists each file operation, followed by its changed excerpts with their one-based start:
 

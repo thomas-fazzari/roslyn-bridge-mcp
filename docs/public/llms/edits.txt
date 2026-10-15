@@ -16,6 +16,9 @@ code_actions also accepts symbol. A selection still needs file and positions.
 2. Read the changed files and edits. Apply the returned proposalId:
 edit {"action":"rename","proposalId":"ID_FROM_PREVIEW","apply":true}
 
+When the user already authorized the change, apply in one call without a preview:
+edit {"action":"rename","symbol":"Calculator.Add","newName":"Compute","apply":true}
+
 RENAME A FILE
 -------------
 newName is a workspace-relative destination, not a symbol name:
@@ -36,10 +39,12 @@ Available actions depend on the installed Roslyn version and loaded project.
 listing's proposalId and the action's zero-based index:
 edit {"action":"code_actions","proposalId":"ID_FROM_LISTING","actionIndex":0}
 
-3. Inspect the preview. Apply its NEW proposalId:
+3. Inspect the preview. Apply its new proposalId:
 edit {"action":"code_actions","proposalId":"ID_FROM_PREVIEW","apply":true}
 
-Do not reuse the listing ID in place of the resolved preview ID.
+The listing's proposalId with actionIndex and apply true also applies the action,
+skipping the preview. So does a fresh request with a position, actionIndex and
+apply true, when the user already authorized the change.
 Some command-based actions reveal their edits only during execution.
 
 A listing starts with "proposal ID", then one line per action: its zero-based

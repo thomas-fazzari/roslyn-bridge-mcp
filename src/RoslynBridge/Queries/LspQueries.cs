@@ -66,7 +66,11 @@ internal sealed class LspQueries(
             return result.ToCompactHover();
         }
 
-        var locations = result.ToCompactLocations(paths, request.Limit);
+        var locations = result.ToCompactLocations(
+            paths,
+            request.Limit,
+            skipGenerated: request.Action is LspAction.References
+        );
         if (request.Context)
         {
             SourceLines.Add(locations, paths, callSiteFile: null);
@@ -98,6 +102,7 @@ internal sealed class LspQueries(
             _ => (LspMethods.TextDocumentPrepareTypeHierarchy, LspMethods.TypeHierarchySubtypes),
         };
         var related = new JsonArray();
+        var accesses = 0;
         var items = await session.RequestAsync(prepare, position, cancellationToken) as JsonArray;
 
         foreach (var item in items ?? [])
@@ -109,11 +114,26 @@ internal sealed class LspQueries(
             );
             foreach (var entry in expanded as JsonArray ?? [])
             {
+                // Outgoing calls also list property, field and constant accesses, which hide the calls
+                if (
+                    request.Action is LspAction.Callees
+                    && !LspSymbolKinds.IsInvocable(entry!["to"]?["kind"]?.GetValue<int>())
+                )
+                {
+                    accesses++;
+                    continue;
+                }
+
                 related.Add(entry!.DeepClone());
             }
         }
 
         var result = related.ToCompactHierarchy(paths, request.Limit);
+        if (accesses > 0)
+        {
+            result["accesses"] = accesses;
+        }
+
         await NameSymbolsAsync(result, cancellationToken);
         if (request.Context)
         {

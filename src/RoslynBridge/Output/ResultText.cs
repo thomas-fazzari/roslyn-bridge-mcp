@@ -210,6 +210,14 @@ internal static partial class ResultText
         }
 
         AppendEmptyOrTruncation(text, result, "locations");
+
+        if (Int(result, "generated") is > 0 and var generated)
+        {
+            text.Append(
+                CultureInfo.InvariantCulture,
+                $"generated code: {generated} more omitted. Use lsp request to list them.\n"
+            );
+        }
     }
 
     private static void AppendRelated(StringBuilder text, JsonObject result)
@@ -239,6 +247,14 @@ internal static partial class ResultText
         }
 
         AppendEmptyOrTruncation(text, result, "symbols");
+
+        if (Int(result, "accesses") is > 0 and var accesses)
+        {
+            text.Append(
+                CultureInfo.InvariantCulture,
+                $"{accesses} property, field or constant accesses omitted\n"
+            );
+        }
     }
 
     private static void AppendSourceLines(StringBuilder text, JsonArray positions, JsonObject lines)
@@ -286,6 +302,11 @@ internal static partial class ResultText
     private static string? Location(JsonObject symbol)
     {
         var position = symbol["position"] is JsonArray value ? Position(value) : null;
+        if (position is not null && symbol["end"] is JsonArray end)
+        {
+            position += "-" + Position(end);
+        }
+
         return (symbol["file"]?.GetValue<string>(), position) switch
         {
             ({ } file, { } start) => $"{file}:{start}",

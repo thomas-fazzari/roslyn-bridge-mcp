@@ -11,6 +11,8 @@ namespace RoslynBridge.Queries;
 /// </summary>
 internal static class LspResultsExtensions
 {
+    private const string SourceGeneratedScheme = "roslyn-source-generated:";
+
     extension(JsonNode? result)
     {
         /// <summary>
@@ -21,20 +23,19 @@ internal static class LspResultsExtensions
 
         /// <summary>
         /// Converts document or workspace symbols to name, kind and one-based position entries.
-        /// Document symbols keep their nesting in children.
+        /// Document symbols keep their nesting in children and their declaration end.
+        /// The limit applies to nested symbols too, in document order.
         /// </summary>
         public JsonObject ToCompactSymbols(WorkspacePaths paths, int limit)
         {
             var symbols = result as JsonArray ?? [];
+            var remaining = limit;
+            var total = CountSymbols(symbols);
             return new JsonObject
             {
-                ["items"] = new JsonArray([
-                    .. symbols
-                        .Take(limit)
-                        .Select(symbol => (JsonNode)CompactSymbol(symbol!, paths)),
-                ]),
-                ["total"] = symbols.Count,
-                ["truncated"] = symbols.Count > limit,
+                ["items"] = LimitSymbols(symbols, paths, ref remaining),
+                ["total"] = total,
+                ["truncated"] = total > limit,
             };
         }
 
@@ -67,7 +68,11 @@ internal static class LspResultsExtensions
             };
         }
 
-        public JsonObject ToCompactLocations(WorkspacePaths paths, int limit)
+        /// <summary>
+        /// Groups locations by file, in path and position order, without duplicates.
+        /// With <paramref name="skipGenerated"/>, source-generated locations are counted in generated instead.
+        /// </summary>
+        public JsonObject ToCompactLocations(WorkspacePaths paths, int limit, bool skipGenerated)
         {
             var locations = result switch
             {
@@ -78,9 +83,9 @@ internal static class LspResultsExtensions
                     ToolError.InvalidLspData("Roslyn returned an invalid location result.")
                 ),
             };
-            var items = new JsonArray();
-            var groups = new Dictionary<string, JsonArray>(StringComparer.Ordinal);
-            foreach (var location in locations.Take(limit))
+            var found = new HashSet<(string File, int Line, int Character)>();
+            var generated = 0;
+            foreach (var location in locations)
             {
                 var uri =
                     (location?["uri"] ?? location?["targetUri"])?.GetValue<string>()
@@ -92,25 +97,59 @@ internal static class LspResultsExtensions
                     ?? throw new ToolErrorException(
                         ToolError.InvalidLspData("Roslyn returned a location without a position.")
                     );
-                var file = LocationFile(uri, paths);
-                if (!groups.TryGetValue(file, out var positions))
+                if (
+                    skipGenerated && uri.StartsWith(SourceGeneratedScheme, StringComparison.Ordinal)
+                )
                 {
-                    positions = [];
-                    groups.Add(file, positions);
-                    items.Add(
-                        (JsonNode)new JsonObject { ["file"] = file, ["positions"] = positions }
-                    );
+                    generated++;
+                    continue;
                 }
 
-                positions.Add((JsonNode)OneBased(start));
+                found.Add(
+                    (
+                        LocationFile(uri, paths),
+                        start["line"]!.GetValue<int>() + 1,
+                        start["character"]!.GetValue<int>() + 1
+                    )
+                );
             }
 
-            return new JsonObject
+            var items = new JsonArray();
+            foreach (
+                var group in found
+                    .OrderBy(location => location.File, StringComparer.Ordinal)
+                    .ThenBy(location => location.Line)
+                    .ThenBy(location => location.Character)
+                    .Take(limit)
+                    .GroupBy(location => location.File, StringComparer.Ordinal)
+            )
+            {
+                items.Add(
+                    (JsonNode)
+                        new JsonObject
+                        {
+                            ["file"] = group.Key,
+                            ["positions"] = new JsonArray([
+                                .. group.Select(location =>
+                                    (JsonNode)new JsonArray(location.Line, location.Character)
+                                ),
+                            ]),
+                        }
+                );
+            }
+
+            var compact = new JsonObject
             {
                 ["items"] = items,
-                ["total"] = locations.Count,
-                ["truncated"] = locations.Count > limit,
+                ["total"] = found.Count,
+                ["truncated"] = found.Count > limit,
             };
+            if (generated > 0)
+            {
+                compact["generated"] = generated;
+            }
+
+            return compact;
         }
     }
 
@@ -161,16 +200,50 @@ internal static class LspResultsExtensions
         AddText(compact, "detail", symbol["detail"], name);
         AddText(compact, "container", symbol["containerName"], name);
         AddLocation(compact, symbol, paths);
-
-        if (symbol["children"] is JsonArray { Count: > 0 } children)
-        {
-            compact["children"] = new JsonArray([
-                .. children.Select(child => (JsonNode)CompactSymbol(child!, paths)),
-            ]);
-        }
-
         return compact;
     }
+
+    private static JsonArray LimitSymbols(
+        JsonArray symbols,
+        WorkspacePaths paths,
+        ref int remaining
+    )
+    {
+        var items = new JsonArray();
+        foreach (var symbol in symbols.OfType<JsonObject>())
+        {
+            if (remaining == 0)
+            {
+                break;
+            }
+
+            remaining--;
+            var compact = CompactSymbol(symbol, paths);
+            // A document symbol range covers the whole declaration, while selectionRange is its name
+            if (symbol["selectionRange"] is not null && symbol["range"]?["end"] is { } end)
+            {
+                compact["end"] = OneBased(end);
+            }
+
+            if (symbol["children"] is JsonArray { Count: > 0 } children)
+            {
+                var limited = LimitSymbols(children, paths, ref remaining);
+                if (limited.Count > 0)
+                {
+                    compact["children"] = limited;
+                }
+            }
+
+            items.Add((JsonNode)compact);
+        }
+
+        return items;
+    }
+
+    private static int CountSymbols(JsonArray symbols) =>
+        symbols.Sum(symbol =>
+            1 + (symbol?["children"] is JsonArray children ? CountSymbols(children) : 0)
+        );
 
     private static void AddText(JsonObject compact, string key, JsonNode? value, string? name)
     {

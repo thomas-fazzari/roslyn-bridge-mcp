@@ -14,15 +14,20 @@ public sealed class LspResultsExtensionsTests
     );
 
     [Fact]
-    public void GroupsLocationsAndConvertsPositionsToOneBasedCoordinates()
+    public void GroupsSortsAndDeduplicatesLocationsWithOneBasedCoordinates()
     {
         var locations = new JsonArray(
-            Location("First.cs", 0, 4),
             Location("Second.cs", 10, 2),
+            Location("First.cs", 20, 8),
+            Location("First.cs", 0, 4),
             Location("First.cs", 20, 8)
         );
 
-        var result = locations.ToCompactLocations(_paths, LspRequest.DefaultResultLimit);
+        var result = locations.ToCompactLocations(
+            _paths,
+            LspRequest.DefaultResultLimit,
+            skipGenerated: false
+        );
 
         result["total"]!.GetValue<int>().Should().Be(3);
         result["truncated"]!.GetValue<bool>().Should().BeFalse();
@@ -35,7 +40,7 @@ public sealed class LspResultsExtensionsTests
             .BeTrue();
         items[1]!["file"]!.GetValue<string>().Should().Be("Second.cs");
         JsonNode.DeepEquals(items[1]!["positions"], JsonNode.Parse("[[11,3]]")).Should().BeTrue();
-        locations.Should().HaveCount(3);
+        locations.Should().HaveCount(4);
         locations[0]!["range"].Should().NotBeNull();
     }
 
@@ -48,7 +53,7 @@ public sealed class LspResultsExtensionsTests
             Location("Second.cs", 2, 0)
         );
 
-        var result = locations.ToCompactLocations(_paths, 2);
+        var result = locations.ToCompactLocations(_paths, 2, skipGenerated: false);
 
         result["total"]!.GetValue<int>().Should().Be(3);
         result["truncated"]!.GetValue<bool>().Should().BeTrue();
@@ -73,7 +78,11 @@ public sealed class LspResultsExtensionsTests
             };
         }
 
-        var result = location.ToCompactLocations(_paths, LspRequest.DefaultResultLimit);
+        var result = location.ToCompactLocations(
+            _paths,
+            LspRequest.DefaultResultLimit,
+            skipGenerated: false
+        );
 
         result["total"]!.GetValue<int>().Should().Be(1);
         result["truncated"]!.GetValue<bool>().Should().BeFalse();
@@ -90,7 +99,11 @@ public sealed class LspResultsExtensionsTests
     {
         JsonNode? locations = array ? new JsonArray() : null;
 
-        var result = locations.ToCompactLocations(_paths, LspRequest.DefaultResultLimit);
+        var result = locations.ToCompactLocations(
+            _paths,
+            LspRequest.DefaultResultLimit,
+            skipGenerated: false
+        );
 
         result["items"]!.AsArray().Should().BeEmpty();
         result["total"]!.GetValue<int>().Should().Be(0);
@@ -104,9 +117,36 @@ public sealed class LspResultsExtensionsTests
     {
         var location = new JsonObject { ["uri"] = value, ["range"] = Range(0, 0) };
 
-        var result = location.ToCompactLocations(_paths, LspRequest.DefaultResultLimit);
+        var result = location.ToCompactLocations(
+            _paths,
+            LspRequest.DefaultResultLimit,
+            skipGenerated: false
+        );
 
         result["items"]![0]!["file"]!.GetValue<string>().Should().Be(value);
+    }
+
+    [Fact]
+    public void SkipsSourceGeneratedLocationsAndCountsThem()
+    {
+        var locations = new JsonArray(
+            Location("Source.cs", 0, 0),
+            new JsonObject
+            {
+                ["uri"] = "roslyn-source-generated://assembly/Generated.cs",
+                ["range"] = Range(0, 0),
+            }
+        );
+
+        var result = locations.ToCompactLocations(
+            _paths,
+            LspRequest.DefaultResultLimit,
+            skipGenerated: true
+        );
+
+        result["total"]!.GetValue<int>().Should().Be(1);
+        result["generated"]!.GetValue<int>().Should().Be(1);
+        result["items"]!.AsArray().Should().ContainSingle();
     }
 
     [Fact]
@@ -165,11 +205,51 @@ public sealed class LspResultsExtensionsTests
             .DeepEquals(
                 result["items"],
                 JsonNode.Parse(
-                    """[{"name":"IGreeter","kind":"interface","position":[3,18],"children":[{"name":"Greet(string) : string","kind":"method","position":[5,12]}]}]"""
+                    """[{"name":"IGreeter","kind":"interface","position":[3,18],"end":[3,2],"children":[{"name":"Greet(string) : string","kind":"method","position":[5,12],"end":[5,6]}]}]"""
                 )
             )
             .Should()
             .BeTrue(result.ToJsonString());
+    }
+
+    [Fact]
+    public void LimitsNestedDocumentSymbolsAndCountsThemAll()
+    {
+        var symbols = new JsonArray(
+            new JsonObject
+            {
+                ["name"] = "Sample",
+                ["kind"] = 3,
+                ["range"] = Range(0, 0),
+                ["selectionRange"] = Range(0, 10),
+                ["children"] = new JsonArray(
+                    new JsonObject
+                    {
+                        ["name"] = "First",
+                        ["kind"] = 5,
+                        ["range"] = Range(2, 0),
+                        ["selectionRange"] = Range(2, 13),
+                    },
+                    new JsonObject
+                    {
+                        ["name"] = "Second",
+                        ["kind"] = 5,
+                        ["range"] = Range(4, 0),
+                        ["selectionRange"] = Range(4, 13),
+                    }
+                ),
+            }
+        );
+
+        var result = symbols.ToCompactSymbols(_paths, 2);
+
+        result["total"]!.GetValue<int>().Should().Be(3);
+        result["truncated"]!.GetValue<bool>().Should().BeTrue();
+        result["items"]![0]!["children"]!
+            .AsArray()
+            .Select(child => child!["name"]!.GetValue<string>())
+            .Should()
+            .Equal("First");
     }
 
     [Fact]

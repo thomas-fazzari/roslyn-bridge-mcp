@@ -50,6 +50,8 @@ internal sealed class RoslynProcess(Process process) : IRoslynServer
         };
         startInfo.ArgumentList.Add("--stdio");
         startInfo.ArgumentList.Add("--autoLoadProjects");
+        startInfo.ArgumentList.Add("--logLevel");
+        startInfo.ArgumentList.Add("Warning");
 
         RoslynLocator.ApplyDotnetRoot(
             startInfo.Environment,

@@ -31,7 +31,7 @@ internal static class ClientCapabilities
               "textDocument": {
                 "diagnostic": { "relatedDocumentSupport": false },
                 "publishDiagnostics": { "relatedInformation": true, "versionSupport": true },
-                "hover": { "contentFormat": ["markdown", "plaintext"] },
+                "hover": { "contentFormat": ["plaintext"] },
                 "definition": { "linkSupport": true },
                 "implementation": { "linkSupport": true },
                 "typeDefinition": { "linkSupport": true },

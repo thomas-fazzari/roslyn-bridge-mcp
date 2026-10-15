@@ -55,6 +55,8 @@ Location links use the target selection start. limit caps occurrences, not
 files. limit defaults to 50 and accepts 1 through 250. A final line starting with
 "truncated:" gives the total count. Inspect it before claiming a complete
 reference or implementation list. No match returns "no locations".
+References leave out source-generated code and end with a line counting the
+omitted occurrences. Use the lsp tool with action=request to list them.
 
 callers, callees, supertypes and subtypes return one line per symbol:
 src/Consumer.cs:7:26 method MyApp.Consumer.Run(IGreeter)
@@ -62,7 +64,8 @@ src/Consumer.cs:7:26 method MyApp.Consumer.Run(IGreeter)
 The line gives the declaration position, the kind and then the symbol name.
 Send everything after the kind back unchanged as the symbol argument. A result
 outside the workspace keeps Roslyn's name. The calls line is present only for
-callers and callees.
+callers and callees. callees lists calls only. A final line counts the
+property, field and constant accesses it leaves out.
 
 CONTEXT
 -------
@@ -75,8 +78,9 @@ src/Foo.cs
 For callers and callees, the lines are the call sites. Callee call sites are in
 the requested file. context uses more tokens, so request it only when needed.
 
-Symbols use the same line shape. Document symbols omit the file and indent
-members under their container. Workspace symbols end with "in CONTAINER".
-Hover returns its Markdown text.
+Symbols use the same line shape. Document symbols omit the file, give the
+declaration end after a dash, as in 5:18-9:2, and indent members under their
+container. limit counts nested members too. Workspace symbols end with "in CONTAINER".
+Hover returns plain text.
 Use the lsp tool with action=request for raw LSP locations, full ranges and
 location link metadata. Raw results and capabilities are JSON.

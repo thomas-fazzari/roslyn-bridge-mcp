@@ -32,6 +32,9 @@ public sealed partial class RoslynMcpTests
 {
     private const int TestTimeoutMilliseconds = 300_000;
     private const int RegexTimeoutMilliseconds = 1_000;
+    private const string ApplyFromPreview = "preview";
+    private const string ApplyFromListing = "listing";
+    private const string ApplyWithoutProposal = "direct";
     private const string ContractFile = "Contracts/IGreeter.cs";
     private const string ImplementationFile = "Application/Greeter.cs";
     private const string ConsumerFile = "Application/Consumer.cs";
@@ -112,7 +115,7 @@ public sealed partial class RoslynMcpTests
         var hover = await workspace.CallAsync(
             await workspace.AtAsync(LspAction.Hover, ConsumerFile, "Greet(")
         );
-        hover.Should().Contain("Greet");
+        hover.Should().Contain("Greet").And.NotContain("```");
 
         var callers = Lines(
             await workspace.CallAsync(
@@ -534,10 +537,34 @@ public sealed partial class RoslynMcpTests
         contract.Should().NotContain("Welcome(");
     }
 
+    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    public async Task AppliesARenameWithoutAPreviewAsync()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var workspace = await RoslynTestWorkspace.CreateAsync(cancellationToken);
+
+        var applied = await workspace.CallAsync(
+            new LspRequest
+            {
+                Action = LspAction.Rename,
+                Symbol = "IGreeter.Greet",
+                NewName = "Welcome",
+                Apply = true,
+            }
+        );
+
+        AssertApplied(applied);
+        foreach (var file in new[] { ContractFile, ImplementationFile, ConsumerFile })
+        {
+            (await workspace.ReadFileAsync(file)).Should().Contain("Welcome(");
+        }
+    }
+
     [Theory(Explicit = true, Timeout = TestTimeoutMilliseconds)]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task ResolvesAndAppliesRoslynCodeActionAsync(bool applyFromListing)
+    [InlineData(ApplyFromPreview)]
+    [InlineData(ApplyFromListing)]
+    [InlineData(ApplyWithoutProposal)]
+    public async Task ResolvesAndAppliesRoslynCodeActionAsync(string mode)
     {
         const string title = "using System.Collections.Generic;";
         var cancellationToken = TestContext.Current.CancellationToken;
@@ -559,16 +586,22 @@ public sealed partial class RoslynMcpTests
         var preview = await workspace.CallAsync(request);
         (await DiagnosticsAsync(workspace)).Should().Contain(item => item.Code == "CS0246");
 
-        var applyRequest = ApplyProposal(
-            LspAction.CodeActions,
-            applyFromListing ? listing : preview
-        ) with
+        var applyRequest = mode switch
         {
-            ActionIndex = request.ActionIndex,
+            ApplyFromListing => ApplyProposal(LspAction.CodeActions, listing) with
+            {
+                ActionIndex = request.ActionIndex,
+            },
+            ApplyFromPreview => ApplyProposal(LspAction.CodeActions, preview),
+            _ => request with { Apply = true },
         };
         var applied = await workspace.CallAsync(applyRequest);
         AssertApplied(applied);
-        AssertError(await workspace.CallRawAsync(applyRequest), ErrorCodes.InvalidRequest);
+        if (mode is not ApplyWithoutProposal)
+        {
+            AssertError(await workspace.CallRawAsync(applyRequest), ErrorCodes.InvalidRequest);
+        }
+
         var text = await workspace.ReadFileAsync(ProblemsFile);
         text.Should().Contain(title);
 
