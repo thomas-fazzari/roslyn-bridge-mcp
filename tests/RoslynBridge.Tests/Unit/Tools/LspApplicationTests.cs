@@ -2,10 +2,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 using System.Globalization;
-using RoslynBridge.Changes;
 using RoslynBridge.Editing;
 using RoslynBridge.Output;
-using RoslynBridge.Queries;
+using RoslynBridge.Results;
 using RoslynBridge.Tools;
 using static RoslynBridge.Tests.Unit.TestHelpers;
 
@@ -26,7 +25,7 @@ public sealed class LspApplicationTests
         var files = Enumerable
             .Repeat(
                 new FilePreview(
-                    new FileOperation("S.cs", WorkspaceEditService.ChangeFileOperation),
+                    new FileOperation("S.cs", FileOperation.Change),
                     [change],
                     Truncated: false
                 ),
@@ -137,11 +136,6 @@ public sealed class LspApplicationTests
     private static EditReceipt Receipt(params string[] paths) =>
         new(
             Applied: true,
-            [
-                .. paths.Select(path => new FileOperation(
-                    path,
-                    WorkspaceEditService.ChangeFileOperation
-                )),
-            ]
+            [.. paths.Select(path => new FileOperation(path, FileOperation.Change))]
         );
 }

@@ -3,18 +3,20 @@
 
 using System.Text.Json.Nodes;
 
-namespace RoslynBridge.Editing;
+namespace RoslynBridge.Results;
 
 /// <summary>
 /// A file operation with workspace-relative paths. OldPath is set for a rename.
 /// </summary>
 internal sealed record FileOperation(string Path, string Kind, string? OldPath = null)
 {
-    public bool ChangesMembership =>
-        Kind
-            is WorkspaceEditService.CreateFileOperation
-                or WorkspaceEditService.DeleteFileOperation
-                or WorkspaceEditService.RenameFileOperation;
+    // The LSP names of file operations, which the bridge reuses for its own
+    public const string Change = "change";
+    public const string Create = "create";
+    public const string Rename = "rename";
+    public const string Delete = "delete";
+
+    public bool ChangesMembership => Kind is Create or Delete or Rename;
 }
 
 /// <summary>

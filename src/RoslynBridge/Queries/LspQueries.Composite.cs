@@ -3,6 +3,7 @@
 
 using System.Text;
 using RoslynBridge.Requests;
+using RoslynBridge.Results;
 using RoslynBridge.Symbols;
 
 namespace RoslynBridge.Queries;

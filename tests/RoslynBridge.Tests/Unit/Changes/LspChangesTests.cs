@@ -8,6 +8,7 @@ using RoslynBridge.Editing;
 using RoslynBridge.Lsp;
 using RoslynBridge.Queries;
 using RoslynBridge.Requests;
+using RoslynBridge.Results;
 using RoslynBridge.Symbols;
 using RoslynBridge.Tests.Fakes;
 using RoslynBridge.Tools;

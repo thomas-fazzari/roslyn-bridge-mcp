@@ -186,21 +186,11 @@ internal sealed class RoslynTestWorkspace : IAsyncDisposable
         {
             LspAction.Diagnostics => (DiagnosticsTool.Name, ["file", "severity", "limit"]),
             LspAction.Symbols => (SymbolsTool.Name, ["file", "query", "limit"]),
-            LspAction.Definition
-            or LspAction.TypeDefinition
-            or LspAction.Implementation
-            or LspAction.References
-            or LspAction.Hover
-            or LspAction.Callers
-            or LspAction.Callees
-            or LspAction.Supertypes
-            or LspAction.Subtypes
-            or LspAction.Source
-            or LspAction.Members => (
+            _ when request.Action.IsNavigation => (
                 NavigateTool.Name,
                 new[] { "action", "symbol", "file", "line", "character", "context", "limit" }
             ),
-            LspAction.Rename or LspAction.RenameFile or LspAction.CodeActions => (
+            _ when request.Action.IsChange => (
                 EditTool.Name,
                 [
                     "action",
@@ -225,9 +215,7 @@ internal sealed class RoslynTestWorkspace : IAsyncDisposable
             ["action"] = JsonNamingPolicy.SnakeCaseLower.ConvertName(request.Action.ToString()),
             ["file"] = request.File,
             ["symbol"] = request.Symbol,
-            ["severity"] = JsonSerializer
-                .SerializeToNode(request.Severity, BridgeJsonContext.Default.DiagnosticSeverity)!
-                .GetValue<string>(),
+            ["severity"] = request.Severity.ToString().ToLowerInvariant(),
             ["line"] = request.Line,
             ["character"] = request.Character,
             ["endLine"] = request.EndLine,

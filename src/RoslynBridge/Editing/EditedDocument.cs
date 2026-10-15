@@ -4,6 +4,7 @@
 using System.Diagnostics;
 using System.Text;
 using System.Text.Json.Nodes;
+using RoslynBridge.Results;
 
 namespace RoslynBridge.Editing;
 
@@ -77,10 +78,10 @@ internal sealed class EditedDocument(string path, byte[]? original)
         var preview = TextPreview.Create(Decode(Original), Decode(Content));
         var kind = (Original, Content, CaseOnlyRename) switch
         {
-            (null, _, _) => WorkspaceEditService.CreateFileOperation,
-            (_, null, _) => WorkspaceEditService.DeleteFileOperation,
-            (_, _, true) => WorkspaceEditService.RenameFileOperation,
-            _ => WorkspaceEditService.ChangeFileOperation,
+            (null, _, _) => FileOperation.Create,
+            (_, null, _) => FileOperation.Delete,
+            (_, _, true) => FileOperation.Rename,
+            _ => FileOperation.Change,
         };
         return new FilePreview(
             new FileOperation(

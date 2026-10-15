@@ -4,9 +4,9 @@
 using System.Globalization;
 using System.Text;
 using System.Text.Json.Nodes;
-using RoslynBridge.Changes;
 using RoslynBridge.Editing;
 using RoslynBridge.Output;
+using RoslynBridge.Results;
 using RoslynBridge.Tools;
 using static RoslynBridge.Tests.Unit.TestHelpers;
 
@@ -95,14 +95,14 @@ public sealed class WorkspaceEditServiceTests : IDisposable
 
             exception.Phase.Should().Be(EditApplicationPhase.Write);
             exception.FailedPath.Should().Be(Path.Combine("Nested", "Delete.cs"));
-            exception.FailedOperation.Should().Be(WorkspaceEditService.DeleteFileOperation);
+            exception.FailedOperation.Should().Be(FileOperation.Delete);
             (exception.InnerException is IOException or UnauthorizedAccessException)
                 .Should()
                 .BeTrue();
             exception.Result.Applied.Should().BeFalse();
             exception
                 .Result.Operations.Should()
-                .Equal(new FileOperation("First.cs", WorkspaceEditService.ChangeFileOperation));
+                .Equal(new FileOperation("First.cs", FileOperation.Change));
             await AssertFileTextAsync(first, "class Changed {}");
             File.Exists(deleted).Should().BeTrue();
         }
@@ -467,19 +467,15 @@ public sealed class WorkspaceEditServiceTests : IDisposable
     }
 
     [Theory]
-    [InlineData(WorkspaceEditService.CreateFileOperation)]
-    [InlineData(WorkspaceEditService.RenameFileOperation)]
+    [InlineData(FileOperation.Create)]
+    [InlineData(FileOperation.Rename)]
     public async Task ReplacingAnExistingFileRequiresOverwriteAsync(string kind)
     {
         var source = await WriteFileAsync(_root, "Source.cs", "class Source {}");
         var target = await WriteFileAsync(_root, "Target.cs", "class Target {}");
         var service = CreateService();
         var snapshot = await service.CaptureAsync(TestCt);
-        var operation = string.Equals(
-            kind,
-            WorkspaceEditService.CreateFileOperation,
-            StringComparison.Ordinal
-        )
+        var operation = string.Equals(kind, FileOperation.Create, StringComparison.Ordinal)
             ? CreateFile(target)
             : RenameFile(source, target);
 

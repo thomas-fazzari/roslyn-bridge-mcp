@@ -6,6 +6,7 @@ using System.Text.Json.Nodes;
 using Microsoft.Extensions.FileSystemGlobbing;
 using RoslynBridge.Lsp;
 using RoslynBridge.Requests;
+using RoslynBridge.Results;
 using RoslynBridge.Symbols;
 
 namespace RoslynBridge.Queries;
@@ -25,6 +26,16 @@ internal sealed partial class LspQueries(
         CancellationToken cancellationToken
     )
     {
+        if (request.Action is LspAction.Source)
+        {
+            return (await SourceAsync(request, cancellationToken)).AsToolResult();
+        }
+
+        if (request.Action is LspAction.Members)
+        {
+            return (await MembersAsync(request, cancellationToken)).AsToolResult();
+        }
+
         var position = await PositionAsync(request, cancellationToken);
         if (position.Error is { } error)
         {
@@ -32,13 +43,7 @@ internal sealed partial class LspQueries(
         }
 
         var parameters = position.Value;
-        if (
-            request.Action
-            is LspAction.Callers
-                or LspAction.Callees
-                or LspAction.Supertypes
-                or LspAction.Subtypes
-        )
+        if (request.Action.IsHierarchy)
         {
             return await HierarchyAsync(request, parameters, cancellationToken);
         }

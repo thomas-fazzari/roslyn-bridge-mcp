@@ -16,6 +16,10 @@ namespace RoslynBridge.Lsp;
 /// <summary>
 /// Owns one Roslyn process and its workspace for the lifetime of the MCP host.
 /// </summary>
+/// <remarks>
+/// Its document state is not thread-safe. Tool calls reach it one at a time, so only file watcher
+/// events and Roslyn callbacks arrive concurrently, and those use their own synchronization.
+/// </remarks>
 [DebuggerDisplay("running = {IsRunning}, open documents = {_documents.Count}")]
 internal sealed partial class RoslynSession(
     BridgeOptions options,
@@ -56,11 +60,23 @@ internal sealed partial class RoslynSession(
 
     public void RequireReload() => _restartRequired = true;
 
-    public Func<
-        JsonObject,
-        CancellationToken,
-        Task<JsonObject>
-    >? ApplyWorkspaceEditAsync { get; set; }
+    public Func<JsonObject, CancellationToken, Task<JsonObject>>? ApplyWorkspaceEditAsync
+    {
+        get;
+        private set;
+    }
+
+    /// <summary>
+    /// Sends Roslyn's workspace/applyEdit requests to <paramref name="handler"/> until the result is disposed.
+    /// Without a handler, the bridge refuses them.
+    /// </summary>
+    public IDisposable HandleWorkspaceEdits(
+        Func<JsonObject, CancellationToken, Task<JsonObject>> handler
+    )
+    {
+        ApplyWorkspaceEditAsync = handler;
+        return new WorkspaceEditScope(this);
+    }
 
     /// <summary>
     /// Starts Roslyn when needed and waits up to the startup timeout for the workspace to load.
@@ -236,7 +252,7 @@ internal sealed partial class RoslynSession(
             .Single();
         serializerOptions.TypeInfoResolver = JsonTypeInfoResolver.Combine(
             new RequestIdResolver(requestIdConverter),
-            BridgeJsonContext.Default
+            LspJsonContext.Default
         );
         return formatter;
     }
@@ -505,4 +521,9 @@ internal sealed partial class RoslynSession(
         Message = "Skipped {Path}: the document exceeds the one million UTF-16 code unit limit."
     )]
     private static partial void LogOversizedDocument(ILogger logger, string path);
+
+    private sealed class WorkspaceEditScope(RoslynSession session) : IDisposable
+    {
+        public void Dispose() => session.ApplyWorkspaceEditAsync = null;
+    }
 }

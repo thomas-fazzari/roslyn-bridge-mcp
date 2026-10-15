@@ -66,7 +66,7 @@ internal static class Program
     internal static IMcpServerBuilder WithRoslynTools(this IMcpServerBuilder builder)
     {
         var jsonOptions = new JsonSerializerOptions(McpJsonUtilities.DefaultOptions);
-        jsonOptions.TypeInfoResolverChain.Insert(0, BridgeJsonContext.Default);
+        jsonOptions.TypeInfoResolverChain.Insert(0, ToolJsonContext.Default);
         return builder
             .WithTools<DiagnosticsTool>(serializerOptions: jsonOptions)
             .WithTools<NavigateTool>(serializerOptions: jsonOptions)

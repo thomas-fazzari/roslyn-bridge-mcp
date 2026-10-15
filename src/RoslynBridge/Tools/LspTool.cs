@@ -15,6 +15,7 @@ using RoslynBridge.Lsp;
 using RoslynBridge.Output;
 using RoslynBridge.Queries;
 using RoslynBridge.Requests;
+using RoslynBridge.Results;
 using StreamJsonRpc;
 
 namespace RoslynBridge.Tools;
@@ -178,10 +179,7 @@ internal sealed partial class LspTool(
     // Diagnostics and a new edit synchronize Roslyn themselves, so an earlier synchronization repeats work
     private static bool SynchronizesBeforeFirstRead(LspRequest request) =>
         request.Action is LspAction.Diagnostics
-        || (
-            request.ProposalId is null
-            && request.Action is LspAction.Rename or LspAction.RenameFile or LspAction.CodeActions
-        );
+        || (request.ProposalId is null && request.Action.IsChange);
 
     private async Task<Result<ToolResult>> DispatchAsync(
         LspRequest request,
@@ -211,23 +209,18 @@ internal sealed partial class LspTool(
         return request.Action switch
         {
             LspAction.Capabilities => new JsonResult(session.Capabilities?.DeepClone()),
-            LspAction.Diagnostics => Widen(
+            LspAction.Diagnostics => (
                 await queries.DiagnosticsAsync(request, cancellationToken)
-            ),
+            ).AsToolResult(),
             LspAction.Symbols => await queries.SymbolsAsync(request, cancellationToken),
-            LspAction.Definition
-            or LspAction.TypeDefinition
-            or LspAction.Implementation
-            or LspAction.References
-            or LspAction.Hover
-            or LspAction.Callers
-            or LspAction.Callees
-            or LspAction.Supertypes
-            or LspAction.Subtypes => await queries.NavigationAsync(request, cancellationToken),
-            LspAction.Source => Widen(await queries.SourceAsync(request, cancellationToken)),
-            LspAction.Members => Widen(await queries.MembersAsync(request, cancellationToken)),
-            LspAction.Rename or LspAction.RenameFile or LspAction.CodeActions =>
-                await changes.ExecuteAsync(request, cancellationToken),
+            _ when request.Action.IsNavigation => await queries.NavigationAsync(
+                request,
+                cancellationToken
+            ),
+            _ when request.Action.IsChange => await changes.ExecuteAsync(
+                request,
+                cancellationToken
+            ),
             LspAction.Request => await RawRequestAsync(request, cancellationToken),
             _ => throw new InvalidOperationException($"Unsupported LSP action: {request.Action}."),
         };
@@ -293,9 +286,6 @@ internal sealed partial class LspTool(
 
         return isLifecycle || isSynchronization || method is LspMethods.WorkspaceApplyEdit;
     }
-
-    private static Result<ToolResult> Widen<T>(Result<T> result)
-        where T : ToolResult => result.Error is { } error ? error : result.Value;
 
     internal static CallToolResult Response(ToolResult? result)
     {

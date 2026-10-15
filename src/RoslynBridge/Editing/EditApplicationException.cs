@@ -1,6 +1,8 @@
 // Copyright (C) RoslynBridge contributors
 // SPDX-License-Identifier: GPL-3.0-only
 
+using RoslynBridge.Results;
+
 namespace RoslynBridge.Editing;
 
 internal sealed class EditApplicationException(

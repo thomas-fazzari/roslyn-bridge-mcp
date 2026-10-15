@@ -8,6 +8,7 @@ using RoslynBridge.Editing;
 using RoslynBridge.Lsp;
 using RoslynBridge.Queries;
 using RoslynBridge.Requests;
+using RoslynBridge.Results;
 
 namespace RoslynBridge.Changes;
 
@@ -119,7 +120,7 @@ internal sealed class LspChanges(
             (JsonNode)
                 new JsonObject
                 {
-                    ["kind"] = WorkspaceEditService.RenameFileOperation,
+                    ["kind"] = FileOperation.Rename,
                     ["oldUri"] = oldUri,
                     ["newUri"] = newUri,
                 }
@@ -349,28 +350,27 @@ internal sealed class LspChanges(
     {
         var snapshot = await CaptureAsync(cancellationToken);
         var callbacks = new CommandEdits(edits, snapshot, CaptureAsync, cancellationToken);
-        session.ApplyWorkspaceEditAsync = callbacks.ApplyAsync;
         JsonNode? commandResult = null;
         Exception? failure = null;
         var commandExecuted = false;
-        try
+        using (session.HandleWorkspaceEdits(callbacks.ApplyAsync))
         {
-            commandResult = await session.RequestAsync(
-                LspMethods.WorkspaceExecuteCommand,
-                command,
-                cancellationToken
-            );
-            commandExecuted = true;
+            try
+            {
+                commandResult = await session.RequestAsync(
+                    LspMethods.WorkspaceExecuteCommand,
+                    command,
+                    cancellationToken
+                );
+                commandExecuted = true;
+            }
+            catch (Exception exception)
+            {
+                failure = exception;
+            }
         }
-        catch (Exception exception)
-        {
-            failure = exception;
-        }
-        finally
-        {
-            session.ApplyWorkspaceEditAsync = null;
-            await callbacks.DisposeAsync();
-        }
+
+        await callbacks.DisposeAsync();
 
         var result = callbacks.Result with { CommandExecuted = commandExecuted };
         failure = callbacks.Failure ?? failure;

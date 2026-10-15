@@ -3,16 +3,13 @@
 
 using System.Runtime.ExceptionServices;
 using System.Text.Json.Nodes;
+using RoslynBridge.Results;
 
 namespace RoslynBridge.Editing;
 
 internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
 {
     internal const int MaximumFileBytes = 8 * BytesPerMebibyte;
-    internal const string ChangeFileOperation = "change";
-    internal const string CreateFileOperation = "create";
-    internal const string RenameFileOperation = "rename";
-    internal const string DeleteFileOperation = "delete";
 
     private const int BytesPerMebibyte = 1024 * 1024;
     private const int MaximumEditBytes = 64 * BytesPerMebibyte;
@@ -163,12 +160,12 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
             )
         )
         {
-            pendingMutation = new(paths.RelativePath(document.Path), RenameFileOperation);
+            pendingMutation = new(paths.RelativePath(document.Path), FileOperation.Rename);
             File.Move(document.OriginalPath, document.Path, overwrite: true);
             completedOperations.Add(
                 new(
                     paths.RelativePath(document.Path),
-                    RenameFileOperation,
+                    FileOperation.Rename,
                     paths.RelativePath(document.OriginalPath)
                 )
             );
@@ -187,10 +184,10 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
             )
         )
         {
-            pendingMutation = new(paths.RelativePath(document.Path), DeleteFileOperation);
+            pendingMutation = new(paths.RelativePath(document.Path), FileOperation.Delete);
             paths.Resolve(document.Path);
             File.Delete(document.Path);
-            completedOperations.Add(new(paths.RelativePath(document.Path), DeleteFileOperation));
+            completedOperations.Add(new(paths.RelativePath(document.Path), FileOperation.Delete));
         }
     }
 
@@ -328,13 +325,13 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
             case null:
                 await PlanTextEditAsync(operation, documents, snapshot, cancellationToken);
                 break;
-            case CreateFileOperation:
+            case FileOperation.Create:
                 await PlanCreateAsync(operation, documents, snapshot, cancellationToken);
                 break;
-            case RenameFileOperation:
+            case FileOperation.Rename:
                 await PlanRenameAsync(operation, documents, snapshot, cancellationToken);
                 break;
-            case DeleteFileOperation:
+            case FileOperation.Delete:
                 await PlanDeleteAsync(operation, documents, snapshot, cancellationToken);
                 break;
             default:
@@ -546,7 +543,7 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
     }
 
     private static string DestinationOperation(EditedDocument document) =>
-        document.Original is null ? CreateFileOperation : ChangeFileOperation;
+        document.Original is null ? FileOperation.Create : FileOperation.Change;
 
     private readonly record struct PendingMutation(string Path, string Operation);
 

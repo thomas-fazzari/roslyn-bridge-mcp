@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 using DiffPlex;
+using RoslynBridge.Results;
 
 namespace RoslynBridge.Editing;
 

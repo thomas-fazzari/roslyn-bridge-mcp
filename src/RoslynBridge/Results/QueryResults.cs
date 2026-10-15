@@ -3,7 +3,7 @@
 
 using RoslynBridge.Requests;
 
-namespace RoslynBridge.Queries;
+namespace RoslynBridge.Results;
 
 /// <summary>
 /// The occurrences found in one file, a workspace-relative path or the URI of an external or generated file.

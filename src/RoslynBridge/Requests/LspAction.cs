@@ -45,3 +45,39 @@ internal enum LspAction
 
     Members = 19,
 }
+
+internal static class LspActions
+{
+    extension(LspAction action)
+    {
+        /// <summary>
+        /// Whether the action reads from the navigate tool.
+        /// </summary>
+        public bool IsNavigation =>
+            action
+                is LspAction.Definition
+                    or LspAction.TypeDefinition
+                    or LspAction.Implementation
+                    or LspAction.References
+                    or LspAction.Hover
+                    or LspAction.Source
+                    or LspAction.Members
+            || action.IsHierarchy;
+
+        /// <summary>
+        /// Whether the action expands a call or type hierarchy.
+        /// </summary>
+        public bool IsHierarchy =>
+            action
+                is LspAction.Callers
+                    or LspAction.Callees
+                    or LspAction.Supertypes
+                    or LspAction.Subtypes;
+
+        /// <summary>
+        /// Whether the action proposes or applies a workspace change.
+        /// </summary>
+        public bool IsChange =>
+            action is LspAction.Rename or LspAction.RenameFile or LspAction.CodeActions;
+    }
+}

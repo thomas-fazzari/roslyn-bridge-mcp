@@ -3,6 +3,7 @@
 
 using System.Text.Json.Nodes;
 using RoslynBridge.Lsp;
+using RoslynBridge.Results;
 
 namespace RoslynBridge.Symbols;
 

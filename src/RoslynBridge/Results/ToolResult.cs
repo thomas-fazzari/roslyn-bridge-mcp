@@ -3,7 +3,7 @@
 
 using System.Text.Json.Nodes;
 
-namespace RoslynBridge;
+namespace RoslynBridge.Results;
 
 /// <summary>
 /// What a tool call returns before rendering. Each kind of result derives from it.

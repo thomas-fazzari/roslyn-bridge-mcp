@@ -6,10 +6,7 @@ using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using RoslynBridge.Changes;
-using RoslynBridge.Editing;
-using RoslynBridge.Lsp;
-using RoslynBridge.Queries;
+using RoslynBridge.Results;
 
 namespace RoslynBridge.Output;
 

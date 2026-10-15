@@ -3,6 +3,7 @@
 
 using System.Text;
 using RoslynBridge.Editing;
+using RoslynBridge.Results;
 
 namespace RoslynBridge.Tests.Unit.Editing;
 

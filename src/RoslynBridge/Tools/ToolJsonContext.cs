@@ -4,19 +4,16 @@
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using RoslynBridge.Requests;
-using RoslynBridge.Tools;
-using StreamJsonRpc.Protocol;
 
-namespace RoslynBridge;
+namespace RoslynBridge.Tools;
 
+/// <summary>
+/// JSON metadata for tool arguments, which Native AOT cannot build by reflection.
+/// </summary>
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 [JsonSerializable(typeof(NavigationAction))]
 [JsonSerializable(typeof(EditAction))]
 [JsonSerializable(typeof(ServerAction))]
 [JsonSerializable(typeof(DiagnosticSeverity))]
-[JsonSerializable(typeof(JsonNode))]
 [JsonSerializable(typeof(JsonObject))]
-[JsonSerializable(typeof(JsonArray))]
-[JsonSerializable(typeof(object))]
-[JsonSerializable(typeof(CommonErrorData))]
-internal partial class BridgeJsonContext : JsonSerializerContext;
+internal partial class ToolJsonContext : JsonSerializerContext;

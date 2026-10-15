@@ -3,8 +3,7 @@
 
 using System.Globalization;
 using System.Text;
-using RoslynBridge.Changes;
-using RoslynBridge.Editing;
+using RoslynBridge.Results;
 
 namespace RoslynBridge.Output;
 

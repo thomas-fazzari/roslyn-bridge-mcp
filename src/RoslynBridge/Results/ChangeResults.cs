@@ -2,9 +2,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 using System.Text.Json.Nodes;
-using RoslynBridge.Editing;
 
-namespace RoslynBridge.Changes;
+namespace RoslynBridge.Results;
 
 /// <summary>
 /// An edit that has not been applied, stored under its proposal ID.

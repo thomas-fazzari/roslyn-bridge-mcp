@@ -3,6 +3,7 @@
 
 using System.Diagnostics;
 using RoslynBridge.Lsp;
+using RoslynBridge.Results;
 
 namespace RoslynBridge.Symbols;
 

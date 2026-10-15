@@ -1,7 +1,7 @@
 // Copyright (C) RoslynBridge contributors
 // SPDX-License-Identifier: GPL-3.0-only
 
-namespace RoslynBridge;
+namespace RoslynBridge.Results;
 
 /// <summary>
 /// A one-based line and UTF-16 character.

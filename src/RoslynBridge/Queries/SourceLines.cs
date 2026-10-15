@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 using RoslynBridge.Editing;
+using RoslynBridge.Results;
 
 namespace RoslynBridge.Queries;
 

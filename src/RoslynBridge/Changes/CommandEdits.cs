@@ -3,6 +3,7 @@
 
 using System.Text.Json.Nodes;
 using RoslynBridge.Editing;
+using RoslynBridge.Results;
 
 namespace RoslynBridge.Changes;
 

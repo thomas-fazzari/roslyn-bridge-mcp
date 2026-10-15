@@ -1,6 +1,8 @@
 // Copyright (C) RoslynBridge contributors
 // SPDX-License-Identifier: GPL-3.0-only
 
+using RoslynBridge.Results;
+
 namespace RoslynBridge;
 
 /// <summary>
@@ -42,6 +44,16 @@ internal readonly struct Result<T>(T value, ToolError? error)
     public static implicit operator Result<T>(T value) => new(value, error: null);
 
     public static implicit operator Result<T>(ToolError error) => new(default!, error);
+}
+
+internal static class ResultExtensions
+{
+    extension<T>(Result<T> result)
+        where T : ToolResult
+    {
+        public Result<ToolResult> AsToolResult() =>
+            result.Error is { } error ? error : result.Value;
+    }
 }
 
 /// <summary>

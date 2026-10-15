@@ -4,6 +4,7 @@
 using System.Text.Json.Nodes;
 using RoslynBridge.Queries;
 using RoslynBridge.Requests;
+using RoslynBridge.Results;
 
 namespace RoslynBridge.Tests.Unit.Queries;
 
