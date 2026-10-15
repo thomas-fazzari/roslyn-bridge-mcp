@@ -164,9 +164,9 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
     /// in the format <see cref="ResolveAsync"/> accepts. Positions without a declaration are omitted.
     /// </summary>
     public async Task<
-        IReadOnlyDictionary<(string File, int Line, int Character), string>
+        IReadOnlyDictionary<(string File, SourcePosition Position), string>
     > NamesAsync(
-        IEnumerable<(string File, int Line, int Character)> positions,
+        IEnumerable<(string File, SourcePosition Position)> positions,
         CancellationToken cancellationToken
     )
     {
@@ -175,7 +175,7 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
             wanted.Select(position => position.File).Distinct(StringComparer.Ordinal),
             cancellationToken
         );
-        var names = new Dictionary<(string File, int Line, int Character), string>();
+        var names = new Dictionary<(string File, SourcePosition Position), string>();
 
         foreach (var (file, symbols) in documents)
         {
@@ -184,7 +184,7 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
             )
             {
                 var declaration = declared.Declaration;
-                var position = (file, declaration.Line, declaration.Character);
+                var position = (file, new SourcePosition(declaration.Line, declaration.Character));
                 if (wanted.Contains(position))
                 {
                     names.TryAdd(position, declaration.Name);
@@ -291,17 +291,12 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
         // Batches stay within the open documents the session keeps
         foreach (var batch in files.Chunk(RoslynSession.MaximumOpenDocuments))
         {
-            var uris = new List<string>(batch.Length);
-            foreach (var file in batch)
-            {
-                uris.Add(await session.OpenDocumentAsync(file, cancellationToken));
-            }
-
+            var uris = await session.OpenDocumentsAsync(batch, cancellationToken);
             var symbols = await Task.WhenAll(
                 uris.Select(uri =>
                     session.RequestAsync(
                         LspMethods.TextDocumentDocumentSymbol,
-                        new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = uri } },
+                        LspParameters.Document(uri),
                         cancellationToken
                     )
                 )

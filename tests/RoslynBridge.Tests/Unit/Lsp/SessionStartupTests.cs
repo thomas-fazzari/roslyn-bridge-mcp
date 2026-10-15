@@ -1,9 +1,7 @@
 // Copyright (C) RoslynBridge contributors
 // SPDX-License-Identifier: GPL-3.0-only
 
-using Microsoft.Extensions.Logging.Abstractions;
 using RoslynBridge.Lsp;
-using RoslynBridge.Tools;
 using static RoslynBridge.Tests.Unit.TestHelpers;
 
 namespace RoslynBridge.Tests.Unit.Lsp;
@@ -28,41 +26,15 @@ public sealed class SessionStartupTests : IDisposable
         {
             File.SetUnixFileMode(server, UnixFileMode.UserRead | UnixFileMode.UserExecute);
         }
-        var paths = new WorkspacePaths(_root);
-        await using var session = new RoslynSession(
-            new BridgeOptions { WorkspaceRoot = _root, ServerPath = server },
-            paths,
+        await using var session = CreateSession(
+            _root,
             RoslynProcess.Start,
-            NullLogger<RoslynSession>.Instance
+            new BridgeOptions { WorkspaceRoot = _root, ServerPath = server }
         );
 
         (await FluentActions.Awaiting(Start).Should().ThrowAsync<IOException>())
             .Which.Message.Should()
             .Contain("install .NET");
-        return;
-
-        Task Start() => session.EnsureStartedAsync(TestCt);
-    }
-
-    [Fact]
-    public async Task ReportsAMissingServerExecutableAsync()
-    {
-        var paths = new WorkspacePaths(_root);
-        await using var session = new RoslynSession(
-            new BridgeOptions
-            {
-                WorkspaceRoot = _root,
-                ServerPath = Path.Combine(_root, "missing-server"),
-            },
-            paths,
-            RoslynProcess.Start,
-            NullLogger<RoslynSession>.Instance
-        );
-
-        var exception = (
-            await FluentActions.Awaiting(Start).Should().ThrowAsync<Exception>()
-        ).Which;
-        LspTool.FailureCode(exception).Should().Be(ErrorCodes.Io);
         return;
 
         Task Start() => session.EnsureStartedAsync(TestCt);

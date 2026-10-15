@@ -33,6 +33,8 @@ internal sealed partial class RoslynSession(
     private const int StderrBufferCharacters = 2048;
     private const int StderrTailCharacters = 4096;
     private readonly StringBuilder _stderrTail = new();
+    private readonly Lock _stderrLock = new();
+
     private static readonly TimeSpan _shutdownTimeout = TimeSpan.FromSeconds(3);
     private IRoslynServer? _server;
     private JsonRpc? _rpc;
@@ -176,7 +178,7 @@ internal sealed partial class RoslynSession(
         }
 
         string tail;
-        lock (_stderrTail)
+        lock (_stderrLock)
         {
             tail = _stderrTail.ToString().Trim();
         }
@@ -261,7 +263,7 @@ internal sealed partial class RoslynSession(
         _server = launcher(options, paths);
         _processLifetime = new CancellationTokenSource();
 
-        lock (_stderrTail)
+        lock (_stderrLock)
         {
             _stderrTail.Clear();
         }
@@ -470,7 +472,7 @@ internal sealed partial class RoslynSession(
                 }
 
                 var message = new string(buffer, 0, count);
-                lock (_stderrTail)
+                lock (_stderrLock)
                 {
                     _stderrTail.Append(message);
                     if (_stderrTail.Length > StderrTailCharacters)

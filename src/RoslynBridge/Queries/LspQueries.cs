@@ -181,9 +181,9 @@ internal sealed partial class LspQueries(
         };
     }
 
-    private (string File, int Line, int Character)? DeclarationKey(SymbolItem item) =>
+    private (string File, SourcePosition Position)? DeclarationKey(SymbolItem item) =>
         item is { File: { } file, Position: { } position } && paths.ResultFilePath(file) is { } path
-            ? (path, position.Line, position.Character)
+            ? (path, position)
             : null;
 
     public async Task<SymbolList> SymbolsAsync(
@@ -204,7 +204,7 @@ internal sealed partial class LspQueries(
         var uri = await session.OpenDocumentAsync(request.File, cancellationToken);
         var documentSymbols = await session.RequestAsync(
             LspMethods.TextDocumentDocumentSymbol,
-            Document(uri),
+            LspParameters.Document(uri),
             cancellationToken
         );
         return documentSymbols.ToSymbolList(paths, request.Limit);
@@ -239,11 +239,7 @@ internal sealed partial class LspQueries(
     )
     {
         // Each open discards diagnostics of earlier solution versions, so the batch opens before any pull
-        var uris = new List<string>(batch.Length);
-        foreach (var file in batch)
-        {
-            uris.Add(await session.OpenDocumentAsync(file, cancellationToken));
-        }
+        var uris = await session.OpenDocumentsAsync(batch, cancellationToken);
 
         var miscellaneous = await WaitForProjectsAsync(uris, cancellationToken);
         var reports = await Task.WhenAll(
@@ -355,7 +351,7 @@ internal sealed partial class LspQueries(
     {
         var response = await session.RequestAsync(
             LspMethods.TextDocumentDiagnostic,
-            Document(uri),
+            LspParameters.Document(uri),
             cancellationToken
         );
         return response as JsonObject
@@ -375,19 +371,22 @@ internal sealed partial class LspQueries(
             return error;
         }
 
-        var (file, line, character) = location.Value;
-        var uri = await session.OpenDocumentAsync(file, cancellationToken);
-        return new JsonObject
+        var (file, position) = location.Value;
+        var parameters = LspParameters.Document(
+            await session.OpenDocumentAsync(file, cancellationToken)
+        );
+        parameters["position"] = new JsonObject
         {
-            ["textDocument"] = new JsonObject { ["uri"] = uri },
-            ["position"] = new JsonObject { ["line"] = line - 1, ["character"] = character - 1 },
+            ["line"] = position.Line - 1,
+            ["character"] = position.Character - 1,
         };
+        return parameters;
     }
 
     /// <summary>
     /// Returns the one-based position a request targets, from its symbol name or its explicit position.
     /// </summary>
-    private async Task<Result<(string File, int Line, int Character)>> LocateAsync(
+    private async Task<Result<(string File, SourcePosition Position)>> LocateAsync(
         LspRequest request,
         CancellationToken cancellationToken
     )
@@ -412,7 +411,7 @@ internal sealed partial class LspQueries(
             }
 
             var declaration = resolved.Value[0];
-            return (declaration.File, declaration.Line, declaration.Character);
+            return (declaration.File, new SourcePosition(declaration.Line, declaration.Character));
         }
 
         if (request is not { File: not null, Line: > 0, Character: > 0 })
@@ -422,11 +421,8 @@ internal sealed partial class LspQueries(
             );
         }
 
-        return (request.File, request.Line.Value, request.Character.Value);
+        return (request.File, new SourcePosition(request.Line.Value, request.Character.Value));
     }
-
-    public static JsonObject Document(string uri) =>
-        new() { ["textDocument"] = new JsonObject { ["uri"] = uri } };
 
     private IEnumerable<string> SelectFiles(string? file)
     {

@@ -22,7 +22,7 @@ public sealed class ClientCallbacksTests : IDisposable
         var paths = new WorkspacePaths(_root);
         var editor = new WorkspaceEditService(paths);
         var snapshot = await editor.CaptureAsync(TestCt);
-        await using var session = CreateSession(paths);
+        await using var session = CreateSession(paths.Root, RoslynProcess.Start);
         using var edits = session.HandleWorkspaceEdits(
             async (edit, token) =>
             {
@@ -46,7 +46,7 @@ public sealed class ClientCallbacksTests : IDisposable
     {
         var source = await WriteFileAsync(_root, "Source.cs", "class Before {}");
         var paths = new WorkspacePaths(_root);
-        await using var session = CreateSession(paths);
+        await using var session = CreateSession(paths.Root, RoslynProcess.Start);
         var callbacks = CreateCallbacks(session, paths);
 
         var response = await callbacks.ApplyEditAsync(
@@ -59,14 +59,6 @@ public sealed class ClientCallbacksTests : IDisposable
     }
 
     public void Dispose() => Directory.Delete(_root, recursive: true);
-
-    private static RoslynSession CreateSession(WorkspacePaths paths) =>
-        new(
-            new BridgeOptions { WorkspaceRoot = paths.Root },
-            paths,
-            RoslynProcess.Start,
-            NullLogger<RoslynSession>.Instance
-        );
 
     private static ClientCallbacks CreateCallbacks(RoslynSession session, WorkspacePaths paths) =>
         new(session, paths, NullLogger<RoslynSession>.Instance, new TaskCompletionSource());

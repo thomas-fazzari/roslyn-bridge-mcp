@@ -158,7 +158,7 @@ internal static class TextPreview
             || (text[length - 1] == '\r' && text[length] == '\n')
         );
 
-    private static int LineOffset(string text, List<(int Start, int Length)> lines, int line) =>
+    private static int LineOffset(string text, List<LineSpan> lines, int line) =>
         line < lines.Count ? lines[line].Start : text.Length;
 
     private static SourcePosition PositionAt(

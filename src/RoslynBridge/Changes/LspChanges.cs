@@ -313,8 +313,8 @@ internal sealed class LspChanges(
                 result = result with { CommandExecuted = false };
                 var commandResult = await ExecuteCommandAsync(
                     change.Command,
-                    cancellationToken,
-                    filesChanged
+                    filesChanged,
+                    cancellationToken
                 );
                 result = result.Merge(commandResult) with
                 {
@@ -342,10 +342,11 @@ internal sealed class LspChanges(
         };
     }
 
+    /// <param name="filesChanged">Whether earlier writes changed which files exist, so Roslyn must reload.</param>
     public async Task<EditReceipt> ExecuteCommandAsync(
         JsonObject command,
-        CancellationToken cancellationToken,
-        bool filesChanged = false
+        bool filesChanged,
+        CancellationToken cancellationToken
     )
     {
         var snapshot = await CaptureAsync(cancellationToken);

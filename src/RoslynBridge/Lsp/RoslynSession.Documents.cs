@@ -85,6 +85,23 @@ internal sealed partial class RoslynSession
     }
 
     /// <summary>
+    /// Opens the documents one at a time, so their versions stay in order, and returns their URIs.
+    /// </summary>
+    public async Task<List<string>> OpenDocumentsAsync(
+        IReadOnlyCollection<string> files,
+        CancellationToken cancellationToken
+    )
+    {
+        var uris = new List<string>(files.Count);
+        foreach (var file in files)
+        {
+            uris.Add(await OpenDocumentAsync(file, cancellationToken));
+        }
+
+        return uris;
+    }
+
+    /// <summary>
     /// Returns the project contexts of an open document, or none when the server lacks the extension.
     /// </summary>
     public async Task<JsonArray> ProjectContextsAsync(

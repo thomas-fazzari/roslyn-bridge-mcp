@@ -12,7 +12,7 @@ namespace RoslynBridge;
 internal static class Setup
 {
     internal const string Command = "setup";
-    internal const string ServerName = "roslyn";
+    internal const string McpServerName = "roslyn";
 
     // The Roslyn version the CI tests the bridge against, in eng/tasks/ci/roslyn
     internal const string ServerVersion = "5.12.0-1.26426.8";
@@ -150,7 +150,7 @@ internal static class Setup
             string.Format(
                 System.Globalization.CultureInfo.InvariantCulture,
                 Template,
-                ServerName,
+                McpServerName,
                 bridge.Contains(' ', StringComparison.Ordinal) ? $"\"{bridge}\"" : bridge
             );
     }

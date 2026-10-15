@@ -50,7 +50,7 @@ internal static class TextEdits
         return result.ToString();
     }
 
-    private static Change Parse(JsonNode? node, int index, List<(int Start, int Length)> lines)
+    private static Change Parse(JsonNode? node, int index, List<LineSpan> lines)
     {
         var range =
             node?["range"]
@@ -63,7 +63,7 @@ internal static class TextEdits
         return new Change(start, end, text, index);
     }
 
-    private static int GetOffset(JsonNode? position, List<(int Start, int Length)> lines)
+    private static int GetOffset(JsonNode? position, List<LineSpan> lines)
     {
         var line = position?["line"]?.GetValue<int>() ?? -1;
         var character = position?["character"]?.GetValue<int>() ?? -1;
@@ -77,9 +77,9 @@ internal static class TextEdits
         return lines[line].Start + character;
     }
 
-    internal static List<(int Start, int Length)> GetLines(string source)
+    internal static List<LineSpan> GetLines(string source)
     {
-        var lines = new List<(int Start, int Length)>();
+        var lines = new List<LineSpan>();
         var start = 0;
         for (var index = 0; index < source.Length; index++)
         {
@@ -88,7 +88,7 @@ internal static class TextEdits
                 continue;
             }
 
-            lines.Add((start, index - start));
+            lines.Add(new LineSpan(start, index - start));
             if (source[index] == '\r' && index + 1 < source.Length && source[index + 1] == '\n')
             {
                 index++;
@@ -97,7 +97,7 @@ internal static class TextEdits
             start = index + 1;
         }
 
-        lines.Add((start, source.Length - start));
+        lines.Add(new LineSpan(start, source.Length - start));
         return lines;
     }
 
@@ -107,3 +107,8 @@ internal static class TextEdits
 
     private sealed record Change(int Start, int End, string Text, int Index);
 }
+
+/// <summary>
+/// The offset and length of one line in a text, without its line break.
+/// </summary>
+internal readonly record struct LineSpan(int Start, int Length);

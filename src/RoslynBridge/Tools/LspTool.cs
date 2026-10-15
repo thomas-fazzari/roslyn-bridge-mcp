@@ -263,7 +263,11 @@ internal sealed partial class LspTool(
 
         if (request.Method is LspMethods.WorkspaceExecuteCommand)
         {
-            return await changes.ExecuteCommandAsync(request.Parameters ?? [], cancellationToken);
+            return await changes.ExecuteCommandAsync(
+                request.Parameters ?? [],
+                filesChanged: false,
+                cancellationToken
+            );
         }
 
         return new JsonResult(

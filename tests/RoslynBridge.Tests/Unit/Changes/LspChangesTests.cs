@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 using System.Text.Json.Nodes;
-using Microsoft.Extensions.Logging.Abstractions;
 using RoslynBridge.Changes;
 using RoslynBridge.Editing;
 using RoslynBridge.Lsp;
@@ -10,7 +9,6 @@ using RoslynBridge.Queries;
 using RoslynBridge.Requests;
 using RoslynBridge.Results;
 using RoslynBridge.Symbols;
-using RoslynBridge.Tests.Fakes;
 using RoslynBridge.Tools;
 using StreamJsonRpc;
 using static RoslynBridge.Tests.Unit.TestHelpers;
@@ -26,7 +24,7 @@ public sealed class LspChangesTests : IDisposable
     [Fact]
     public async Task EvictionKeepsTheNewestProposalsAsync()
     {
-        await using var session = CreateSession();
+        await using var session = CreateSession(_root, FakeServer());
         var (changes, edits) = CreateChanges(session);
         var snapshot = await edits.CaptureAsync(TestCt);
         var proposals = new List<string>();
@@ -54,7 +52,7 @@ public sealed class LspChangesTests : IDisposable
     [Fact]
     public async Task ProposalCannotBeUsedForAnotherActionAsync()
     {
-        await using var session = CreateSession();
+        await using var session = CreateSession(_root, FakeServer());
         var (changes, edits) = CreateChanges(session);
         var snapshot = await edits.CaptureAsync(TestCt);
         var preview = await changes.CompleteAsync(
@@ -77,8 +75,11 @@ public sealed class LspChangesTests : IDisposable
     [Fact]
     public async Task FailedCommandWithoutWritesKeepsTheOriginalErrorAsync()
     {
-        await using var session = CreateSession(server =>
-            server.Handle = (_, _) => throw new LocalRpcException("Unknown command.")
+        await using var session = CreateSession(
+            _root,
+            FakeServer(server =>
+                server.Handle = (_, _) => throw new LocalRpcException("Unknown command.")
+            )
         );
         await session.EnsureStartedAsync(TestCt);
         var (changes, edits) = CreateChanges(session);
@@ -101,15 +102,14 @@ public sealed class LspChangesTests : IDisposable
     {
         var path = await WriteFileAsync(_root, "Source.cs", "class A {}");
         // Reload after the rename fails fast on a missing server
-        await using var session = new RoslynSession(
+        await using var session = CreateSession(
+            _root,
+            RoslynProcess.Start,
             new BridgeOptions
             {
                 WorkspaceRoot = _root,
                 ServerPath = Path.Combine(_root, "missing-server"),
-            },
-            new WorkspacePaths(_root),
-            RoslynProcess.Start,
-            NullLogger<RoslynSession>.Instance
+            }
         );
         var (changes, edits) = CreateChanges(session);
         var snapshot = await edits.CaptureAsync(TestCt);
@@ -139,19 +139,6 @@ public sealed class LspChangesTests : IDisposable
     }
 
     public void Dispose() => Directory.Delete(_root, recursive: true);
-
-    private RoslynSession CreateSession(Action<FakeRoslynServer>? configure = null) =>
-        new(
-            new BridgeOptions { WorkspaceRoot = _root },
-            new WorkspacePaths(_root),
-            (_, _) =>
-            {
-                var server = new FakeRoslynServer();
-                configure?.Invoke(server);
-                return server;
-            },
-            NullLogger<RoslynSession>.Instance
-        );
 
     private (LspChanges Changes, WorkspaceEditService Edits) CreateChanges(RoslynSession session)
     {

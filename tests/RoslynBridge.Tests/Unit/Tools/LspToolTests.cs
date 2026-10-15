@@ -9,7 +9,6 @@ using RoslynBridge.Lsp;
 using RoslynBridge.Queries;
 using RoslynBridge.Requests;
 using RoslynBridge.Symbols;
-using RoslynBridge.Tests.Fakes;
 using RoslynBridge.Tools;
 using StreamJsonRpc;
 using static RoslynBridge.Tests.Unit.TestHelpers;
@@ -24,6 +23,7 @@ public sealed class LspToolTests : IDisposable
     public async Task BridgeBugIsNotReportedAsAnInvalidRequestAsync()
     {
         await using var session = CreateSession(
+            _root,
             (_, _) => throw new InvalidOperationException("Bridge invariant failed.")
         );
         using var tool = CreateTool(session);
@@ -41,7 +41,7 @@ public sealed class LspToolTests : IDisposable
     [InlineData(LspMethods.WorkspaceApplyEdit)]
     public async Task RawRequestRefusesMethodsTheBridgeOwnsAsync(string method)
     {
-        await using var session = CreateSession(FakeServer());
+        await using var session = CreateSession(_root, FakeServer());
         using var tool = CreateTool(session);
 
         var response = await tool.ExecuteAsync(
@@ -62,7 +62,7 @@ public sealed class LspToolTests : IDisposable
     [InlineData("custom/unlistedMethod")]
     public async Task RawRequestOutsideTheReadOnlyMethodsRequiresApplyAsync(string method)
     {
-        await using var session = CreateSession(FakeServer());
+        await using var session = CreateSession(_root, FakeServer());
         using var tool = CreateTool(session);
 
         var response = await tool.ExecuteAsync(
@@ -83,6 +83,7 @@ public sealed class LspToolTests : IDisposable
     {
         var source = await WriteFileAsync(_root, "Source.cs", "class A {}");
         await using var session = CreateSession(
+            _root,
             FakeServer(server =>
                 server.Handle = async (_, _) =>
                 {
@@ -121,6 +122,22 @@ public sealed class LspToolTests : IDisposable
     }
 
     [Fact]
+    public async Task MissingServerExecutableIsReportedAsAnIoErrorAsync()
+    {
+        var options = new BridgeOptions
+        {
+            WorkspaceRoot = _root,
+            ServerPath = Path.Combine(_root, "missing-server"),
+        };
+        await using var session = CreateSession(_root, RoslynProcess.Start, options);
+        using var tool = CreateTool(session, options);
+
+        var response = await tool.ExecuteAsync(SymbolQuery(), TestCt);
+
+        ErrorCode(response).Should().Be(ErrorCodes.Io);
+    }
+
+    [Fact]
     public async Task CallReportsLoadingWhenTheWorkspaceLoadsPastTheStartupTimeoutAsync()
     {
         var load = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -130,6 +147,7 @@ public sealed class LspToolTests : IDisposable
             StartupTimeout = TimeSpan.FromMilliseconds(50),
         };
         await using var session = CreateSession(
+            _root,
             FakeServer(server => server.ProjectLoad = load.Task),
             options
         );
@@ -148,6 +166,7 @@ public sealed class LspToolTests : IDisposable
         var launched = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var launches = 0;
         await using var session = CreateSession(
+            _root,
             FakeServer(server =>
             {
                 launches++;
@@ -179,6 +198,7 @@ public sealed class LspToolTests : IDisposable
         var load = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var launched = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         await using var session = CreateSession(
+            _root,
             FakeServer(server =>
             {
                 server.ProjectLoad = load.Task;
@@ -203,22 +223,6 @@ public sealed class LspToolTests : IDisposable
 
     private static LspRequest SymbolQuery() =>
         new() { Action = LspAction.Symbols, Query = "Greeter" };
-
-    private static RoslynLauncher FakeServer(Action<FakeRoslynServer>? configure = null) =>
-        (_, _) =>
-        {
-            var server = new FakeRoslynServer();
-            configure?.Invoke(server);
-            return server;
-        };
-
-    private RoslynSession CreateSession(RoslynLauncher launcher, BridgeOptions? options = null) =>
-        new(
-            options ?? new BridgeOptions { WorkspaceRoot = _root },
-            new WorkspacePaths(_root),
-            launcher,
-            NullLogger<RoslynSession>.Instance
-        );
 
     private LspTool CreateTool(RoslynSession session, BridgeOptions? options = null)
     {

@@ -2,8 +2,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 using System.Text.Json.Nodes;
+using Microsoft.Extensions.Logging.Abstractions;
 using ModelContextProtocol.Protocol;
+using RoslynBridge.Lsp;
 using RoslynBridge.Results;
+using RoslynBridge.Tests.Fakes;
 
 namespace RoslynBridge.Tests.Unit;
 
@@ -13,6 +16,26 @@ namespace RoslynBridge.Tests.Unit;
 internal static class TestHelpers
 {
     public static CancellationToken TestCt => TestContext.Current.CancellationToken;
+
+    public static RoslynSession CreateSession(
+        string root,
+        RoslynLauncher launcher,
+        BridgeOptions? options = null
+    ) =>
+        new(
+            options ?? new BridgeOptions { WorkspaceRoot = root },
+            new WorkspacePaths(root),
+            launcher,
+            NullLogger<RoslynSession>.Instance
+        );
+
+    public static RoslynLauncher FakeServer(Action<FakeRoslynServer>? configure = null) =>
+        (_, _) =>
+        {
+            var server = new FakeRoslynServer();
+            configure?.Invoke(server);
+            return server;
+        };
 
     public static string ResponseText(CallToolResult response)
     {

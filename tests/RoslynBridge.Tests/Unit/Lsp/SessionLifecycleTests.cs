@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 using System.Text.Json.Nodes;
-using Microsoft.Extensions.Logging.Abstractions;
 using RoslynBridge.Lsp;
 using RoslynBridge.Tests.Fakes;
 using static RoslynBridge.Tests.Unit.TestHelpers;
@@ -19,18 +18,7 @@ public sealed class SessionLifecycleTests : IDisposable
     public async Task CrashDuringARequestReportsStderrAndRestartsOnTheNextCallAsync()
     {
         var servers = new List<FakeRoslynServer>();
-        var paths = new WorkspacePaths(_root);
-        await using var session = new RoslynSession(
-            new BridgeOptions { WorkspaceRoot = _root },
-            paths,
-            (_, _) =>
-            {
-                var server = new FakeRoslynServer();
-                servers.Add(server);
-                return server;
-            },
-            NullLogger<RoslynSession>.Instance
-        );
+        await using var session = CreateSession(_root, FakeServer(servers.Add));
         await session.EnsureStartedAsync(TestCt);
         await servers[0].WriteErrorAsync("Unhandled exception: out of memory", TestCt);
         servers[0].Handle = (_, _) =>
@@ -62,12 +50,7 @@ public sealed class SessionLifecycleTests : IDisposable
     {
         var target = Path.Combine(_root, "Target.cs");
         await File.WriteAllTextAsync(target, "class Target {}", TestCt);
-        await using var session = new RoslynSession(
-            new BridgeOptions { WorkspaceRoot = _root },
-            new WorkspacePaths(_root),
-            (_, _) => new FakeRoslynServer(),
-            NullLogger<RoslynSession>.Instance
-        );
+        await using var session = CreateSession(_root, FakeServer());
         await session.EnsureStartedAsync(TestCt);
         var link = Path.Combine(_root, "Link.cs");
         try
@@ -84,6 +67,8 @@ public sealed class SessionLifecycleTests : IDisposable
 
         await session.SynchronizeAsync(TestCt);
         await session.SynchronizeAsync(TestCt);
+
+        session.CopyDocumentVersions().Should().NotContainKey(link);
     }
 
     public void Dispose() => Directory.Delete(_root, recursive: true);
