@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { satteri } from "@astrojs/markdown-satteri";
 import starlight from "@astrojs/starlight";
 import { defineConfig } from "astro/config";
+import starlightThemeBlack from "starlight-theme-black";
 
 const base = "/roslyn-bridge-mcp/";
 const docsDir = dirname(fileURLToPath(import.meta.url));
@@ -49,6 +50,13 @@ export default defineConfig({
     starlight({
       title: "RoslynBridge",
       description: "C# diagnostics, navigation and refactoring for coding agents.",
+      plugins: [starlightThemeBlack({ docs: { showMarkdownActions: false } })],
+      customCss: [
+        "@fontsource/onest/400.css",
+        "@fontsource/onest/500.css",
+        "@fontsource/onest/600.css",
+        "./styles/custom.css",
+      ],
       social: [
         {
           icon: "github",

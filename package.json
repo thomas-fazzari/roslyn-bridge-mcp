@@ -5,10 +5,12 @@
   "devDependencies": {
     "@astrojs/markdown-satteri": "0.4.4",
     "@astrojs/starlight": "0.42.6",
+    "@fontsource/onest": "5.3.1",
     "astro": "7.4.0",
     "markdownlint": "0.42.0",
     "markdownlint-cli2": "0.23.3",
-    "oxfmt": "0.73.0"
+    "oxfmt": "0.73.0",
+    "starlight-theme-black": "0.7.1"
   },
   "packageManager": "bun@1.4.2"
 }
