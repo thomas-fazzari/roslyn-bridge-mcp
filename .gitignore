@@ -35,7 +35,7 @@
 !/.claude/
 !/.claude/settings.json
 !/.claude/hooks/
-!/.claude/hooks/format
+!/.claude/hooks/format.pl
 
 !/src/
 !/src/**
