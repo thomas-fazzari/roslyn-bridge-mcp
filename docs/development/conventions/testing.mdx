@@ -1,9 +1,7 @@
 ---
+title: "Testing conventions"
 description: "States what to test, what not to test and how tests are written."
-tags: [kind/reference, area/code]
 ---
-
-# Testing conventions
 
 Add a test only when its failure would show that behavior is broken: a bug, a broken requirement or a violated contract. Prefer a few focused tests, one per distinct failure mode, over many variations of the same case. For a bug fix, add a regression test that fails before the fix when practical.
 

@@ -1,0 +1,37 @@
+---
+title: "Documentation"
+description: "Defines what the documentation covers, how pages are organized and how to check them."
+---
+
+Files under `docs` are the MDX sources of the [Starlight](https://starlight.astro.build/) site. The user pages explain how to install and use the bridge. The developer guide under `docs/development` explains how the bridge is built and how to change it.
+
+## What to document
+
+Document what stays true across releases: responsibilities, invariants and the reason behind them, contracts with clients and workflows for common changes. Leave tuned values, such as timeouts and limits, in the code, unless callers need to know what happens when a limit is exceeded.
+
+Describe rules and responsibilities, not the current implementation. Do not describe individual tests or list files a reader can see in the tree. Do not document planned or unfinished work. Describe the current design only, without references to earlier designs.
+
+The guides are the source of truth. `AGENTS.md` holds short rules for agents and links to the guide pages instead of repeating them.
+
+## Pages
+
+Keep each page on one subject, and link to the page that owns an explanation instead of repeating it. Link to other pages by their relative `.mdx` path, such as `[Setup](setup.mdx)`. The build turns these links into site routes, so they work both on the site and in an editor. Open each page with a paragraph that names the code it covers. Add a row to the [common changes](index.mdx#common-changes) table when a page gains a workflow.
+
+Start each page with this frontmatter:
+
+```yaml
+---
+title: "Page title"
+description: "Explains the subject and scope of the page."
+---
+```
+
+Starlight renders `title` as the page heading, so the body starts at `##`. `description` is a one-sentence summary used for the page metadata.
+
+MDX reads `<` and `{` in prose as JSX. Put them in inline code or a code block.
+
+The `llms` files under `docs/public` are plain-text references for agents. Keep them in sync with the tool contracts.
+
+## Site
+
+`docs/astro.config.mjs` holds the site settings and the sidebar. `docs/content.config.mjs` loads the pages. Add each page to the sidebar. `mise run docs:dev` serves the site locally. `mise run docs:check` lints Markdown, checks formatting and builds the site. A link to a missing page fails the build, but a page missing from the sidebar does not.

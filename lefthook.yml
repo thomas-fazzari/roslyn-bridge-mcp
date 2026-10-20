@@ -8,12 +8,12 @@ pre-commit:
       stage_fixed: true
 
     - name: oxfmt
-      glob: "**/*.{md,json,jsonc,yml,yaml,toml,js,mjs,ts}"
+      glob: "**/*.{md,mdx,json,jsonc,yml,yaml,toml,js,mjs,ts}"
       run: bunx --bun oxfmt --write --no-error-on-unmatched-pattern {staged_files}
       stage_fixed: true
 
     - name: markdownlint
-      glob: "**/*.md"
+      glob: "**/*.{md,mdx}"
       run: bunx --bun markdownlint-cli2 --no-globs --fix {staged_files}
       stage_fixed: true
 

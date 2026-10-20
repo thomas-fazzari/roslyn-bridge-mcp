@@ -1,9 +1,7 @@
 ---
+title: "Developer guide"
 description: "Introduces the developer guide, its design rules and the page to read for each common change."
-tags: [kind/index, area/project]
 ---
-
-# Developer guide
 
 RoslynBridge is a native executable that serves C# tools over the Model Context Protocol (MCP). It starts the official Roslyn language server, keeps it in sync with the workspace files and turns tool calls into Language Server Protocol (LSP) requests.
 
@@ -17,11 +15,11 @@ RoslynBridge is a native executable that serves C# tools over the Model Context 
 
 ## Sections
 
-- [Setup](setup.md) installs the tools and explains local settings.
-- [Validation](validation.md) lists the checks to run and how to run a subset of tests.
-- [Releases](releases.md) covers native builds and publishing.
-- [C# conventions](conventions/csharp.md) and [testing conventions](conventions/testing.md) state the rules for code and tests.
-- [Documentation](documentation.md) defines what these pages cover and how to write them.
+- [Setup](setup.mdx) installs the tools and explains local settings.
+- [Validation](validation.mdx) lists the checks to run and how to run a subset of tests.
+- [Releases](releases.mdx) covers native builds and publishing.
+- [C# conventions](conventions/csharp.mdx) and [testing conventions](conventions/testing.mdx) state the rules for code and tests.
+- [Documentation](documentation.mdx) defines what these pages cover and how to write them.
 
 ## Layout
 
@@ -39,14 +37,14 @@ RoslynBridge is a native executable that serves C# tools over the Model Context 
 | `src/RoslynBridge`          | Entry point, setup command, and the options, errors and workspace paths every layer shares |
 | `tests/RoslynBridge.Tests`  | Unit tests, integration tests and fixtures                                                 |
 | `eng`                       | Analyzer rules and CI tasks                                                                |
-| `docs`                      | VitePress pages and configuration                                                          |
+| `docs`                      | Starlight pages and configuration                                                          |
 
 ## Common changes
 
-| Change                             | Start with                                    |
-| ---------------------------------- | --------------------------------------------- |
-| Change an analyzer or style rule   | [Analyzers](conventions/csharp.md#analyzers)  |
-| Report a new kind of failure       | [Errors](conventions/csharp.md#errors)        |
-| Add or change a test               | [Testing conventions](conventions/testing.md) |
-| Publish a release                  | [Releases](releases.md)                       |
-| Add or change a documentation page | [Documentation](documentation.md)             |
+| Change                             | Start with                                     |
+| ---------------------------------- | ---------------------------------------------- |
+| Change an analyzer or style rule   | [Analyzers](conventions/csharp.mdx#analyzers)  |
+| Report a new kind of failure       | [Errors](conventions/csharp.mdx#errors)        |
+| Add or change a test               | [Testing conventions](conventions/testing.mdx) |
+| Publish a release                  | [Releases](releases.mdx)                       |
+| Add or change a documentation page | [Documentation](documentation.mdx)             |

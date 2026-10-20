@@ -6,6 +6,7 @@
     "redhat.vscode-yaml",
     "oxc.oxc-vscode",
     "tamasfe.even-better-toml",
-    "hverlin.mise-vscode"
+    "hverlin.mise-vscode",
+    "unifiedjs.vscode-mdx"
   ]
 }

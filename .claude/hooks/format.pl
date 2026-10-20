@@ -15,7 +15,7 @@ for my $file (@files) {
     if ($file =~ /\.(?:cs|csx|csproj|props|targets|slnx)$/) {
         system 'csharpier', 'format', $file;
     }
-    elsif ($file =~ /\.(?:md|json|jsonc|ya?ml|toml|m?js|ts)$/) {
+    elsif ($file =~ /\.(?:mdx?|json|jsonc|ya?ml|toml|m?js|ts)$/) {
         system 'bunx', '--bun', 'oxfmt', '--write', '--no-error-on-unmatched-pattern', $file;
     }
 }

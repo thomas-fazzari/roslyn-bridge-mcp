@@ -50,12 +50,8 @@
 **/bin/
 **/obj/
 **/node_modules/
-/docs/.vitepress/cache/
-/docs/.vitepress/dist/
-/docs/.obsidian/*
-!/docs/.obsidian/app.json
-!/docs/.obsidian/types.json
-/docs/.trash/
+/docs/.astro/
+/docs/dist/
 **/TestResults/
 **/.DS_Store
 **/*.user

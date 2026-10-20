@@ -60,16 +60,16 @@ run = "bunx --bun oxfmt --check ."
 
 [tasks."docs:dev"]
 description = "Serves the documentation with live updates"
-run = "bunx --bun vitepress dev docs --host 127.0.0.1 --port 5174 --strictPort"
+run = "bunx --bun astro dev --root docs --host 127.0.0.1 --port 5174"
 
 [tasks."docs:build"]
 description = "Builds the documentation site"
-run = "bunx --bun vitepress build docs"
+run = "bunx --bun astro build --root docs"
 
 [tasks."docs:check"]
 description = "Lints Markdown, checks its formatting and builds the documentation"
 depends = ["docs:build"]
 run = [
   "bunx --bun markdownlint-cli2",
-  'bunx --bun oxfmt --check README.md AGENTS.md "docs/**/*.md"',
+  'bunx --bun oxfmt --check README.md AGENTS.md "docs/**/*.{mdx,mjs}"',
 ]

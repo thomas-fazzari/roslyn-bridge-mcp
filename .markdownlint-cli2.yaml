@@ -5,10 +5,9 @@ config:
 globs:
   - README.md
   - AGENTS.md
-  - "docs/**/*.md"
+  - "docs/**/*.mdx"
 ignores:
   - "**/node_modules/**"
-  - "docs/.vitepress/cache/**"
-  - "docs/.vitepress/dist/**"
-  - "docs/.trash/**"
+  - "docs/.astro/**"
+  - "docs/dist/**"
 fix: false

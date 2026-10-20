@@ -28,8 +28,8 @@
     "**/node_modules/**": true,
     "**/obj/**": true,
     "**/TestResults/**": true,
-    "docs/.vitepress/cache/**": true,
-    "docs/.vitepress/dist/**": true
+    "docs/.astro/**": true,
+    "docs/dist/**": true
   },
   "search.exclude": {
     "**/artifacts/**": true,
@@ -37,16 +37,16 @@
     "**/node_modules/**": true,
     "**/obj/**": true,
     "**/TestResults/**": true,
-    "docs/.vitepress/cache/**": true,
-    "docs/.vitepress/dist/**": true
+    "docs/.astro/**": true,
+    "docs/dist/**": true
   },
   "[csharp][xml]": {
     "editor.defaultFormatter": "csharpier.csharpier-vscode"
   },
-  "[javascript][typescript][markdown][json][jsonc][yaml]": {
+  "[javascript][typescript][markdown][mdx][json][jsonc][yaml]": {
     "editor.defaultFormatter": "oxc.oxc-vscode"
   },
-  "[markdown]": {
+  "[markdown][mdx]": {
     "editor.wordWrap": "on"
   }
 }
