@@ -10,7 +10,7 @@ C# diagnostics, navigation and refactoring for coding agents, backed by the offi
 Find definitions, implementations and references. Preview and apply renames, fixes and refactorings.
 The bridge reads saved files and works independently of your editor.
 
-[Get started](https://thomas-fazzari.github.io/roslyn-bridge-mcp/getting-started.html) · [Usage](https://thomas-fazzari.github.io/roslyn-bridge-mcp/usage.html) · [Development](https://thomas-fazzari.github.io/roslyn-bridge-mcp/development/)
+[Get started](https://thomas-fazzari.github.io/roslyn-bridge-mcp/getting-started/) · [Usage](https://thomas-fazzari.github.io/roslyn-bridge-mcp/usage/) · [Development](https://thomas-fazzari.github.io/roslyn-bridge-mcp/development/)
 
 ## Install
 
@@ -26,7 +26,7 @@ Windows x64, in PowerShell:
 irm https://raw.githubusercontent.com/thomas-fazzari/roslyn-bridge-mcp/master/install.ps1 | iex
 ```
 
-The installer prints the command that registers the bridge in each agent it finds. See [Get started](https://thomas-fazzari.github.io/roslyn-bridge-mcp/getting-started.html) for details.
+The installer prints the command that registers the bridge in each agent it finds. See [Get started](https://thomas-fazzari.github.io/roslyn-bridge-mcp/getting-started/) for details.
 
 ## Contributors
 
