@@ -25,6 +25,7 @@ internal sealed partial class LspQueries
                 query with
                 {
                     Limit = request.Limit,
+                    Offset = request.Offset,
                     Context = request.Context,
                 }
             )

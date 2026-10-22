@@ -15,21 +15,23 @@ internal sealed record FileLocations(
     IReadOnlyDictionary<int, string>? Lines = null
 );
 
-/// <param name="Total">Occurrences before limiting.</param>
+/// <param name="Total">Occurrences before paging.</param>
+/// <param name="NextOffset">The offset of the next page, or null on the last page.</param>
 /// <param name="Generated">Source-generated occurrences left out.</param>
 internal sealed record Locations(
     IReadOnlyList<FileLocations> Files,
     int Total,
-    bool Truncated,
+    int? NextOffset,
     int Generated
 ) : ToolResult;
 
-/// <param name="Total">Symbols before limiting, nested ones included.</param>
+/// <param name="Total">Symbols before paging, nested ones included.</param>
+/// <param name="NextOffset">The offset of the next page, or null on the last page.</param>
 /// <param name="Accesses">Property, field and constant accesses left out of callees.</param>
 internal sealed record SymbolList(
     IReadOnlyList<SymbolItem> Items,
     int Total,
-    bool Truncated,
+    int? NextOffset,
     int Accesses = 0
 ) : ToolResult;
 
@@ -47,18 +49,29 @@ internal sealed record Diagnostic(
 
 internal sealed record FileDiagnostics(string File, IReadOnlyList<Diagnostic> Diagnostics);
 
-/// <param name="FilesWithDiagnostics">Files with diagnostics at the selected severity, before limiting.</param>
-/// <param name="Total">Diagnostics at the selected severity, before limiting.</param>
+/// <param name="Count">Diagnostics with the code, before paging.</param>
+/// <param name="Example">The first diagnostic with the code, in file and position order.</param>
+internal sealed record CodeSummary(int Count, string File, Diagnostic Example);
+
+/// <param name="Codes">One entry per diagnostic code in a summary, which replaces the files.</param>
+/// <param name="FilesWithDiagnostics">Files with diagnostics at the selected severity, before paging.</param>
+/// <param name="Total">Diagnostics at the selected severity, before paging.</param>
 /// <param name="BelowSeverity">Diagnostics left out by the severity filter.</param>
+/// <param name="NextOffset">The offset of the next page of diagnostics, or of codes in a summary, or null on the last page.</param>
 /// <param name="MiscellaneousFiles">Files outside every project, which get no semantic diagnostics.</param>
+/// <param name="CodeCount">Codes before paging, counted in a summary only.</param>
+/// <param name="FilteredByIds">Whether the counts cover only the requested codes.</param>
 internal sealed record DiagnosticReport(
     int FilesChecked,
     IReadOnlyList<FileDiagnostics> Files,
+    IReadOnlyList<CodeSummary> Codes,
     int FilesWithDiagnostics,
     int Total,
     int BelowSeverity,
-    bool Truncated,
-    IReadOnlyList<string> MiscellaneousFiles
+    int? NextOffset,
+    IReadOnlyList<string> MiscellaneousFiles,
+    int CodeCount,
+    bool FilteredByIds
 ) : ToolResult;
 
 /// <summary>
@@ -70,11 +83,12 @@ internal sealed record SourcePart(SymbolItem Symbol, int FirstLine, int LastLine
 internal sealed record SourceParts(IReadOnlyList<SourcePart> Parts, int OmittedLines) : ToolResult;
 
 /// <param name="Members">Members with names relative to the type.</param>
+/// <param name="NextOffset">The offset of the next page, or null on the last page.</param>
 internal sealed record TypeMembers(
     SymbolItem Type,
     IReadOnlyList<SymbolItem> Members,
     int Total,
-    bool Truncated
+    int? NextOffset
 ) : ToolResult;
 
 /// <param name="Label">What produced the section, which a client can request alone.</param>

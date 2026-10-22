@@ -98,7 +98,7 @@ format of diagnostics.txt, for example:
 src/Calculator.cs
   12:9 warning CS8603 Possible null reference return.
 2 files checked, 1 diagnostic in 1 file
-Without that summary line, the check was skipped. Run diagnostics on the
+Without that totals line, the check was skipped. Run diagnostics on the
 changed files then.
 
 Edits must remain inside the workspace. The bridge rejects symlinks below its

@@ -23,6 +23,13 @@ severity sets the lowest reported severity. The default, warning, reports
 errors and warnings. Use information or hint to include analyzer suggestions:
 diagnostics {"file":"src/Calculator.cs","severity":"hint"}
 
+Only some codes. Codes match without regard to case, and ids applies before
+severity:
+diagnostics {"file":"src/Calculator.cs","ids":["CS0246","IDE0005"]}
+
+One line per code, for a large audit:
+diagnostics {"file":"src/Core/**/*.cs","summary":true}
+
 RESULT
 ------
 Results are text lines. Each file with diagnostics is followed by one
@@ -34,10 +41,21 @@ src/Calculator.cs
 to the edit tool's code_actions, or pass the code as its diagnostic.
 severity is error, warning, information or hint. Clean files are not listed.
 
-A summary line follows the files:
+A totals line follows the files:
 4 files checked, 3 diagnostics in 2 files, 5 below the severity
 "below the severity" counts diagnostics left out by the severity filter.
 A clean scan reads: 1 file checked, no diagnostics
+
+With ids, the report lists and counts only matching diagnostics, and the
+totals line ends with "filtered by ids". A filtered scan with no match reads:
+1 file checked, no diagnostics, filtered by ids
+That is not a clean file. Other codes may remain.
+
+With summary, each code gets one line instead of one line per diagnostic, sorted
+by count and then by code:
+CS0246 x12 error src/Calculator.cs:12:9 The type or namespace name 'Foo' could not be found
+x12 is the count. The severity, an example location and its message follow. The
+totals line still counts diagnostics.
 
 A line starting with "truncated:" means the limit omitted diagnostics.
 A line starting with "incomplete:" lists files Roslyn has not attached to a
@@ -47,7 +65,11 @@ stays listed. Check the project file includes it.
 LIMITS AND VERIFICATION
 -----------------------
 limit defaults to 50 and accepts 1 through 250 across the whole response.
-It caps returned items, not the files analyzed or the analysis time.
+It caps returned items, not the files analyzed or the analysis time. With
+summary, it caps the code lines.
+A truncated result gives the next offset. Send it as offset to skip that many
+diagnostics, or code lines with summary. Diagnostics are in file, line and
+character order, so pages do not overlap. offset never changes the totals.
 A scan accepts at most 1000 files. Narrow the glob if it exceeds this limit.
 When the result is truncated, split the selection into narrower requests.
 Report the checked scope. A failed, incomplete or truncated response cannot

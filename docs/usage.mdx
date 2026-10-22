@@ -19,9 +19,9 @@ Available fixes and refactorings depend on the installed Roslyn version and proj
 
 | Tool            | Arguments                                                                                                                                                                                                       | Result                                                                        |
 | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| `diagnostics`   | `file` path or glob, `severity`                                                                                                                                                                                 | Errors, warnings and suggestions                                              |
+| `diagnostics`   | `file` path or glob, `severity`, `ids`, `summary`                                                                                                                                                               | Errors, warnings and suggestions                                              |
 | `navigate`      | `action` (`definition`, `type_definition`, `implementation`, `references`, `callers`, `callees`, `supertypes`, `subtypes`, `hover`, `source`, `members`, `impact`), and `symbol` or `file`, `line`, `character` | Locations, related symbols, hover text, source or members                     |
-| `bulk_navigate` | `queries` (1 to 16 items, each with the `action` and the `symbol` or `file`, `line`, `character` of `navigate`), `context`, `limit`                                                                             | One section per query                                                         |
+| `bulk_navigate` | `queries` (1 to 16 items, each with the `action` and the `symbol` or `file`, `line`, `character` of `navigate`), `context`, `limit`, `offset`                                                                   | One section per query                                                         |
 | `symbols`       | `file` or `query`                                                                                                                                                                                               | Document or workspace symbols                                                 |
 | `edit`          | `action` (`rename`, `rename_file`, `code_actions`) and its inputs                                                                                                                                               | Edit previews, then applied changes                                           |
 | `lsp`           | `action` (`status`, `capabilities`, `reload`, `request`), `method`, `parameters`                                                                                                                                | Session state, a fresh session or a raw Language Server Protocol (LSP) result |
@@ -87,21 +87,42 @@ Both also accept a `file` and `line` alone, and then use the innermost declarati
 Each section has the shape of that action's own result, and a section that does not apply reads `## action: none`.
 When the sections do not all fit, the largest ones are named with their sizes on a final `omitted to fit:` line. Request those alone.
 `bulk_navigate` runs up to 16 independent `navigate` queries concurrently, and a query cannot use another query's result.
-Each query takes the `action`, `symbol`, `file`, `line` and `character` of `navigate`, and `context` and `limit` apply to every query.
+Each query takes the `action`, `symbol`, `file`, `line` and `character` of `navigate`, and `context`, `limit` and `offset` apply to every query.
 It returns one section per query in request order, headed `## number action target`. The number starts at 1, and the target is the symbol or `file:line:character`.
 A query that fails shows its error line in its own section, and the others still run. If the call times out, finished sections stay and the rest report `timeout`.
 An `impact` query lists its sections under `###` headers. Sections that do not fit are named with their sizes on a final `omitted to fit:` line.
 `hover` returns plain text. `symbols` uses the same symbol lines. For a file, they give the declaration end after a dash, as in `5:18-9:2`, and are indented under their container.
-A final `truncated:` line gives the total when `limit` omitted results.
+A final `truncated:` line gives the total and the next offset when `limit` omitted results:
+
+```text
+truncated: 300 locations in total, next offset: 50. Raise limit or narrow the query.
+```
+
+Send the next offset as `offset` to read the next page. `offset` skips that many results and never changes the totals.
+`navigate`, `bulk_navigate`, `symbols` and `diagnostics` accept it, and a negative offset returns `invalid_request`.
+An offset past the last result returns a line that gives the total.
+Pages do not overlap because results keep a fixed order. Locations, related symbols and members are in file and position order.
+Workspace symbols are ordered by how well the name matches, then by file and position. Diagnostics are in file, line and character order.
 
 For diagnostics, omit `file` to scan C# files or use a glob such as `src/**/*.cs`. Braces list alternatives, so `src/{Calculator,Program}.cs` checks two files in one call. Only `.cs` and `.csx` files are analyzed.
 `severity` defaults to `warning`, which reports errors and warnings. Set it to `information` or `hint` to include analyzer suggestions.
-Each file with diagnostics is followed by one indented line per diagnostic, then a summary:
+Each file with diagnostics is followed by one indented line per diagnostic, then a totals line:
 
 ```text
 src/Problems.cs
   5:19 error CS0246 The type or namespace name 'List<>' could not be found
 4 files checked, 1 diagnostic in 1 file, 3 below the severity
+```
+
+`ids` lists diagnostic codes, such as `["CS0246", "IDE0005"]`. Codes match without regard to case, and `ids` applies before `severity`.
+The report lists and counts only matching diagnostics, and its totals line ends with `filtered by ids`. A filtered result without matches does not mean the workspace is clean.
+`summary` returns one line per code instead of one line per diagnostic. It lists the code, its count, its severity, one example location and its message.
+Lines are sorted by count, then by code. `limit` and `offset` count code lines, and the totals line still counts diagnostics:
+
+```text
+CS0246 x12 error src/Problems.cs:5:19 The type or namespace name 'List<>' could not be found
+IDE0005 x3 hint src/Program.cs:1:1 Using directive is unnecessary.
+4 files checked, 15 diagnostics in 2 files
 ```
 
 A line starting with `incomplete:` lists files not attached to a project, for example a file outside every project.

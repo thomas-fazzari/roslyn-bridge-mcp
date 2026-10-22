@@ -18,6 +18,9 @@ public sealed class LspToolTests : IDisposable
     private const string SourceText = "class A {}\nclass B {}\nclass C {}\nclass D {}\n";
     private const int LspClassKind = 5;
 
+    private const int Error = (int)DiagnosticSeverity.Error;
+    private const int Warning = (int)DiagnosticSeverity.Warning;
+
     private readonly string _root = Directory.CreateTempSubdirectory("roslyn-lsp-tool-").FullName;
 
     [Fact]
@@ -310,6 +313,218 @@ public sealed class LspToolTests : IDisposable
         );
 
         ResponseText(response).Should().StartWith("2 files checked");
+    }
+
+    [Fact]
+    public async Task DiagnosticsKeepOnlyTheRequestedIdsAndSayThatTheFilterAppliedAsync()
+    {
+        await WriteFileAsync(_root, "A.cs", "class A {}");
+        await using var session = CreateSession(
+            _root,
+            DiagnosticServer(("A.cs", 0, 0, Error, "CS0246"), ("A.cs", 1, 0, Warning, "CS8618"))
+        );
+        using var tool = CreateTool(session);
+
+        var filtered = await tool.ExecuteAsync(
+            new LspRequest
+            {
+                Action = LspAction.Diagnostics,
+                File = "A.cs",
+                Ids = ["cs0246"],
+            },
+            TestCt
+        );
+        var unmatched = await tool.ExecuteAsync(
+            new LspRequest
+            {
+                Action = LspAction.Diagnostics,
+                File = "A.cs",
+                Ids = ["CS9999"],
+            },
+            TestCt
+        );
+
+        ResponseText(filtered)
+            .Split('\n')
+            .Should()
+            .Equal(
+                "A.cs",
+                "  1:1 error CS0246 Message CS0246",
+                "1 file checked, 1 diagnostic in 1 file, filtered by ids"
+            );
+        ResponseText(unmatched).Should().Be("1 file checked, no diagnostics, filtered by ids");
+    }
+
+    [Fact]
+    public async Task DiagnosticSummaryListsEachCodeByCountThenCodeAsync()
+    {
+        await WriteFileAsync(_root, "A.cs", "class A {}");
+        await WriteFileAsync(_root, "B.cs", "class B {}");
+        await using var session = CreateSession(
+            _root,
+            DiagnosticServer(
+                ("A.cs", 0, 2, Warning, "CS8618"),
+                ("A.cs", 1, 0, Error, "CS0246"),
+                ("A.cs", 3, 4, Error, "CS0246"),
+                ("A.cs", 5, 0, Warning, "CS0168"),
+                ("B.cs", 0, 0, Error, "CS0246"),
+                ("B.cs", 1, 1, Warning, "CS0168"),
+                ("B.cs", 2, 0, Warning, "CS8618"),
+                ("B.cs", 3, 0, Warning, "IDE0051")
+            )
+        );
+        using var tool = CreateTool(session);
+        var request = new LspRequest { Action = LspAction.Diagnostics, Summary = true };
+
+        var full = await tool.ExecuteAsync(request, TestCt);
+        var firstPage = await tool.ExecuteAsync(request with { Limit = 2 }, TestCt);
+        var secondPage = await tool.ExecuteAsync(request with { Limit = 2, Offset = 2 }, TestCt);
+
+        ResponseText(full)
+            .Split('\n')
+            .Should()
+            .Equal(
+                "CS0246 x3 error A.cs:2:1 Message CS0246",
+                "CS0168 x2 warning A.cs:6:1 Message CS0168",
+                "CS8618 x2 warning A.cs:1:3 Message CS8618",
+                "IDE0051 x1 warning B.cs:4:1 Message IDE0051",
+                "2 files checked, 8 diagnostics in 2 files"
+            );
+        ResponseText(firstPage)
+            .Should()
+            .StartWith(
+                "CS0246 x3 error A.cs:2:1 Message CS0246\nCS0168 x2 warning A.cs:6:1 Message CS0168\n2 files checked, 8 diagnostics in 2 files\ntruncated: 4 codes in total, next offset: 2."
+            );
+        ResponseText(secondPage).Should().StartWith("CS8618 x2 ").And.NotContain("truncated:");
+    }
+
+    [Fact]
+    public async Task DiagnosticOffsetCrossesFilesInPositionOrderAndKeepsTheTotalsAsync()
+    {
+        await WriteFileAsync(_root, "A.cs", "class A {}");
+        await WriteFileAsync(_root, "B.cs", "class B {}");
+        await using var session = CreateSession(
+            _root,
+            DiagnosticServer(
+                ("A.cs", 4, 0, Error, "CS0001"),
+                ("A.cs", 1, 0, Error, "CS0002"),
+                ("B.cs", 0, 0, Error, "CS0003"),
+                ("B.cs", 2, 0, Error, "CS0004")
+            )
+        );
+        using var tool = CreateTool(session);
+
+        var response = await tool.ExecuteAsync(
+            new LspRequest
+            {
+                Action = LspAction.Diagnostics,
+                Limit = 2,
+                Offset = 1,
+            },
+            TestCt
+        );
+
+        ResponseText(response)
+            .Should()
+            .StartWith(
+                "A.cs\n  5:1 error CS0001 Message CS0001\nB.cs\n  1:1 error CS0003 Message CS0003\n2 files checked, 4 diagnostics in 2 files\ntruncated: 4 diagnostics in total, next offset: 3."
+            );
+    }
+
+    [Fact]
+    public async Task OffsetReadsTheNextPageAndTheTruncationNamesTheNextOffsetAsync()
+    {
+        await WriteFileAsync(_root, SourceFile, SourceText);
+        await using var session = CreateSession(
+            _root,
+            FakeServer(server =>
+                server.Handle = (_, _) => Task.FromResult<JsonNode?>(FiveReferences())
+            )
+        );
+        using var tool = CreateTool(session);
+        var request = ReferencesAt(1) with { Limit = 2 };
+
+        var first = await tool.ExecuteAsync(request, TestCt);
+        var second = await tool.ExecuteAsync(request with { Offset = 2 }, TestCt);
+        var last = await tool.ExecuteAsync(request with { Offset = 4 }, TestCt);
+        var past = await tool.ExecuteAsync(request with { Offset = 9 }, TestCt);
+
+        ResponseText(first)
+            .Should()
+            .StartWith("Found.cs 1:1 2:1\ntruncated: 5 locations in total, next offset: 2.");
+        ResponseText(second)
+            .Should()
+            .StartWith("Found.cs 3:1 4:1\ntruncated: 5 locations in total, next offset: 4.");
+        ResponseText(last).Should().Be("Found.cs 5:1");
+        ResponseText(past).Should().Be("offset past the end: 5 locations in total");
+    }
+
+    [Fact]
+    public async Task BulkAppliesItsOffsetToEveryQueryAsync()
+    {
+        await WriteFileAsync(_root, SourceFile, SourceText);
+        await using var session = CreateSession(
+            _root,
+            FakeServer(server =>
+                server.Handle = (_, _) => Task.FromResult<JsonNode?>(FiveReferences())
+            )
+        );
+        using var tool = CreateTool(session);
+
+        var response = await tool.ExecuteAsync(
+            Bulk(ReferencesAt(1), ReferencesAt(2)) with
+            {
+                Limit = 1,
+                Offset = 3,
+            },
+            TestCt
+        );
+
+        ResponseText(response)
+            .Should()
+            .Contain(
+                "## 1 references Source.cs:1:1\nFound.cs 4:1\ntruncated: 5 locations in total, next offset: 4."
+            )
+            .And.Contain(
+                "## 2 references Source.cs:2:1\nFound.cs 4:1\ntruncated: 5 locations in total, next offset: 4."
+            );
+    }
+
+    [Fact]
+    public async Task NegativeOffsetIsRejectedAsAnInvalidRequestAsync()
+    {
+        await using var session = CreateSession(_root, FakeServer());
+        using var tool = CreateTool(session);
+
+        var response = await tool.ExecuteAsync(SymbolQuery() with { Offset = -1 }, TestCt);
+
+        ErrorCode(response).Should().Be(ErrorCodes.InvalidRequest);
+    }
+
+    [Fact]
+    public async Task WorkspaceSymbolsOfTheSameRankAreOrderedByLocationAsync()
+    {
+        await using var session = CreateSession(
+            _root,
+            FakeServer(server =>
+                server.Handle = (_, _) =>
+                    Task.FromResult<JsonNode?>(
+                        new JsonArray(
+                            WorkspaceSymbol("Z.cs", 0),
+                            WorkspaceSymbol("A.cs", 2),
+                            WorkspaceSymbol("A.cs", 0)
+                        )
+                    )
+            )
+        );
+        using var tool = CreateTool(session);
+
+        var response = await tool.ExecuteAsync(SymbolQuery(), TestCt);
+
+        ResponseText(response)
+            .Split('\n')
+            .Should()
+            .Equal("A.cs:1:1 class Greeter", "A.cs:3:1 class Greeter", "Z.cs:1:1 class Greeter");
     }
 
     [Fact(Timeout = 30_000)]
@@ -660,6 +875,62 @@ public sealed class LspToolTests : IDisposable
 
     public void Dispose() => Directory.Delete(_root, recursive: true);
 
+    // a diagnostic is its file, zero-based line and character, LSP severity and code
+    private static RoslynLauncher DiagnosticServer(
+        params (string File, int Line, int Character, int Severity, string Code)[] diagnostics
+    ) =>
+        FakeServer(server =>
+            server.Handle = (method, parameters) =>
+            {
+                var items = new JsonArray();
+                if (method is LspMethods.TextDocumentDiagnostic)
+                {
+                    var uri = parameters!["textDocument"]!["uri"]!.GetValue<string>();
+                    var file = Path.GetFileName(new Uri(uri).LocalPath);
+                    foreach (
+                        var diagnostic in diagnostics.Where(found =>
+                            string.Equals(found.File, file, StringComparison.Ordinal)
+                        )
+                    )
+                    {
+                        items.Add(
+                            new JsonObject
+                            {
+                                ["range"] = new JsonObject
+                                {
+                                    ["start"] = new JsonObject
+                                    {
+                                        ["line"] = diagnostic.Line,
+                                        ["character"] = diagnostic.Character,
+                                    },
+                                },
+                                ["severity"] = diagnostic.Severity,
+                                ["code"] = diagnostic.Code,
+                                ["message"] = $"Message {diagnostic.Code}",
+                            }
+                        );
+                    }
+                }
+
+                return Task.FromResult<JsonNode?>(new JsonObject { ["items"] = items });
+            }
+        );
+
+    private JsonArray FiveReferences() =>
+        new([
+            .. Enumerable
+                .Range(0, 5)
+                .Select(line => Location(Path.Combine(_root, "Found.cs"), line)),
+        ]);
+
+    private JsonObject WorkspaceSymbol(string file, int line) =>
+        new()
+        {
+            ["name"] = "Greeter",
+            ["kind"] = 5,
+            ["location"] = Location(Path.Combine(_root, file), line),
+        };
+
     private static LspRequest SymbolQuery() =>
         new() { Action = LspAction.Symbols, Query = "Greeter" };
 
@@ -699,13 +970,13 @@ public sealed class LspToolTests : IDisposable
                 ),
         ]);
 
-    private static JsonObject Location(string path) =>
+    private static JsonObject Location(string path, int line = 0) =>
         new()
         {
             ["uri"] = new Uri(path).AbsoluteUri,
             ["range"] = new JsonObject
             {
-                ["start"] = new JsonObject { ["line"] = 0, ["character"] = 0 },
+                ["start"] = new JsonObject { ["line"] = line, ["character"] = 0 },
             },
         };
 

@@ -32,7 +32,10 @@ internal sealed class DiagnosticsTool(LspTool lsp)
             "Lowest severity to report. The default reports errors and warnings. Use information or hint to include analyzer suggestions."
         )]
             DiagnosticSeverity severity = DiagnosticSeverity.Warning,
+        [Description("Only these diagnostic codes, such as CS0246.")] string[]? ids = null,
+        [Description("One line per code with count and example.")] bool summary = false,
         [Description(ToolDescriptions.Limit)] int limit = LspRequest.DefaultResultLimit,
+        [Description(ToolDescriptions.Offset)] int offset = 0,
         CancellationToken cancellationToken = default
     ) =>
         lsp.ExecuteAsync(
@@ -41,7 +44,10 @@ internal sealed class DiagnosticsTool(LspTool lsp)
                 Action = LspAction.Diagnostics,
                 File = file,
                 Severity = severity,
+                Ids = ids,
+                Summary = summary,
                 Limit = limit,
+                Offset = offset,
             },
             cancellationToken
         );

@@ -78,11 +78,12 @@ internal sealed partial class LspQueries
             found.Value[0].ToItem(paths),
             [
                 .. members
+                    .Skip(request.Offset)
                     .Take(request.Limit)
                     .Select(member => member.ToItem(paths) with { Name = member.Signature }),
             ],
             members.Count,
-            members.Count > request.Limit
+            LspRequest.NextOffset(request.Offset, request.Limit, members.Count)
         );
     }
 

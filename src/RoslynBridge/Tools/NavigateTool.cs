@@ -32,12 +32,14 @@ internal sealed class NavigateTool(LspTool lsp)
         [Description(ToolDescriptions.Character)] int? character = null,
         [Description(ToolDescriptions.Context)] bool context = false,
         [Description(ToolDescriptions.Limit)] int limit = LspRequest.DefaultResultLimit,
+        [Description(ToolDescriptions.Offset)] int offset = 0,
         CancellationToken cancellationToken = default
     ) =>
         lsp.ExecuteAsync(
             new LspRequest
             {
                 Limit = limit,
+                Offset = offset,
                 Action = action.ToLspAction(),
                 Symbol = symbol,
                 File = file,

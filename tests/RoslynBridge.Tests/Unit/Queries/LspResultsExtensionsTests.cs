@@ -31,7 +31,7 @@ public sealed class LspResultsExtensionsTests
         );
 
         result.Total.Should().Be(3);
-        result.Truncated.Should().BeFalse();
+        result.NextOffset.Should().BeNull();
         result.Files.Should().HaveCount(2);
         result.Files[0].File.Should().Be("First.cs");
         result
@@ -56,7 +56,7 @@ public sealed class LspResultsExtensionsTests
         var result = locations.ToLocations(_paths, 2, skipGenerated: false);
 
         result.Total.Should().Be(3);
-        result.Truncated.Should().BeTrue();
+        result.NextOffset.Should().Be(2);
         result.Files.Should().ContainSingle().Which.Positions.Should().HaveCount(2);
     }
 
@@ -251,8 +251,47 @@ public sealed class LspResultsExtensionsTests
         var result = symbols.ToSymbolList(_paths, 2);
 
         result.Total.Should().Be(3);
-        result.Truncated.Should().BeTrue();
+        result.NextOffset.Should().Be(2);
         result.Items[0].Children.Select(child => child.Name).Should().Equal("First");
+    }
+
+    [Fact]
+    public void SymbolOffsetSkipsInDocumentOrderAndKeepsTheMembersOfASkippedSymbol()
+    {
+        var symbols = new JsonArray(
+            new JsonObject
+            {
+                ["name"] = "Sample",
+                ["kind"] = 3,
+                ["range"] = Range(0, 0),
+                ["selectionRange"] = Range(0, 10),
+                ["children"] = new JsonArray(
+                    new JsonObject
+                    {
+                        ["name"] = "First",
+                        ["kind"] = 5,
+                        ["range"] = Range(2, 0),
+                        ["selectionRange"] = Range(2, 13),
+                    },
+                    new JsonObject
+                    {
+                        ["name"] = "Second",
+                        ["kind"] = 5,
+                        ["range"] = Range(4, 0),
+                        ["selectionRange"] = Range(4, 13),
+                    }
+                ),
+            }
+        );
+
+        var first = symbols.ToSymbolList(_paths, limit: 1, offset: 1);
+        var last = symbols.ToSymbolList(_paths, limit: 2, offset: 2);
+
+        first.Total.Should().Be(3);
+        first.Items.Select(item => item.Name).Should().Equal("First");
+        first.NextOffset.Should().Be(2);
+        last.Items.Select(item => item.Name).Should().Equal("Second");
+        last.NextOffset.Should().BeNull();
     }
 
     [Fact]
@@ -272,7 +311,7 @@ public sealed class LspResultsExtensionsTests
         var result = symbols.ToSymbolList(_paths, 1);
 
         result.Total.Should().Be(2);
-        result.Truncated.Should().BeTrue();
+        result.NextOffset.Should().Be(1);
         result
             .Items.Should()
             .BeEquivalentTo([
@@ -311,6 +350,26 @@ public sealed class LspResultsExtensionsTests
         item.Calls.Should().Equal(new SourcePosition(7, 59), new SourcePosition(8, 3));
     }
 
+    [Fact]
+    public void RelatedSymbolsAreOrderedByFileAndPositionBeforePaging()
+    {
+        var calls = new JsonArray(
+            IncomingCall("Consumer.cs", 9),
+            IncomingCall("Another.cs", 20),
+            IncomingCall("Consumer.cs", 2)
+        );
+
+        var all = calls.ToRelatedSymbols(_paths, LspRequest.DefaultResultLimit);
+        var page = calls.ToRelatedSymbols(_paths, limit: 1, offset: 1);
+
+        all.Items.Select(item => (item.File, item.Position!.Value.Line))
+            .Should()
+            .Equal(("Another.cs", 21), ("Consumer.cs", 3), ("Consumer.cs", 10));
+        page.Items.Should().ContainSingle().Which.File.Should().Be("Consumer.cs");
+        page.Items[0].Position!.Value.Line.Should().Be(3);
+        page.NextOffset.Should().Be(2);
+    }
+
     [Theory]
     [InlineData("""{"kind":"markdown","value":"```csharp\nvoid Greet()\n```\n  \n"}""")]
     [InlineData("""["```csharp\nvoid Greet()\n```"]""")]
@@ -330,6 +389,20 @@ public sealed class LspResultsExtensionsTests
         {
             ["uri"] = new Uri(Path.Combine(_paths.Root, file)).AbsoluteUri,
             ["range"] = Range(line, character),
+        };
+
+    private static JsonObject IncomingCall(string file, int line) =>
+        new()
+        {
+            ["from"] = new JsonObject
+            {
+                ["name"] = $"Caller{line}",
+                ["kind"] = 6,
+                ["uri"] = Location(file, 0, 0)["uri"]!.DeepClone(),
+                ["range"] = Range(line, 4),
+                ["selectionRange"] = Range(line, 4),
+            },
+            ["fromRanges"] = new JsonArray(Range(line, 8)),
         };
 
     private static JsonObject Range(int line, int character) =>

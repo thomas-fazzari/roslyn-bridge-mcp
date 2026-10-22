@@ -47,11 +47,23 @@ internal sealed record LspRequest
     public JsonObject? Parameters { get; init; }
 
     /// <summary>
-    /// The independent navigation requests of a bulk request. They take their limit and context from it.
+    /// The independent navigation requests of a bulk request. They take their limit, offset and context from it.
     /// </summary>
     public IReadOnlyList<LspRequest> Queries { get; init; } = [];
 
     public DiagnosticSeverity Severity { get; init; } = DiagnosticSeverity.Warning;
 
+    public IReadOnlyList<string>? Ids { get; init; }
+
+    public bool Summary { get; init; }
+
     public int Limit { get; init; } = DefaultResultLimit;
+
+    public int Offset { get; init; }
+
+    /// <summary>
+    /// Returns the offset of the page after the one at <paramref name="offset"/>, or null on the last page.
+    /// </summary>
+    internal static int? NextOffset(int offset, int limit, int total) =>
+        offset < total - limit ? offset + limit : null;
 }

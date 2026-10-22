@@ -58,7 +58,7 @@ public sealed class SourceLinesTests : IDisposable
                 },
             ],
             Total: 1,
-            Truncated: false
+            NextOffset: null
         );
 
         var result = SourceLines.Add(
@@ -98,7 +98,7 @@ public sealed class SourceLinesTests : IDisposable
     ) =>
         SourceLines
             .Add(
-                new Locations([new FileLocations(file, positions)], positions.Length, false, 0),
+                new Locations([new FileLocations(file, positions)], positions.Length, null, 0),
                 new WorkspacePaths(_root.FullName)
             )
             .Files[0]

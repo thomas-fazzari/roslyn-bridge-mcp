@@ -28,6 +28,7 @@ internal sealed class BulkNavigateTool(LspTool lsp)
         BulkQuery[] queries,
         [Description(ToolDescriptions.Context)] bool context = false,
         [Description(ToolDescriptions.Limit)] int limit = LspRequest.DefaultResultLimit,
+        [Description(ToolDescriptions.Offset)] int offset = 0,
         CancellationToken cancellationToken = default
     ) =>
         lsp.ExecuteAsync(
@@ -35,6 +36,7 @@ internal sealed class BulkNavigateTool(LspTool lsp)
             {
                 Action = LspAction.Bulk,
                 Limit = limit,
+                Offset = offset,
                 Context = context,
                 Queries =
                 [

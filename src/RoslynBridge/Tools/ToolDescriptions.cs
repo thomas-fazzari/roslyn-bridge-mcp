@@ -18,4 +18,5 @@ internal static class ToolDescriptions
     public const string Context =
         "Show the trimmed source line of each result position. Uses more tokens.";
     public const string Limit = "Maximum returned results, from 1 to 250. Truncation is explicit.";
+    public const string Offset = "Results to skip, for paging.";
 }

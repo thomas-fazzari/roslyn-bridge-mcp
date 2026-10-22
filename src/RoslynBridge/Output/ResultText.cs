@@ -218,6 +218,25 @@ internal static partial class ResultText
             }
         }
 
+        foreach (var summary in report.Codes)
+        {
+            var example = summary.Example;
+            if (example.Code is { } code)
+            {
+                text.Append(code).Append(' ');
+            }
+
+            text.Append(CultureInfo.InvariantCulture, $"x{summary.Count} ")
+                .Append(example.Severity.ToString().ToLowerInvariant())
+                .Append(' ')
+                .Append(summary.File)
+                .Append(':')
+                .Append(Position(example.Start))
+                .Append(' ')
+                .Append(OneLine(example.Message))
+                .Append('\n');
+        }
+
         text.Append(Count(report.FilesChecked, "file", "files"))
             .Append(" checked, ")
             .Append(
@@ -233,8 +252,17 @@ internal static partial class ResultText
             );
         }
 
+        if (report.FilteredByIds)
+        {
+            text.Append(", filtered by ids");
+        }
+
         text.Append('\n');
-        AppendTruncation(text, report.Total, report.Truncated, "diagnostics");
+        var (total, noun) =
+            report.CodeCount > 0 ? (report.CodeCount, "codes") : (report.Total, "diagnostics");
+
+        AppendTruncation(text, total, report.NextOffset is not null, noun, report.NextOffset);
+
         if (report.MiscellaneousFiles.Count > 0)
         {
             text.Append("incomplete: not in a project, no semantic diagnostics: ")
@@ -250,7 +278,7 @@ internal static partial class ResultText
             AppendSymbolTree(text, symbol, indent: string.Empty);
         }
 
-        AppendEmptyOrTruncation(text, symbols.Total, symbols.Truncated, "symbols");
+        AppendPageEnd(text, symbols.Total, symbols.Items.Count == 0, symbols.NextOffset, "symbols");
         if (symbols.Accesses > 0)
         {
             text.Append(
@@ -308,7 +336,13 @@ internal static partial class ResultText
             text.Append(' ').AppendJoin(' ', file.Positions.Select(Position)).Append('\n');
         }
 
-        AppendEmptyOrTruncation(text, locations.Total, locations.Truncated, "locations");
+        AppendPageEnd(
+            text,
+            locations.Total,
+            locations.Files.Count == 0,
+            locations.NextOffset,
+            "locations"
+        );
         if (locations.Generated > 0)
         {
             text.Append(
@@ -363,7 +397,13 @@ internal static partial class ResultText
                 .Append('\n');
         }
 
-        AppendEmptyOrTruncation(text, members.Total, members.Truncated, "members");
+        AppendPageEnd(
+            text,
+            members.Total,
+            members.Members.Count == 0,
+            members.NextOffset,
+            "members"
+        );
     }
 
     private static void AppendSourceLines(
@@ -428,11 +468,33 @@ internal static partial class ResultText
         };
     }
 
+    // an offset past the last result leaves the page empty, which must not read as no results
+    private static void AppendPageEnd(
+        StringBuilder text,
+        int total,
+        bool pageEmpty,
+        int? nextOffset,
+        string noun
+    )
+    {
+        if (total > 0 && pageEmpty)
+        {
+            text.Append(
+                CultureInfo.InvariantCulture,
+                $"offset past the end: {total} {noun} in total\n"
+            );
+            return;
+        }
+
+        AppendEmptyOrTruncation(text, total, nextOffset is not null, noun, nextOffset);
+    }
+
     private static void AppendEmptyOrTruncation(
         StringBuilder text,
         int total,
         bool truncated,
-        string noun
+        string noun,
+        int? nextOffset = null
     )
     {
         if (total == 0)
@@ -441,18 +503,29 @@ internal static partial class ResultText
             return;
         }
 
-        AppendTruncation(text, total, truncated, noun);
+        AppendTruncation(text, total, truncated, noun, nextOffset);
     }
 
-    private static void AppendTruncation(StringBuilder text, int total, bool truncated, string noun)
+    private static void AppendTruncation(
+        StringBuilder text,
+        int total,
+        bool truncated,
+        string noun,
+        int? nextOffset = null
+    )
     {
-        if (truncated)
+        if (!truncated)
         {
-            text.Append(
-                CultureInfo.InvariantCulture,
-                $"truncated: {total} {noun} in total. Raise limit or narrow the query.\n"
-            );
+            return;
         }
+
+        text.Append(CultureInfo.InvariantCulture, $"truncated: {total} {noun} in total");
+        if (nextOffset is { } next)
+        {
+            text.Append(CultureInfo.InvariantCulture, $", next offset: {next}");
+        }
+
+        text.Append(". Raise limit or narrow the query.\n");
     }
 
     private static string Position(SourcePosition position) =>

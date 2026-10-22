@@ -78,7 +78,8 @@ internal sealed partial class LspQueries(
         var locations = result.ToLocations(
             paths,
             request.Limit,
-            skipGenerated: request.Action is LspAction.References
+            skipGenerated: request.Action is LspAction.References,
+            offset: request.Offset
         );
         return request.Context ? SourceLines.Add(locations, paths) : locations;
     }
@@ -133,7 +134,7 @@ internal sealed partial class LspQueries(
         }
 
         var result = await NameSymbolsAsync(
-            related.ToRelatedSymbols(paths, request.Limit) with
+            related.ToRelatedSymbols(paths, request.Limit, request.Offset) with
             {
                 Accesses = accesses,
             },
@@ -224,9 +225,19 @@ internal sealed partial class LspQueries(
                     .OrderBy(symbol =>
                         MatchRank(symbol?["name"]?.GetValue<string>() ?? string.Empty, query)
                     )
+                    .ThenBy(
+                        symbol => symbol?["location"]?["uri"]?.GetValue<string>(),
+                        StringComparer.Ordinal
+                    )
+                    .ThenBy(symbol =>
+                        symbol?["location"]?["range"]?["start"]?["line"]?.GetValue<int>()
+                    )
+                    .ThenBy(symbol =>
+                        symbol?["location"]?["range"]?["start"]?["character"]?.GetValue<int>()
+                    )
                     .Select(symbol => symbol?.DeepClone()),
             ]);
-            return ranked.ToSymbolList(paths, request.Limit);
+            return ranked.ToSymbolList(paths, request.Limit, request.Offset);
         }
 
         var uri = await session.OpenDocumentAsync(request.File, cancellationToken);
@@ -235,7 +246,7 @@ internal sealed partial class LspQueries(
             LspParameters.Document(uri),
             cancellationToken
         );
-        return documentSymbols.ToSymbolList(paths, request.Limit);
+        return documentSymbols.ToSymbolList(paths, request.Limit, request.Offset);
     }
 
     public async Task<Result<DiagnosticReport>> DiagnosticsAsync(
@@ -251,14 +262,14 @@ internal sealed partial class LspQueries(
             );
         }
 
-        return await DiagnosticsAsync(files, request.Severity, request.Limit, cancellationToken);
+        return await DiagnosticsAsync(files, request, cancellationToken);
     }
 
     /// <param name="files">Full paths of C# files.</param>
+    /// <param name="request">Selects the severity, codes, summary, limit and offset of the report.</param>
     public async Task<DiagnosticReport> DiagnosticsAsync(
         IReadOnlyCollection<string> files,
-        DiagnosticSeverity severity,
-        int limit,
+        LspRequest request,
         CancellationToken cancellationToken
     )
     {
@@ -269,7 +280,7 @@ internal sealed partial class LspQueries(
             scanned.AddRange(await ScanAsync(batch, cancellationToken));
         }
 
-        return Report(scanned, severity, limit);
+        return Report(scanned, request);
     }
 
     private async Task<IEnumerable<ScannedFile>> ScanAsync(
@@ -294,59 +305,83 @@ internal sealed partial class LspQueries(
         );
     }
 
-    private DiagnosticReport Report(
-        List<ScannedFile> scanned,
-        DiagnosticSeverity severity,
-        int limit
-    )
+    private DiagnosticReport Report(List<ScannedFile> scanned, LspRequest request)
     {
-        var files = new List<FileDiagnostics>();
-        var remaining = limit;
-        var total = 0;
+        var ids = request.Ids is { Count: > 0 }
+            ? request.Ids.ToHashSet(StringComparer.OrdinalIgnoreCase)
+            : null;
+        var found = new List<(string File, Diagnostic Diagnostic)>();
         var belowSeverity = 0;
-        var filesWithDiagnostics = 0;
         foreach (var file in scanned)
         {
-            var diagnostics = file
-                .Reported.Where(diagnostic => diagnostic!.Severity() <= severity)
+            var matching = file
+                .Reported.Where(diagnostic =>
+                    ids is null || (diagnostic!.Code() is { } code && ids.Contains(code))
+                )
                 .ToList();
-            belowSeverity += file.Reported.Count - diagnostics.Count;
-            total += diagnostics.Count;
-            if (diagnostics.Count == 0)
+            var selected = matching
+                .Where(diagnostic => diagnostic!.Severity() <= request.Severity)
+                .ToList();
+            belowSeverity += matching.Count - selected.Count;
+            if (selected.Count == 0)
             {
                 continue;
             }
 
-            filesWithDiagnostics++;
-            if (remaining == 0)
-            {
-                continue;
-            }
-
-            var selected = diagnostics
-                .Select(diagnostic => diagnostic!.ToDiagnostic())
-                .OrderBy(diagnostic => diagnostic.Start.Line)
-                .ThenBy(diagnostic => diagnostic.Start.Character)
-                .Take(remaining)
-                .ToList();
-            remaining -= selected.Count;
-            files.Add(new FileDiagnostics(paths.RelativePath(file.Path), selected));
+            var relative = paths.RelativePath(file.Path);
+            found.AddRange(
+                selected
+                    .Select(diagnostic => diagnostic!.ToDiagnostic())
+                    .OrderBy(diagnostic => diagnostic.Start.Line)
+                    .ThenBy(diagnostic => diagnostic.Start.Character)
+                    .ThenBy(diagnostic => diagnostic.Code, StringComparer.Ordinal)
+                    .Select(diagnostic => (relative, diagnostic))
+            );
         }
 
+        var codes = request.Summary ? Summarize(found) : [];
+        var listed = request.Summary ? [] : found.Skip(request.Offset).Take(request.Limit);
         return new DiagnosticReport(
             scanned.Count,
-            files,
-            filesWithDiagnostics,
-            total,
+            [
+                .. listed
+                    .GroupBy(entry => entry.File, StringComparer.Ordinal)
+                    .Select(group => new FileDiagnostics(
+                        group.Key,
+                        [.. group.Select(entry => entry.Diagnostic)]
+                    )),
+            ],
+            [.. codes.Skip(request.Offset).Take(request.Limit)],
+            found.Select(entry => entry.File).Distinct(StringComparer.Ordinal).Count(),
+            found.Count,
             belowSeverity,
-            total > limit,
+            LspRequest.NextOffset(
+                request.Offset,
+                request.Limit,
+                request.Summary ? codes.Count : found.Count
+            ),
             [
                 .. scanned
                     .Where(file => file.Miscellaneous)
                     .Select(file => paths.RelativePath(file.Path)),
-            ]
+            ],
+            codes.Count,
+            ids is not null
         );
     }
+
+    private static List<CodeSummary> Summarize(List<(string File, Diagnostic Diagnostic)> found) =>
+        [
+            .. found
+                .GroupBy(entry => entry.Diagnostic.Code, StringComparer.Ordinal)
+                .Select(group => new CodeSummary(
+                    group.Count(),
+                    group.First().File,
+                    group.First().Diagnostic
+                ))
+                .OrderByDescending(summary => summary.Count)
+                .ThenBy(summary => summary.Example.Code, StringComparer.Ordinal),
+        ];
 
     public async Task<JsonObject> FileDiagnosticsAsync(
         string uri,

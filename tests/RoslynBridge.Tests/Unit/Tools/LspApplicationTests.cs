@@ -60,7 +60,7 @@ public sealed class LspApplicationTests
                 ),
             ],
             Total: 1,
-            Truncated: false,
+            NextOffset: null,
             Generated: 0
         );
 

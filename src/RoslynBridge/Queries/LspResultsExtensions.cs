@@ -24,28 +24,29 @@ internal static class LspResultsExtensions
 
         /// <summary>
         /// Converts document or workspace symbols. Document symbols keep their nesting and declaration end.
-        /// The limit applies to nested symbols too, in document order.
+        /// The offset and limit apply to nested symbols too, in document order.
+        /// A skipped symbol leaves its listed members at its level.
         /// </summary>
-        public SymbolList ToSymbolList(WorkspacePaths paths, int limit)
+        public SymbolList ToSymbolList(WorkspacePaths paths, int limit, int offset = 0)
         {
             var symbols = result as JsonArray ?? [];
+            var skipped = offset;
             var remaining = limit;
             var total = CountSymbols(symbols);
             return new SymbolList(
-                LimitSymbols(symbols, paths, ref remaining),
+                PageSymbols(symbols, paths, ref skipped, ref remaining),
                 total,
-                total > limit
+                LspRequest.NextOffset(offset, limit, total)
             );
         }
 
         /// <summary>
-        /// Converts call or type hierarchy results. Call results also list their call sites.
+        /// Converts call or type hierarchy results, in file and position order. Call results also list their call sites.
         /// </summary>
-        public SymbolList ToRelatedSymbols(WorkspacePaths paths, int limit)
+        public SymbolList ToRelatedSymbols(WorkspacePaths paths, int limit, int offset = 0)
         {
             var related = result as JsonArray ?? [];
             var items = related
-                .Take(limit)
                 .Select(entry =>
                     Symbol(entry!["from"] ?? entry["to"] ?? entry, paths) with
                     {
@@ -54,15 +55,28 @@ internal static class LspResultsExtensions
                             : [],
                     }
                 )
+                .OrderBy(item => item.File, StringComparer.Ordinal)
+                .ThenBy(item => item.Position?.Line)
+                .ThenBy(item => item.Position?.Character)
+                .ThenBy(item => item.Name, StringComparer.Ordinal)
                 .ToList();
-            return new SymbolList(items, related.Count, related.Count > limit);
+            return new SymbolList(
+                [.. items.Skip(offset).Take(limit)],
+                items.Count,
+                LspRequest.NextOffset(offset, limit, items.Count)
+            );
         }
 
         /// <summary>
         /// Groups locations by file, in path and position order, without duplicates.
         /// With <paramref name="skipGenerated"/>, source-generated locations are only counted.
         /// </summary>
-        public Locations ToLocations(WorkspacePaths paths, int limit, bool skipGenerated)
+        public Locations ToLocations(
+            WorkspacePaths paths,
+            int limit,
+            bool skipGenerated,
+            int offset = 0
+        )
         {
             var locations = result switch
             {
@@ -102,6 +116,7 @@ internal static class LspResultsExtensions
                 .OrderBy(location => location.File, StringComparer.Ordinal)
                 .ThenBy(location => location.Position.Line)
                 .ThenBy(location => location.Position.Character)
+                .Skip(offset)
                 .Take(limit)
                 .GroupBy(location => location.File, StringComparer.Ordinal)
                 .Select(group => new FileLocations(
@@ -109,7 +124,12 @@ internal static class LspResultsExtensions
                     [.. group.Select(location => location.Position)]
                 ))
                 .ToList();
-            return new Locations(files, found.Count, found.Count > limit, generated);
+            return new Locations(
+                files,
+                found.Count,
+                LspRequest.NextOffset(offset, limit, found.Count),
+                generated
+            );
         }
     }
 
@@ -132,10 +152,12 @@ internal static class LspResultsExtensions
             return new Diagnostic(
                 OneBased(start),
                 diagnostic.Severity(),
-                diagnostic["code"] is JsonValue code ? code.ToString() : null,
+                diagnostic.Code(),
                 diagnostic["message"]?.GetValue<string>() ?? string.Empty
             );
         }
+
+        public string? Code() => diagnostic["code"] is JsonValue code ? code.ToString() : null;
     }
 
     private static SymbolItem Symbol(JsonNode symbol, WorkspacePaths paths)
@@ -159,9 +181,10 @@ internal static class LspResultsExtensions
         };
     }
 
-    private static List<SymbolItem> LimitSymbols(
+    private static List<SymbolItem> PageSymbols(
         JsonArray symbols,
         WorkspacePaths paths,
+        ref int skipped,
         ref int remaining
     )
     {
@@ -171,6 +194,17 @@ internal static class LspResultsExtensions
             if (remaining == 0)
             {
                 break;
+            }
+
+            if (skipped > 0)
+            {
+                skipped--;
+                if (symbol["children"] is JsonArray listed)
+                {
+                    items.AddRange(PageSymbols(listed, paths, ref skipped, ref remaining));
+                }
+
+                continue;
             }
 
             remaining--;
@@ -183,7 +217,10 @@ internal static class LspResultsExtensions
 
             if (symbol["children"] is JsonArray { Count: > 0 } children)
             {
-                item = item with { Children = LimitSymbols(children, paths, ref remaining) };
+                item = item with
+                {
+                    Children = PageSymbols(children, paths, ref skipped, ref remaining),
+                };
             }
 
             items.Add(item);

@@ -174,8 +174,7 @@ internal sealed partial class LspTool(
             {
                 Diagnostics = await queries.DiagnosticsAsync(
                     files,
-                    DiagnosticSeverity.Warning,
-                    LspRequest.DefaultResultLimit,
+                    new LspRequest { Action = LspAction.Diagnostics },
                     cancellationToken
                 ),
             };
@@ -219,6 +218,11 @@ internal sealed partial class LspTool(
             return ToolError.InvalidRequest(
                 $"Limit must be between 1 and {LspRequest.MaximumResultLimit}."
             );
+        }
+
+        if (request.Offset < 0)
+        {
+            return ToolError.InvalidRequest("Offset must not be negative.");
         }
 
         if (
