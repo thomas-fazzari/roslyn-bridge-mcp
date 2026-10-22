@@ -4,9 +4,9 @@ on:
   push:
     branches: [master, feature/**, chore/**, fix/**, hotfix/**]
     tags: [v*]
-    paths-ignore: ["**.md", docs/**, LICENSE]
+    paths-ignore: [README.md, AGENTS.md, docs/**, LICENSE]
   pull_request:
-    paths-ignore: ["**.md", docs/**, LICENSE]
+    paths-ignore: [README.md, AGENTS.md, docs/**, LICENSE]
   workflow_dispatch:
 
 permissions:
@@ -29,7 +29,7 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
       - run: mise run install
-      - run: "mise run hooks:check ::: dotnet:fmt ::: tooling:fmt ::: docs:check ::: build"
+      - run: "mise run hooks:check ::: dotnet:fmt ::: tooling:fmt ::: docs:check ::: notices:check ::: build"
 
   native:
     name: Native AOT (${{ matrix.rid }})
@@ -118,7 +118,7 @@ jobs:
           pattern: native-*
           path: artifacts
           merge-multiple: true
-      - name: Publish tested archives
+      - name: Publish tested executables and notices
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}

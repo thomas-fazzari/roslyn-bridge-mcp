@@ -13,4 +13,8 @@ Set `ROSLYN_BRIDGE_TEST_EXECUTABLE` to the absolute path of the published execut
 
 ## Publishing
 
-Push a tag such as `v0.1.0`. The workflow publishes the release after every check passes. Each release contains one archive per platform and `SHA256SUMS`. The CI scripts live in `eng/tasks/ci`.
+Push a tag such as `v0.1.0`. The workflow publishes the release after every check passes. Each release contains one executable per platform, `LICENSE`, `NOTICE`, `THIRD_PARTY_NOTICES.md`, `DOTNET_RUNTIME_NOTICES.txt` and `SHA256SUMS`, which lists the checksum of every other file. The CI scripts live in `eng/tasks/ci`.
+
+## License notices
+
+The executable embeds `NOTICE`, `THIRD_PARTY_NOTICES.md` and the .NET runtime notices, and prints them with `roslyn-bridge-mcp licenses`. The build takes the runtime notices from `THIRD-PARTY-NOTICES.TXT` in the restored `Microsoft.DotNet.ILCompiler` package and fails when the file is missing. Publishing copies it to the output as `DOTNET_RUNTIME_NOTICES.txt`. Native executables contain their dependencies, so update `THIRD_PARTY_NOTICES.md` whenever a package is added, removed or upgraded to a version with a different license. `mise run notices:check` compares the packages listed there with the packages the executable ships, and `mise run check` runs it.

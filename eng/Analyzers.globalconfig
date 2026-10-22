@@ -123,5 +123,5 @@ dotnet_diagnostic.MA0026.severity = none
 dotnet_diagnostic.MA0048.severity = none
 
 # File header
-file_header_template = Copyright (C) RoslynBridge contributors\nSPDX-License-Identifier: GPL-3.0-only
+file_header_template = SPDX-FileCopyrightText: 2026 Thomas Fazzari\nSPDX-License-Identifier: AGPL-3.0-or-later
 dotnet_diagnostic.IDE0073.severity = warning

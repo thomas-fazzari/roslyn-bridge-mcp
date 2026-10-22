@@ -5,6 +5,7 @@ dotnet = "10.0.400"
 "dotnet:csharpier" = "1.3.0"
 bun = "1.4.2"
 lefthook = "2.2.1"
+perl = { version = "latest", os = ["linux", "macos"] }
 
 [task_config]
 includes = ["eng/tasks"]
@@ -28,8 +29,17 @@ depends = ["build"]
 run = 'dotnet test --solution RoslynBridge.slnx --configuration "${CONFIGURATION:-Debug}" --no-build --no-restore -- --explicit only --filter-class RoslynBridge.Tests.Integration.Roslyn.RoslynMcpTests'
 
 [tasks.check]
-description = "Runs every formatting, analyzer, documentation and unit test check"
-run = [{ tasks = ["hooks:check", "dotnet:fmt", "tooling:fmt", "docs:check"] }, { task = "test" }]
+description = "Runs every formatting, analyzer, documentation, license notice and unit test check"
+run = [
+  { tasks = [
+    "hooks:check",
+    "dotnet:fmt",
+    "tooling:fmt",
+    "docs:check",
+    "notices:check",
+  ] },
+  { task = "test" },
+]
 
 [tasks.fix]
 description = "Formats C#, MSBuild, Markdown, JSON, YAML and TOML files"
@@ -73,3 +83,7 @@ run = [
   "bunx --bun markdownlint-cli2",
   'bunx --bun oxfmt --check README.md AGENTS.md "docs/**/*.{mdx,mjs}"',
 ]
+
+[tasks."notices:check"]
+description = "Checks that THIRD_PARTY_NOTICES.md lists the packages the executable ships"
+run = "perl eng/tasks/check-notices.pl"

@@ -1,0 +1,34 @@
+Roslyn Bridge MCP
+Copyright (C) 2026 Thomas Fazzari
+
+This program is free software: you can redistribute it and/or modify it
+under the terms of the GNU Affero General Public License as published by
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
+
+This program is distributed in the hope that it will be useful, but
+WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero
+General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+Additional terms
+
+Under section 7 of the GNU Affero General Public License, these terms
+apply to this program and to every work based on it:
+
+a) Attribution, section 7(b). Keep this notice, including the line
+   "Copyright (C) 2026 Thomas Fazzari", intact in every copy of the
+   source code. A work based on this program that displays Appropriate
+   Legal Notices, such as an About screen or a credits list, must show
+   in them: "Based on Roslyn Bridge MCP by Thomas Fazzari
+   (https://github.com/thomas-fazzari/roslyn-bridge-mcp)".
+
+b) Origin, section 7(c). Mark a modified version as different from the
+   original, and do not present it as the original program.
+
+c) Names, sections 7(d) and 7(e). This license grants no right to use
+   the name "Roslyn Bridge MCP" as the name of a modified version, nor
+   the author's name to promote it, beyond the attribution above.

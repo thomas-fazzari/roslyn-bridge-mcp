@@ -10,4 +10,6 @@ ignores:
   - "**/node_modules/**"
   - "docs/.astro/**"
   - "docs/dist/**"
+  - NOTICE
+  - LICENSE
 fix: false

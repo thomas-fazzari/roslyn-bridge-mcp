@@ -3,7 +3,7 @@ title: "Developer guide"
 description: "Introduces the developer guide, its design rules and the page to read for each common change."
 ---
 
-RoslynBridge is a native executable that serves C# tools over the Model Context Protocol (MCP). It starts the official Roslyn language server, keeps it in sync with the workspace files and turns tool calls into Language Server Protocol (LSP) requests.
+Roslyn Bridge MCP is a native executable that serves C# tools over the Model Context Protocol (MCP). It starts the official Roslyn language server, keeps it in sync with the workspace files and turns tool calls into Language Server Protocol (LSP) requests.
 
 ## Design rules
 
@@ -34,7 +34,7 @@ RoslynBridge is a native executable that serves C# tools over the Model Context 
 | `src/RoslynBridge/Symbols`  | Symbol name resolution                                                                     |
 | `src/RoslynBridge/Editing`  | Workspace file edits, snapshots and preview diffs                                          |
 | `src/RoslynBridge/Lsp`      | Roslyn process, protocol and document synchronization                                      |
-| `src/RoslynBridge`          | Entry point, setup command, and the options, errors and workspace paths every layer shares |
+| `src/RoslynBridge`          | Entry point, commands, and the options, errors and workspace paths that every layer shares |
 | `tests/RoslynBridge.Tests`  | Unit tests, integration tests and fixtures                                                 |
 | `eng`                       | Analyzer rules and CI tasks                                                                |
 | `docs`                      | Starlight pages and configuration                                                          |

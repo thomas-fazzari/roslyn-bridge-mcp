@@ -1,4 +1,4 @@
-# RoslynBridge
+# Roslyn Bridge MCP
 
 [![CI](https://img.shields.io/github/actions/workflow/status/thomas-fazzari/roslyn-bridge-mcp/ci.yml?branch=master&label=CI)](https://github.com/thomas-fazzari/roslyn-bridge-mcp/actions/workflows/ci.yml)
 [![Version](https://img.shields.io/github/v/release/thomas-fazzari/roslyn-bridge-mcp)](https://github.com/thomas-fazzari/roslyn-bridge-mcp/releases/latest)
@@ -27,6 +27,12 @@ irm https://raw.githubusercontent.com/thomas-fazzari/roslyn-bridge-mcp/master/in
 ```
 
 The installer prints the command that registers the bridge in each agent it finds. See [Get started](https://thomas-fazzari.github.io/roslyn-bridge-mcp/getting-started/) for details.
+
+## License
+
+Licensed under the GNU Affero General Public License, version 3 or later, with additional terms under section 7. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
+
+Third-party notices are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). The executable prints them, with the .NET runtime notices, using `roslyn-bridge-mcp licenses`.
 
 ## Contributors
 

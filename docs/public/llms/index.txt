@@ -1,5 +1,5 @@
-ROSLYN CODEX LSP: AGENT REFERENCE
-=================================
+ROSLYN BRIDGE MCP: AGENT REFERENCE
+==================================
 
 MCP server: roslyn
 MCP tools: diagnostics, navigate, bulk_navigate, symbols (read-only), edit, lsp
@@ -38,5 +38,5 @@ https://thomas-fazzari.github.io/roslyn-bridge-mcp/llms/session.txt
 SETUP
 -----
 If roslyn is absent from the available MCP tools, follow the installation guide:
-https://thomas-fazzari.github.io/roslyn-bridge-mcp/getting-started.html
+https://thomas-fazzari.github.io/roslyn-bridge-mcp/getting-started/
 This reference describes the tool API.

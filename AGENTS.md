@@ -1,6 +1,6 @@
 # Dear Clanker
 
-This repository contains **RoslynBridge**, an MCP server that gives coding agents C# diagnostics, navigation and refactoring through the official Roslyn language server.
+This repository contains **Roslyn Bridge MCP**, an MCP server that gives coding agents C# diagnostics, navigation and refactoring through the official Roslyn language server.
 It ships as a native ahead-of-time executable that any MCP client can launch.
 
 ## Resources

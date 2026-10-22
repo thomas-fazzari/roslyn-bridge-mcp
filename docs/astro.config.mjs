@@ -48,7 +48,7 @@ export default defineConfig({
   markdown: { processor: satteri({ mdastPlugins: [relativePageLinks] }) },
   integrations: [
     starlight({
-      title: "RoslynBridge",
+      title: "Roslyn Bridge MCP",
       description: "C# diagnostics, navigation and refactoring for coding agents.",
       plugins: [starlightThemeBlack({ docs: { showMarkdownActions: false } })],
       customCss: [

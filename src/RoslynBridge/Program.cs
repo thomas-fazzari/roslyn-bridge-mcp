@@ -1,5 +1,5 @@
-// Copyright (C) RoslynBridge contributors
-// SPDX-License-Identifier: GPL-3.0-only
+// SPDX-FileCopyrightText: 2026 Thomas Fazzari
+// SPDX-License-Identifier: AGPL-3.0-or-later
 
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
@@ -22,7 +22,7 @@ internal static class Program
         if (args is ["--help"] or ["-h"])
         {
             await Console.Error.WriteLineAsync(
-                "roslyn-bridge-mcp [--workspace DIRECTORY] [--server EXECUTABLE] [--dotnet-root DIRECTORY] [--startup-timeout SECONDS] [--request-timeout SECONDS]\nroslyn-bridge-mcp setup"
+                "roslyn-bridge-mcp [--workspace DIRECTORY] [--server EXECUTABLE] [--dotnet-root DIRECTORY] [--startup-timeout SECONDS] [--request-timeout SECONDS]\nroslyn-bridge-mcp setup\nroslyn-bridge-mcp licenses"
             );
             return;
         }
@@ -30,6 +30,12 @@ internal static class Program
         if (args is [Setup.Command])
         {
             Environment.ExitCode = Setup.Run(Console.Out);
+            return;
+        }
+
+        if (args is [Licenses.Command])
+        {
+            Licenses.Print(Console.Out);
             return;
         }
 
