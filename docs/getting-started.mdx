@@ -31,6 +31,25 @@ Run the printed command once per agent. To update, run the install command again
 
 Releases target macOS x64 and ARM64, Linux x64 and ARM64 with glibc, and Windows x64. Your C# project can target a different .NET version. Keep its required SDK and workloads installed, including any SDK pinned in its `global.json`.
 
+### .NET tool
+
+The bridge is also a .NET tool on [NuGet](https://www.nuget.org/packages/ThomasFazzari.RoslynBridge), built for the same platforms. The scripts above need only `curl` or PowerShell. The tool needs the .NET 10 SDK, which the Roslyn language server needs anyway.
+
+```sh
+dotnet tool install --global ThomasFazzari.RoslynBridge
+roslyn-bridge-mcp setup
+```
+
+`setup` works as described above. To update, run `dotnet tool update --global ThomasFazzari.RoslynBridge`.
+
+To skip the global install, let the MCP client start the bridge with `dnx`, which runs a .NET tool without installing it:
+
+```sh
+claude mcp add --scope user roslyn -- dnx ThomasFazzari.RoslynBridge --yes
+```
+
+`dnx` runs the latest version and does not install the Roslyn language server. Run `dnx ThomasFazzari.RoslynBridge --yes -- setup` once for that, and ignore the registration commands it prints. The first launch of each version downloads the package, and on macOS and Linux the .NET SDK prints a line to standard output while it does. A client can fail on that line. Run `dnx ThomasFazzari.RoslynBridge --yes -- --help` in a terminal after each release to download the package ahead of time.
+
 ## Use it
 
 Restore your C# solution with `dotnet restore`, then open a new agent session in that project.
@@ -43,6 +62,19 @@ implementations, then preview a rename and a suggested fix. Do not apply changes
 
 Approve the tool call if prompted. The bridge uses the session's working directory as its workspace.
 Save editor changes before requesting diagnostics.
+
+## Agent instructions (recommended)
+
+Agents keep their text-search habits, and some clients defer MCP tools until the agent loads them. Add a few lines like these to the project's agent instructions file, such as `AGENTS.md` or `CLAUDE.md`, or to the equivalent file of your client:
+
+```markdown
+## C# code navigation
+
+Use the `roslyn` MCP tools for C# code before text search or reading whole files. If your client defers MCP tools, load them first.
+Read a whole file only to edit it.
+```
+
+The snippet is all the agent needs. Do not describe the tools, their parameters or how the bridge works. The MCP server already sends each tool's description and its own usage instructions to the client when it connects. Repeating them in `AGENTS.md` costs context in every session and goes out of date when the tools change.
 
 ## Configuration
 
@@ -78,4 +110,4 @@ MCP clients often start the bridge without your shell environment. The bridge th
 
 ## Remove
 
-Remove the `roslyn` entry from each agent with its `mcp remove` command, for example `claude mcp remove roslyn --scope user`. Then delete `roslyn-bridge-mcp` from the installation directory.
+Remove the `roslyn` entry from each agent with its `mcp remove` command, for example `claude mcp remove roslyn --scope user`. Then delete `roslyn-bridge-mcp` from the installation directory, or run `dotnet tool uninstall --global ThomasFazzari.RoslynBridge` when you installed the tool.

@@ -3,8 +3,30 @@
 
 namespace RoslynBridge.Tests.Unit;
 
-public sealed class SetupTests
+public sealed class SetupTests : IDisposable
 {
+    private readonly string _root = Directory.CreateTempSubdirectory("roslyn-setup-").FullName;
+
+    [Fact]
+    public void ToolInstallRegistersTheToolLinkInsteadOfTheVersionedStoreFolder()
+    {
+        var link = Path.Combine(_root, Setup.ToolCommandName);
+        File.WriteAllText(link, string.Empty);
+        var executable = Path.Combine(_root, ".store", "tool", "1.0.0", "tools", "RoslynBridge");
+
+        Setup.StableBridgePath(executable).Should().Be(link);
+    }
+
+    [Fact]
+    public void BridgePathStaysTheProcessPathWithoutAToolLink()
+    {
+        var installed = Path.Combine(_root, "bin", Setup.ToolCommandName);
+        var store = Path.Combine(_root, ".store", "tool", "1.0.0", "tools", "RoslynBridge");
+
+        Setup.StableBridgePath(installed).Should().Be(installed);
+        Setup.StableBridgePath(store).Should().Be(store);
+    }
+
     [Theory]
     [InlineData(
         "claude",
@@ -22,4 +44,6 @@ public sealed class SetupTests
 
         agent.Registration("/opt/my tools/roslyn-bridge-mcp").Should().Be(expected);
     }
+
+    public void Dispose() => Directory.Delete(_root, recursive: true);
 }

@@ -2,7 +2,22 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <PublishAot>true</PublishAot>
-    <Description>Roslyn language server tools for Codex through MCP.</Description>
+    <Description>Lightweight MCP for C# diagnostics, navigation and refactoring, backed by the official Roslyn language server.</Description>
+  </PropertyGroup>
+
+  <PropertyGroup Label="Tool package">
+    <IsPackable>true</IsPackable>
+    <PackAsTool>true</PackAsTool>
+    <PackageId>ThomasFazzari.RoslynBridge</PackageId>
+    <ToolCommandName>roslyn-bridge-mcp</ToolCommandName>
+    <!-- Native AOT cannot cross-compile, so each runtime package is packed on a runner of its own platform -->
+    <ToolPackageRuntimeIdentifiers>linux-x64;linux-arm64;osx-x64;osx-arm64;win-x64</ToolPackageRuntimeIdentifiers>
+    <PackageLicenseExpression>AGPL-3.0-or-later</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageProjectUrl>https://thomas-fazzari.github.io/roslyn-bridge-mcp/</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/thomas-fazzari/roslyn-bridge-mcp</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>mcp;model-context-protocol;roslyn;csharp;language-server;coding-agents</PackageTags>
   </PropertyGroup>
 
   <PropertyGroup>
@@ -20,6 +35,18 @@
       CopyToPublishDirectory="PreserveNewest"
     />
   </ItemGroup>
+
+  <ItemGroup>
+    <None Include="../../README.md" Pack="true" PackagePath="" />
+    <None Include="../../NOTICE" Pack="true" PackagePath="" />
+  </ItemGroup>
+
+  <!-- The runtime package holds the native executable and the runtime notices, not debug symbols or API documentation -->
+  <Target Name="ExcludeToolDebugFiles" AfterTargets="PackTool">
+    <ItemGroup>
+      <TfmSpecificPackageFile Remove="$(PublishDir)**/*.pdb;$(PublishDir)**/*.dbg;$(PublishDir)**/*.dSYM/**;$(PublishDir)$(AssemblyName).xml" />
+    </ItemGroup>
+  </Target>
 
   <Target Name="RequireRuntimeNotices" BeforeTargets="CoreCompile">
     <Error

@@ -52,6 +52,12 @@ test -n "${RUNTIME_ID:-}" || { echo 'Set RUNTIME_ID, for example osx-arm64.' >&2
 dotnet publish src/RoslynBridge/RoslynBridge.csproj --configuration Release --runtime "$RUNTIME_ID" -p:Version="${APP_VERSION:-0.0.0-dev}" --output "${NATIVE_OUTPUT:-artifacts/native}"
 """
 
+[tasks.pack]
+description = "Packs the .NET tool package for RUNTIME_ID, or the tool package that points to them when unset (APP_VERSION and PACKAGE_OUTPUT are optional)"
+run = """
+dotnet pack src/RoslynBridge/RoslynBridge.csproj --configuration Release ${RUNTIME_ID:+--runtime "$RUNTIME_ID"} -p:Version="${APP_VERSION:-0.0.0-dev}" --output "${PACKAGE_OUTPUT:-artifacts/nupkg}"
+"""
+
 [tasks."hooks:install"]
 description = "Installs the Git hooks"
 run = "lefthook install"

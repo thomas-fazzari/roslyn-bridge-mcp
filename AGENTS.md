@@ -5,7 +5,7 @@ It ships as a native ahead-of-time executable that any MCP client can launch.
 
 ## Code navigation
 
-Use the `roslyn` MCP tools for C# code before `grep` or reading whole files. When they are deferred, load them with ToolSearch first.
+Use the `roslyn` MCP tools for C# code before text search or reading whole files. When they are deferred, load them with ToolSearch first.
 
 - Find a symbol with `symbols`, and read its declaration with `navigate` and `source`.
 - List a type with `members`. Find usages with `references`, `callers` or `impact`.

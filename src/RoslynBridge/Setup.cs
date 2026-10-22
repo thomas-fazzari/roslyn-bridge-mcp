@@ -13,6 +13,7 @@ internal static class Setup
 {
     internal const string Command = "setup";
     internal const string McpServerName = "roslyn";
+    internal const string ToolCommandName = "roslyn-bridge-mcp";
 
     // The Roslyn version the CI tests the bridge against, in eng/tasks/ci/roslyn
     internal const string ServerVersion = "5.12.0-1.26426.8";
@@ -51,7 +52,7 @@ internal static class Setup
         output.WriteLine($"Roslyn: {server}");
         output.WriteLine();
 
-        var bridge = Environment.ProcessPath!;
+        var bridge = StableBridgePath(Environment.ProcessPath!);
         var detected = Agents.Where(static agent => IsInstalled(agent.Executable)).ToArray();
         output.WriteLine(
             detected.Length == 0
@@ -66,6 +67,23 @@ internal static class Setup
         }
 
         return 0;
+    }
+
+    // dotnet tool install runs the executable from a versioned folder under .store that an update deletes
+    internal static string StableBridgePath(string processPath)
+    {
+        var store = $"{Path.DirectorySeparatorChar}.store{Path.DirectorySeparatorChar}";
+        var index = processPath.IndexOf(store, StringComparison.Ordinal);
+        if (index < 0)
+        {
+            return processPath;
+        }
+
+        var link = Path.Combine(
+            processPath[..index],
+            ToolCommandName + Path.GetExtension(processPath)
+        );
+        return File.Exists(link) ? link : processPath;
     }
 
     private static string? FindOrInstallServer(

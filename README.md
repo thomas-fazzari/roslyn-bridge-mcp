@@ -2,6 +2,7 @@
 
 [![CI](https://img.shields.io/github/actions/workflow/status/thomas-fazzari/roslyn-bridge-mcp/ci.yml?branch=master&label=CI)](https://github.com/thomas-fazzari/roslyn-bridge-mcp/actions/workflows/ci.yml)
 [![Version](https://img.shields.io/github/v/release/thomas-fazzari/roslyn-bridge-mcp)](https://github.com/thomas-fazzari/roslyn-bridge-mcp/releases/latest)
+[![NuGet](https://img.shields.io/nuget/v/ThomasFazzari.RoslynBridge?logo=nuget&logoColor=white)](https://www.nuget.org/packages/ThomasFazzari.RoslynBridge)
 [![Documentation](https://img.shields.io/badge/docs-Starlight-BC52EE?logo=astro&logoColor=white)](https://thomas-fazzari.github.io/roslyn-bridge-mcp/)
 [![License](https://img.shields.io/github/license/thomas-fazzari/roslyn-bridge-mcp)](LICENSE)
 
@@ -27,6 +28,28 @@ irm https://raw.githubusercontent.com/thomas-fazzari/roslyn-bridge-mcp/master/in
 ```
 
 The installer prints the command that registers the bridge in each agent it finds. See [Get started](https://thomas-fazzari.github.io/roslyn-bridge-mcp/getting-started/) for details.
+
+### .NET tool
+
+With the .NET 10 SDK, you can install the bridge as a .NET tool instead. `setup` installs the Roslyn language server and prints the registration commands:
+
+```sh
+dotnet tool install --global ThomasFazzari.RoslynBridge
+roslyn-bridge-mcp setup
+```
+
+## Agent instructions (recommended)
+
+Add these lines to your project's `AGENTS.md`, `CLAUDE.md` or the equivalent file of your client, so the agent uses the tools instead of text search:
+
+```markdown
+## C# code navigation
+
+Use the `roslyn` MCP tools for C# code before text search or reading whole files. If your client defers MCP tools, load them first.
+Read a whole file only to edit it.
+```
+
+The snippet is all the agent needs. Do not describe the tools, their parameters or how the bridge works. The MCP server already sends each tool's description and its own usage instructions to the client when it connects. Repeating them in `AGENTS.md` costs context in every session and goes out of date when the tools change.
 
 ## License
 
