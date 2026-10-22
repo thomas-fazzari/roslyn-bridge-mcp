@@ -12,6 +12,7 @@ internal sealed class WorkspacePaths(string root)
 {
     internal const int MaximumFileCount = 100_000;
     internal const string IntermediateDirectoryName = "obj";
+    private const int ProjectSearchDepth = 2;
 
     internal static FrozenSet<string> ExcludedDirectories { get; } =
         new[]
@@ -64,6 +65,14 @@ internal sealed class WorkspacePaths(string root)
             // Rust (e.g. tooling)
             "target",
         }.ToFrozenSet(StringComparer.Ordinal);
+
+    private static readonly FrozenSet<string> _projectExtensions = new[]
+    {
+        ".sln",
+        ".slnx",
+        ".slnf",
+        ".csproj",
+    }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
     public string Root { get; } = Path.TrimEndingDirectorySeparator(Path.GetFullPath(root));
 
@@ -183,13 +192,29 @@ internal sealed class WorkspacePaths(string root)
     public IEnumerable<WorkspaceFile> EnumerateFiles() =>
         EnumerateFiles(static name => !IsExcludedDirectory(name));
 
+    /// <summary>Returns whether the root or a folder up to two levels below holds a solution or project file.</summary>
+    public bool ContainsProject()
+    {
+        try
+        {
+            return Files(static name => !IsExcludedDirectory(name), ProjectSearchDepth)
+                .Any(file => _projectExtensions.Contains(Path.GetExtension(file.Path)));
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
     /// <summary>Enumerates the files whose changes Roslyn must see, including those under obj.</summary>
     public IEnumerable<WorkspaceFile> EnumerateWatchedFiles() => EnumerateFiles(IsWatchedDirectory);
 
     // Symlinks and unreadable directories are skipped
-    private IEnumerable<WorkspaceFile> EnumerateFiles(Func<string, bool> includeDirectory)
-    {
-        var files = new FileSystemEnumerable<WorkspaceFile>(
+    private FileSystemEnumerable<WorkspaceFile> Files(
+        Func<string, bool> includeDirectory,
+        int maximumDepth = int.MaxValue
+    ) =>
+        new(
             Root,
             static (ref entry) =>
                 new WorkspaceFile(
@@ -200,6 +225,7 @@ internal sealed class WorkspacePaths(string root)
             new EnumerationOptions
             {
                 RecurseSubdirectories = true,
+                MaxRecursionDepth = maximumDepth,
                 AttributesToSkip = FileAttributes.ReparsePoint,
                 IgnoreInaccessible = true,
             }
@@ -209,8 +235,10 @@ internal sealed class WorkspacePaths(string root)
             ShouldRecursePredicate = (ref entry) => includeDirectory(entry.FileName.ToString()),
         };
 
+    private IEnumerable<WorkspaceFile> EnumerateFiles(Func<string, bool> includeDirectory)
+    {
         var count = 0;
-        foreach (var file in files)
+        foreach (var file in Files(includeDirectory))
         {
             if (++count > MaximumFileCount)
             {

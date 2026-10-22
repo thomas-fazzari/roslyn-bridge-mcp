@@ -12,7 +12,9 @@ Server capabilities:
 lsp {"action":"capabilities"}
 
 Use capabilities when support for an operation is uncertain.
-Roslyn loads the project on the first language request. If the load outlasts
+Roslyn starts loading when the bridge launches if a .sln, .slnx, .slnf or
+.csproj file sits at the workspace root or up to two folders below it.
+Otherwise it loads on the first language request. If the load outlasts
 the startup timeout, the call returns the error loading and the load goes on.
 Retry the same call. Status answers at once and reports loading true meanwhile.
 

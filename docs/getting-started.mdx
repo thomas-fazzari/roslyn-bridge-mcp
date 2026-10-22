@@ -54,7 +54,10 @@ Claude Code stores the user-scope registration in `~/.claude.json`, or under `CL
 Allow the tools without prompts by adding `mcp__roslyn__*` to `permissions.allow` in `~/.claude/settings.json`.
 See [Claude Code MCP](https://docs.claude.com/en/docs/claude-code/mcp) for client settings.
 
-Roslyn loads the solution on the first language request. A call waits up to the startup timeout for the load.
+The bridge starts loading the solution at launch when a `.sln`, `.slnx`, `.slnf` or `.csproj` file sits at the workspace root or up to two folders below it.
+Files under build and tool folders such as `bin`, `obj` and `node_modules` do not count.
+Otherwise, Roslyn loads on the first language request.
+A call waits up to the startup timeout for the load.
 When the load takes longer, the call returns the error `loading` and the load continues for later calls.
 For large projects, set `tool_timeout_sec = 200` under `[mcp_servers.roslyn]` in Codex.
 In Claude Code, set the `MCP_TOOL_TIMEOUT` environment variable in milliseconds, for example `200000`.

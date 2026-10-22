@@ -81,6 +81,24 @@ internal sealed partial class RoslynSession(
     }
 
     /// <summary>
+    /// Starts loading the workspace unless Roslyn is ready or loading, without waiting for the load.
+    /// </summary>
+    public async Task StartLoadingAsync()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (IsReady || IsLoading)
+        {
+            return;
+        }
+
+        await StopServerAsync();
+        _startupCancellation?.Dispose();
+        _startupCancellation = new CancellationTokenSource();
+        var cancellationToken = _startupCancellation.Token;
+        _startup = Task.Run(() => StartAsync(cancellationToken), cancellationToken);
+    }
+
+    /// <summary>
     /// Starts Roslyn when needed and waits up to the startup timeout for the workspace to load.
     /// </summary>
     /// <remarks>
@@ -88,15 +106,7 @@ internal sealed partial class RoslynSession(
     /// </remarks>
     public async Task EnsureStartedAsync(CancellationToken cancellationToken)
     {
-        ObjectDisposedException.ThrowIf(_disposed, this);
-        if (!IsReady && !IsLoading)
-        {
-            await StopServerAsync();
-            _startupCancellation?.Dispose();
-            _startupCancellation = new CancellationTokenSource();
-            _startup = StartAsync(_startupCancellation.Token);
-        }
-
+        await StartLoadingAsync();
         try
         {
             await _startup!.WaitAsync(options.StartupTimeout, cancellationToken);

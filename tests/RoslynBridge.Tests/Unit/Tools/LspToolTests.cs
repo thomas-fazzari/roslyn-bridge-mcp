@@ -220,6 +220,30 @@ public sealed class LspToolTests : IDisposable
     }
 
     [Fact]
+    public async Task PreloadBeginsTheLoadWithoutWaitingAndTheFirstCallUsesItAsync()
+    {
+        var load = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var launches = 0;
+        await using var session = CreateSession(
+            _root,
+            FakeServer(server =>
+            {
+                launches++;
+                server.ProjectLoad = load.Task;
+            })
+        );
+        using var tool = CreateTool(session);
+
+        await session.StartLoadingAsync();
+
+        session.IsLoading.Should().BeTrue();
+        load.SetResult();
+        var response = await tool.ExecuteAsync(SymbolQuery(), TestCt);
+        response.IsError.Should().NotBe(true);
+        launches.Should().Be(1);
+    }
+
+    [Fact]
     public async Task FileOutsideEveryProjectSinceTheLoadIsReportedWithoutWaitingAsync()
     {
         await WriteFileAsync(_root, "Loose.cs", "class Loose {}");

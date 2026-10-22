@@ -41,7 +41,9 @@ internal static class Program
             options.LogToStandardErrorThreshold = LogLevel.Trace
         );
         builder.Services.AddSingleton(options);
-        builder.Services.AddSingleton(new WorkspacePaths(options.WorkspaceRoot));
+
+        var paths = new WorkspacePaths(options.WorkspaceRoot);
+        builder.Services.AddSingleton(paths);
         builder.Services.AddSingleton<RoslynLauncher>(RoslynProcess.Start);
         builder.Services.AddSingleton<RoslynSession>();
         builder.Services.AddSingleton<WorkspaceEditService>();
@@ -57,7 +59,14 @@ internal static class Program
             .WithStdioServerTransport()
             .WithRoslynTools();
 
-        await builder.Build().RunAsync(CancellationToken.None);
+        var host = builder.Build();
+        // stdio transport delivers no tool call before RunAsync, so this cannot race one
+        if (paths.ContainsProject())
+        {
+            await host.Services.GetRequiredService<RoslynSession>().StartLoadingAsync();
+        }
+
+        await host.RunAsync(CancellationToken.None);
     }
 
     /// <summary>

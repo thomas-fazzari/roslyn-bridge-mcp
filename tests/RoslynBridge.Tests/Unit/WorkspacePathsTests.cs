@@ -75,6 +75,24 @@ public sealed class WorkspacePathsTests : IDisposable
     }
 
     [Fact]
+    public async Task ContainsProjectFindsAProjectTwoFoldersBelowTheRootAsync()
+    {
+        await WriteFileAsync(_root, Path.Combine("src", "App", "App.csproj"), "<Project />");
+
+        new WorkspacePaths(_root).ContainsProject().Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task ContainsProjectIgnoresSourcesExcludedDirectoriesAndDeepFoldersAsync()
+    {
+        await WriteFileAsync(_root, "Source.cs", "class Source {}");
+        await WriteFileAsync(_root, Path.Combine("bin", "App.csproj"), "<Project />");
+        await WriteFileAsync(_root, Path.Combine("a", "b", "c", "App.csproj"), "<Project />");
+
+        new WorkspacePaths(_root).ContainsProject().Should().BeFalse();
+    }
+
+    [Fact]
     public void WorkspaceFileReadsAWindowsDriveWrittenLikeRoslyn()
     {
         Assert.SkipUnless(OperatingSystem.IsWindows(), "Drive letters exist only on Windows.");
