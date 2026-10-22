@@ -1,5 +1,6 @@
 {
   "csharp.debug.justMyCode": false,
+  "csharp.suppressBuildAssetsNotification": true,
   "dotnet.defaultSolution": "RoslynBridge.slnx",
   "oxc.enable.oxlint": false,
   "oxc.useExecPath": true,
