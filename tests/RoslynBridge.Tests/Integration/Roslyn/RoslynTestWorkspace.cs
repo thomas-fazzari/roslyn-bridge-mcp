@@ -185,6 +185,7 @@ internal sealed class RoslynTestWorkspace : IAsyncDisposable
                 NavigateTool.Name,
                 new[] { "action", "symbol", "file", "line", "character", "context", "limit" }
             ),
+            LspAction.Bulk => (BulkNavigateTool.Name, ["queries", "context", "limit"]),
             _ when request.Action.IsChange => (
                 EditTool.Name,
                 [
@@ -206,6 +207,11 @@ internal sealed class RoslynTestWorkspace : IAsyncDisposable
             _ => (ServerTool.Name, ["action", "method", "parameters", "apply"]),
         };
 
+        return (tool, Arguments(request, parameters));
+    }
+
+    private static Dictionary<string, object?> Arguments(LspRequest request, string[] names)
+    {
         var values = new Dictionary<string, object?>(StringComparer.Ordinal)
         {
             ["action"] = JsonNamingPolicy.SnakeCaseLower.ConvertName(request.Action.ToString()),
@@ -226,15 +232,22 @@ internal sealed class RoslynTestWorkspace : IAsyncDisposable
             ["apply"] = request.Apply ? true : null,
             ["context"] = request.Context ? true : null,
             ["limit"] = request.Limit,
+            ["queries"] = request.Queries.Count > 0 ? QueryArguments(request.Queries) : null,
         };
 
-        return (
-            tool,
-            parameters
-                .Where(name => values[name] is not null)
-                .ToDictionary(name => name, name => values[name], StringComparer.Ordinal)
-        );
+        return names
+            .Where(name => values[name] is not null)
+            .ToDictionary(name => name, name => values[name], StringComparer.Ordinal);
     }
+
+    private static List<Dictionary<string, object?>> QueryArguments(
+        IEnumerable<LspRequest> queries
+    ) =>
+        [
+            .. queries.Select(query =>
+                Arguments(query, ["action", "symbol", "file", "line", "character"])
+            ),
+        ];
 
     private async Task RestoreAsync()
     {

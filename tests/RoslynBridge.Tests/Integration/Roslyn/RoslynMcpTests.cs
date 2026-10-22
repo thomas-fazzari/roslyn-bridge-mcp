@@ -390,7 +390,9 @@ public sealed partial class RoslynMcpTests
             .Should()
             .ContainSingle(line => line.StartsWith(ConsumerFile + ":", StringComparison.Ordinal));
         Section(impact, "implementation").Select(FileOf).Should().Contain(ImplementationFile);
-        impact.Should().NotContain(line => line.StartsWith("# subtypes", StringComparison.Ordinal));
+        impact
+            .Should()
+            .NotContain(line => line.StartsWith("## subtypes", StringComparison.Ordinal));
 
         var typeImpact = Lines(
             await workspace.CallAsync(
@@ -398,6 +400,46 @@ public sealed partial class RoslynMcpTests
             )
         );
         Section(typeImpact, "subtypes").Select(FileOf).Should().Equal(ImplementationFile);
+    }
+
+    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    public async Task RunsSeveralNavigationsOfOneSymbolInOneBulkCallAsync()
+    {
+        const string symbol = "IGreeter.Greet";
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var workspace = await RoslynTestWorkspace.CreateAsync(cancellationToken);
+
+        var bulk = Lines(
+            await workspace.CallAsync(
+                new LspRequest
+                {
+                    Action = LspAction.Bulk,
+                    Queries =
+                    [
+                        new LspRequest { Action = LspAction.Source, Symbol = symbol },
+                        new LspRequest { Action = LspAction.References, Symbol = symbol },
+                        new LspRequest { Action = LspAction.Callers, Symbol = symbol },
+                        new LspRequest { Action = LspAction.Impact, Symbol = symbol },
+                    ],
+                }
+            )
+        );
+
+        bulk.Where(line => line.StartsWith("## ", StringComparison.Ordinal))
+            .Should()
+            .Equal(
+                $"## 1 source {symbol}",
+                $"## 2 references {symbol}",
+                $"## 3 callers {symbol}",
+                $"## 4 impact {symbol}"
+            );
+        bulk.Should().NotContain(line => line.StartsWith("error ", StringComparison.Ordinal));
+        Section(bulk, $"1 source {symbol}").Should().Contain(line => line.Contains("string Greet"));
+        Section(bulk, $"2 references {symbol}").Select(FileOf).Should().Contain(ConsumerFile);
+        Section(bulk, $"3 callers {symbol}")
+            .Should()
+            .ContainSingle(line => line.StartsWith(ConsumerFile + ":", StringComparison.Ordinal));
+        bulk.Should().Contain("### references").And.Contain("### callers");
     }
 
     [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]

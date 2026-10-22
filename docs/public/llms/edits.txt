@@ -21,14 +21,14 @@ edit {"action":"rename","symbol":"Calculator.Add","newName":"Compute","apply":tr
 
 RENAME A FILE
 -------------
-newName is a workspace-relative destination, not a symbol name:
+For a file, newName is the workspace-relative destination:
 edit {"action":"rename_file","file":"src/Calculator.cs","newName":"src/Math/Calculator.cs"}
 
 Apply its proposalId with the edit tool, action rename_file and apply true.
 This requires Roslyn to advertise file rename support.
 
 FIXES AND REFACTORINGS
----------------------
+----------------------
 1. List actions at the diagnostic or selected code:
 edit {"action":"code_actions","file":"src/Calculator.cs","line":12,"character":9}
 
@@ -90,9 +90,9 @@ The status is applied, partially applied or not applied. "Roslyn synchronized"
 reports a successful Roslyn refresh. Commands add "command executed" and their
 result. On a later failure, the response starts with "error CODE: message" and
 "failed step: STEP", with the failed path and operation when known, and then
-the receipt. Read both before retrying. The next request reloads Roslyn after
-an application failure. Large receipts end with "truncated: N more operations
-not shown" or "result omitted".
+the receipt. Read both before retrying. After an application failure, the
+bridge reloads Roslyn on the next request. Large receipts end with
+"truncated: N more operations not shown" or "result omitted".
 A successful result ends with the diagnostics of the changed C# files, in the
 format of diagnostics.txt, for example:
 src/Calculator.cs
@@ -101,7 +101,7 @@ src/Calculator.cs
 Without that summary line, the check was skipped. Run diagnostics on the
 changed files then.
 
-Edits must remain inside the workspace. Symlinks below its root are rejected.
-Each file replacement is atomic. A failed multi-file operation can leave partial
-changes, so inspect the workspace before retrying.
+Edits must remain inside the workspace. The bridge rejects symlinks below its
+root. Each file replacement is atomic. A failed multi-file operation can leave
+partial changes, so inspect the workspace before retrying.
 Limits: 256 edited files, 8 MiB per file and 64 MiB total edited content.

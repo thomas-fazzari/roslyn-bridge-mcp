@@ -79,6 +79,7 @@ internal static class Program
         return builder
             .WithTools<DiagnosticsTool>(serializerOptions: jsonOptions)
             .WithTools<NavigateTool>(serializerOptions: jsonOptions)
+            .WithTools<BulkNavigateTool>(serializerOptions: jsonOptions)
             .WithTools<SymbolsTool>(serializerOptions: jsonOptions)
             .WithTools<EditTool>(serializerOptions: jsonOptions)
             .WithTools<ServerTool>(serializerOptions: jsonOptions);

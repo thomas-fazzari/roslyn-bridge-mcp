@@ -30,8 +30,7 @@ internal sealed class NavigateTool(LspTool lsp)
         [Description(ToolDescriptions.File)] string? file = null,
         [Description(ToolDescriptions.Line)] int? line = null,
         [Description(ToolDescriptions.Character)] int? character = null,
-        [Description("Show the trimmed source line of each result position. Uses more tokens.")]
-            bool context = false,
+        [Description(ToolDescriptions.Context)] bool context = false,
         [Description(ToolDescriptions.Limit)] int limit = LspRequest.DefaultResultLimit,
         CancellationToken cancellationToken = default
     ) =>
@@ -39,22 +38,7 @@ internal sealed class NavigateTool(LspTool lsp)
             new LspRequest
             {
                 Limit = limit,
-                Action = action switch
-                {
-                    NavigationAction.Definition => LspAction.Definition,
-                    NavigationAction.TypeDefinition => LspAction.TypeDefinition,
-                    NavigationAction.Implementation => LspAction.Implementation,
-                    NavigationAction.References => LspAction.References,
-                    NavigationAction.Hover => LspAction.Hover,
-                    NavigationAction.Callers => LspAction.Callers,
-                    NavigationAction.Callees => LspAction.Callees,
-                    NavigationAction.Supertypes => LspAction.Supertypes,
-                    NavigationAction.Subtypes => LspAction.Subtypes,
-                    NavigationAction.Source => LspAction.Source,
-                    NavigationAction.Members => LspAction.Members,
-                    NavigationAction.Impact => LspAction.Impact,
-                    _ => throw new ArgumentOutOfRangeException(nameof(action)),
-                },
+                Action = action.ToLspAction(),
                 Symbol = symbol,
                 File = file,
                 Line = line,
@@ -103,4 +87,28 @@ internal enum NavigationAction
 
     [JsonStringEnumMemberName("impact")]
     Impact = 11,
+}
+
+internal static class NavigationActions
+{
+    extension(NavigationAction action)
+    {
+        public LspAction ToLspAction() =>
+            action switch
+            {
+                NavigationAction.Definition => LspAction.Definition,
+                NavigationAction.TypeDefinition => LspAction.TypeDefinition,
+                NavigationAction.Implementation => LspAction.Implementation,
+                NavigationAction.References => LspAction.References,
+                NavigationAction.Hover => LspAction.Hover,
+                NavigationAction.Callers => LspAction.Callers,
+                NavigationAction.Callees => LspAction.Callees,
+                NavigationAction.Supertypes => LspAction.Supertypes,
+                NavigationAction.Subtypes => LspAction.Subtypes,
+                NavigationAction.Source => LspAction.Source,
+                NavigationAction.Members => LspAction.Members,
+                NavigationAction.Impact => LspAction.Impact,
+                _ => throw new ArgumentOutOfRangeException(nameof(action)),
+            };
+    }
 }

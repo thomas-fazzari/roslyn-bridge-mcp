@@ -1,11 +1,13 @@
 // Copyright (C) RoslynBridge contributors
 // SPDX-License-Identifier: GPL-3.0-only
 
+using System.Globalization;
 using System.Text.Json.Nodes;
 using Microsoft.Extensions.Logging.Abstractions;
 using RoslynBridge.Changes;
 using RoslynBridge.Editing;
 using RoslynBridge.Lsp;
+using RoslynBridge.Output;
 using RoslynBridge.Queries;
 using RoslynBridge.Requests;
 using RoslynBridge.Symbols;
@@ -17,6 +19,9 @@ namespace RoslynBridge.Tests.Unit.Tools;
 
 public sealed class LspToolTests : IDisposable
 {
+    private const string SourceFile = "Source.cs";
+    private const string SourceText = "class A {}\nclass B {}\nclass C {}\nclass D {}\n";
+
     private readonly string _root = Directory.CreateTempSubdirectory("roslyn-lsp-tool-").FullName;
 
     [Fact]
@@ -311,10 +316,262 @@ public sealed class LspToolTests : IDisposable
         ResponseText(response).Should().StartWith("2 files checked");
     }
 
+    [Fact(Timeout = 30_000)]
+    public async Task BulkReportsEachQueryInRequestOrderAsync()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await WriteFileAsync(_root, SourceFile, SourceText);
+        var othersAnswered = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously
+        );
+        var answered = 0;
+        await using var session = CreateSession(
+            _root,
+            FakeServer(server =>
+                server.Handle = async (_, parameters) =>
+                {
+                    var line = LineOf(parameters);
+                    // The first query finishes last, so the order cannot be the order of completion
+                    if (line == 1)
+                    {
+                        await othersAnswered.Task;
+                    }
+                    else if (Interlocked.Increment(ref answered) == 2)
+                    {
+                        othersAnswered.SetResult();
+                    }
+
+                    return Found($"Found{line}.cs");
+                }
+            )
+        );
+        using var tool = CreateTool(session);
+
+        var response = await tool.ExecuteAsync(
+            Bulk(ReferencesAt(1), ReferencesAt(2), ReferencesAt(3)),
+            cancellationToken
+        );
+
+        ResponseText(response)
+            .Should()
+            .Be(
+                "## 1 references Source.cs:1:1\nFound1.cs 1:1\n"
+                    + "## 2 references Source.cs:2:1\nFound2.cs 1:1\n"
+                    + "## 3 references Source.cs:3:1\nFound3.cs 1:1"
+            );
+    }
+
+    [Fact]
+    public async Task BulkReportsAFailedQueryInItsSectionAndRunsTheOthersAsync()
+    {
+        await WriteFileAsync(_root, SourceFile, SourceText);
+        await using var session = CreateSession(
+            _root,
+            FakeServer(server =>
+                server.Handle = (_, parameters) =>
+                    Task.FromResult<JsonNode?>(
+                        parameters?["position"] is null ? null : Found("Found.cs")
+                    )
+            )
+        );
+        using var tool = CreateTool(session);
+
+        var response = await tool.ExecuteAsync(
+            Bulk(
+                ReferencesAt(1),
+                new LspRequest { Action = LspAction.References, Symbol = "Missing" },
+                ReferencesAt(3)
+            ),
+            TestCt
+        );
+
+        response.IsError.Should().NotBeTrue();
+        var sections = ResponseText(response).Split("\n## ");
+        sections.Should().HaveCount(3);
+        sections[0].Should().EndWith("Found.cs 1:1");
+        sections[1].Should().StartWith($"2 references Missing\nerror {ErrorCodes.SymbolNotFound}:");
+        sections[2].Should().EndWith("Found.cs 1:1");
+    }
+
+    [Fact]
+    public async Task BulkResolvesASymbolOnceForEveryQueryThatNamesItAsync()
+    {
+        var symbolRequests = 0;
+        await using var session = CreateSession(
+            _root,
+            FakeServer(server =>
+                server.Handle = (method, _) =>
+                {
+                    if (method is LspMethods.WorkspaceSymbol)
+                    {
+                        Interlocked.Increment(ref symbolRequests);
+                    }
+
+                    return Task.FromResult<JsonNode?>(null);
+                }
+            )
+        );
+        using var tool = CreateTool(session);
+
+        var response = await tool.ExecuteAsync(
+            Bulk(
+                new LspRequest { Action = LspAction.References, Symbol = "Missing" },
+                new LspRequest { Action = LspAction.Callers, Symbol = "Missing" }
+            ),
+            TestCt
+        );
+
+        var sections = ResponseText(response).Split("\n## ");
+        sections
+            .Should()
+            .HaveCount(2)
+            .And.AllSatisfy(section =>
+                section.Should().Contain($"error {ErrorCodes.SymbolNotFound}:")
+            );
+        symbolRequests.Should().Be(1);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(LspRequest.MaximumBulkQueries + 1)]
+    public async Task BulkRejectsAnEmptyOrOversizedBatchAsync(int count)
+    {
+        await using var session = CreateSession(_root, FakeServer());
+        using var tool = CreateTool(session);
+
+        var response = await tool.ExecuteAsync(
+            Bulk([.. Enumerable.Repeat(ReferencesAt(1), count)]),
+            TestCt
+        );
+
+        ErrorCode(response).Should().Be(ErrorCodes.InvalidRequest);
+    }
+
+    [Fact]
+    public async Task BulkOmitsTheSectionsThatDoNotFitAndListsTheirSizesAsync()
+    {
+        await WriteFileAsync(_root, SourceFile, SourceText);
+        await using var session = CreateSession(
+            _root,
+            FakeServer(server =>
+                server.Handle = (_, parameters) =>
+                    Task.FromResult<JsonNode?>(
+                        LineOf(parameters) switch
+                        {
+                            3 => Found("Small.cs"),
+                            4 => new JsonArray(),
+                            _ => LargeFound(),
+                        }
+                    )
+            )
+        );
+        using var tool = CreateTool(session);
+
+        var response = await tool.ExecuteAsync(
+            Bulk(ReferencesAt(1), ReferencesAt(2), ReferencesAt(3), ReferencesAt(4)) with
+            {
+                Limit = LspRequest.MaximumResultLimit,
+            },
+            TestCt
+        );
+
+        response.IsError.Should().NotBeTrue();
+        var text = ResponseText(response);
+        text.Length.Should().BeLessThanOrEqualTo(ResultText.MaximumResponseCharacters);
+        text.Should()
+            .Contain("## 3 references Source.cs:3:1\nSmall.cs 1:1")
+            .And.Contain("## 4 references Source.cs:4:1: none");
+        var omitted = text.Split('\n')
+            .Single(line => line.StartsWith("omitted to fit: ", StringComparison.Ordinal));
+        omitted
+            .Should()
+            .MatchRegex(@"^omitted to fit: 1 references Source\.cs:1:1 \([\d,]+ chars\)\. ");
+        text.Should().NotContain("## 1 ");
+    }
+
+    [Fact(Timeout = 30_000)]
+    public async Task BulkKeepsFinishedSectionsWhenTheTimeoutEndsTheCallAsync()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await WriteFileAsync(_root, SourceFile, SourceText);
+        var options = new BridgeOptions
+        {
+            WorkspaceRoot = _root,
+            RequestTimeout = TimeSpan.FromSeconds(1),
+        };
+        await using var session = CreateSession(
+            _root,
+            FakeServer(server =>
+                server.Handle = (_, parameters) =>
+                    LineOf(parameters) == 2
+                        ? new TaskCompletionSource<JsonNode?>().Task
+                        : Task.FromResult<JsonNode?>(Found("Found.cs"))
+            ),
+            options
+        );
+        using var tool = CreateTool(session, options);
+        await tool.ExecuteAsync(Bulk(ReferencesAt(1)), cancellationToken);
+
+        var response = await tool.ExecuteAsync(
+            Bulk(ReferencesAt(1), ReferencesAt(2), ReferencesAt(3)),
+            cancellationToken
+        );
+
+        response.IsError.Should().NotBeTrue();
+        var sections = ResponseText(response).Split("\n## ");
+        sections.Should().HaveCount(3);
+        sections[0].Should().EndWith("Found.cs 1:1");
+        sections[1].Should().Contain($"error {ErrorCodes.Timeout}:");
+        sections[2].Should().EndWith("Found.cs 1:1");
+    }
+
     public void Dispose() => Directory.Delete(_root, recursive: true);
 
     private static LspRequest SymbolQuery() =>
         new() { Action = LspAction.Symbols, Query = "Greeter" };
+
+    private static LspRequest Bulk(params LspRequest[] queries) =>
+        new() { Action = LspAction.Bulk, Queries = queries };
+
+    private static LspRequest ReferencesAt(int line) =>
+        new()
+        {
+            Action = LspAction.References,
+            File = SourceFile,
+            Line = line,
+            Character = 1,
+        };
+
+    private static int LineOf(JsonNode? parameters) =>
+        parameters!["position"]!["line"]!.GetValue<int>() + 1;
+
+    private JsonArray Found(string file) => new JsonArray(Location(Path.Combine(_root, file)));
+
+    // Each file name is long enough that two of these sections cannot share a response
+    private JsonArray LargeFound() =>
+        new JsonArray([
+            .. Enumerable
+                .Range(0, LspRequest.MaximumResultLimit)
+                .Select(index =>
+                    Location(
+                        Path.Combine(
+                            _root,
+                            new string('d', 100),
+                            string.Create(CultureInfo.InvariantCulture, $"File{index}.cs")
+                        )
+                    )
+                ),
+        ]);
+
+    private static JsonObject Location(string path) =>
+        new()
+        {
+            ["uri"] = new Uri(path).AbsoluteUri,
+            ["range"] = new JsonObject
+            {
+                ["start"] = new JsonObject { ["line"] = 0, ["character"] = 0 },
+            },
+        };
 
     private LspTool CreateTool(RoslynSession session, BridgeOptions? options = null)
     {

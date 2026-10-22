@@ -2,10 +2,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 using System.Collections.Frozen;
-using System.ComponentModel;
 using System.Diagnostics;
 using System.Text;
-using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Protocol;
@@ -121,7 +119,7 @@ internal sealed partial class LspTool(
         {
             return Failure(new ToolError(ErrorCodes.Lsp, exception.Message), exception.ErrorCode);
         }
-        catch (Exception exception) when (IsReported(exception))
+        catch (Exception exception) when (ToolFailures.IsReported(exception))
         {
             return ReportFailure(request.Action, exception);
         }
@@ -136,7 +134,7 @@ internal sealed partial class LspTool(
     private CallToolResult ReportFailure(LspAction action, Exception exception)
     {
         OperationFailed(logger, action, exception);
-        return Failure(new ToolError(FailureCode(exception), exception.Message));
+        return Failure(ToolFailures.ToError(exception));
     }
 
     /// <summary>
@@ -178,35 +176,12 @@ internal sealed partial class LspTool(
         }
         // The edit is already applied, so a failed check returns the receipt without diagnostics
         catch (Exception exception)
-            when (IsReported(exception) || exception is OperationCanceledException)
+            when (ToolFailures.IsReported(exception) || exception is OperationCanceledException)
         {
             OperationFailed(logger, LspAction.Diagnostics, exception);
             return receipt;
         }
     }
-
-    private static bool IsReported(Exception exception) =>
-        exception
-            is ToolErrorException
-                or WorkspaceLoadingException
-                or IOException
-                or UnauthorizedAccessException
-                or Win32Exception
-                or RemoteRpcException
-                or TimeoutException
-                or JsonException;
-
-    internal static string FailureCode(Exception exception) =>
-        exception switch
-        {
-            ToolErrorException toolError => toolError.Error.Code,
-            WorkspaceLoadingException => ErrorCodes.Loading,
-            TimeoutException => ErrorCodes.Timeout,
-            IOException or UnauthorizedAccessException or Win32Exception => ErrorCodes.Io,
-            RemoteRpcException or JsonException => ErrorCodes.Lsp,
-            // Only an application failure reports an unexpected cause, which is a bridge bug
-            _ => ErrorCodes.Internal,
-        };
 
     private CallToolResult ReportApplicationFailure(
         LspAction action,
@@ -240,6 +215,16 @@ internal sealed partial class LspTool(
             );
         }
 
+        if (
+            request.Action is LspAction.Bulk
+            && request.Queries.Count is < 1 or > LspRequest.MaximumBulkQueries
+        )
+        {
+            return ToolError.InvalidRequest(
+                $"Queries must hold between 1 and {LspRequest.MaximumBulkQueries} items."
+            );
+        }
+
         if (request.Action is LspAction.Reload)
         {
             changes.Clear();
@@ -260,6 +245,7 @@ internal sealed partial class LspTool(
                 await queries.DiagnosticsAsync(request, cancellationToken)
             ).AsToolResult(),
             LspAction.Symbols => await queries.SymbolsAsync(request, cancellationToken),
+            LspAction.Bulk => await queries.BulkAsync(request, cancellationToken),
             _ when request.Action.IsNavigation => await queries.NavigationAsync(
                 request,
                 cancellationToken
@@ -363,7 +349,7 @@ internal sealed partial class LspTool(
             OperationCanceledException => cancellationRequested
                 ? ErrorCodes.Cancelled
                 : ErrorCodes.Timeout,
-            _ => FailureCode(cause),
+            _ => ToolFailures.FailureCode(cause),
         };
         var message = cause.Message[..Math.Min(cause.Message.Length, MaximumErrorCharacters)];
         var text = new StringBuilder(ResultText.Error(new ToolError(code, message), rpcCode: null))

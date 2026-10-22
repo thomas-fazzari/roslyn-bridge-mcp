@@ -5,7 +5,7 @@ description: "Installs RoslynBridge and registers it in an MCP client."
 
 ## Install
 
-Prerequisites: the .NET 10 SDK, and an MCP client such as Claude Code, Codex, GitHub Copilot CLI, pi or Antigravity.
+Prerequisites: the .NET 10 SDK and a Model Context Protocol (MCP) client such as Claude Code, Codex, GitHub Copilot CLI, pi or Antigravity.
 
 macOS and Linux:
 
@@ -19,7 +19,7 @@ Windows x64, in PowerShell:
 irm https://raw.githubusercontent.com/thomas-fazzari/roslyn-bridge-mcp/master/install.ps1 | iex
 ```
 
-The script downloads the latest release for your platform, verifies its SHA-256 checksum and installs `roslyn-bridge-mcp` in `~/.local/bin`, or `%LOCALAPPDATA%\Programs\roslyn-bridge-mcp` on Windows. Set `ROSLYN_BRIDGE_INSTALL_DIR` to choose another directory. It then runs `roslyn-bridge-mcp setup`.
+The script downloads the latest release for your platform and verifies its SHA-256 checksum. It installs `roslyn-bridge-mcp` in `~/.local/bin`, or `%LOCALAPPDATA%\Programs\roslyn-bridge-mcp` on Windows, and runs `roslyn-bridge-mcp setup`. Set `ROSLYN_BRIDGE_INSTALL_DIR` to choose another directory.
 
 Setup installs the official Roslyn language server as a global .NET tool when it is missing. It then prints the command that registers the bridge in each agent it detects, for example:
 
@@ -70,7 +70,7 @@ In Claude Code, set the `MCP_TOOL_TIMEOUT` environment variable in milliseconds,
 | `--startup-timeout` | 120 seconds                                                   |
 | `--request-timeout` | 60 seconds                                                    |
 
-Timeout arguments accept 1 to 600 seconds. Keep the client's tool timeout above the startup and request timeout sum when increasing these limits.
+Timeout arguments accept 1 to 600 seconds. When you raise these limits, keep the client's tool timeout above the sum of the startup and request timeouts.
 
 The `roslyn-language-server` tool only starts `Microsoft.CodeAnalysis.LanguageServer` from its own folder and relays every message. When the server path resolves to that folder, the bridge starts `Microsoft.CodeAnalysis.LanguageServer` directly.
 

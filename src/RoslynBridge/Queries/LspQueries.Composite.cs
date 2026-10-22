@@ -3,7 +3,6 @@
 
 using System.Globalization;
 using System.Text;
-using System.Text.Json;
 using System.Text.Json.Nodes;
 using RoslynBridge.Lsp;
 using RoslynBridge.Requests;
@@ -110,39 +109,38 @@ internal sealed partial class LspQueries
         LspAction[] actions = targetsType
             ? [LspAction.References, LspAction.Subtypes]
             : [LspAction.References, LspAction.Callers, LspAction.Implementation];
-        var sections = new List<ImpactSection>(actions.Length);
-        foreach (var action in actions)
-        {
-            var section = await NavigationAsync(
-                request with
-                {
-                    Action = action,
-                    Symbol = null,
-                    File = file,
-                    Line = position.Line,
-                    Character = position.Character,
-                },
-                cancellationToken
-            );
-            if (section.Error is { } sectionError)
+
+        return await SectionsAsync(
+            [.. actions.Select(ActionName)],
+            (index, token) => ImpactSectionAsync(request, actions[index], file, position, token),
+            cancellationToken
+        );
+    }
+
+    private async Task<Result<ToolResult>> ImpactSectionAsync(
+        LspRequest request,
+        LspAction action,
+        string file,
+        SourcePosition position,
+        CancellationToken cancellationToken
+    )
+    {
+        var section = await NavigationAsync(
+            request with
             {
-                return sectionError;
-            }
+                Action = action,
+                Symbol = null,
+                File = file,
+                Line = position.Line,
+                Character = position.Character,
+            },
+            cancellationToken
+        );
 
-            // Roslyn lists a member that nothing overrides as its own implementation
-            var result =
-                section.Value is Locations implementations && action is LspAction.Implementation
-                    ? Without(implementations, paths.RelativePath(paths.Resolve(file)), position)
-                    : section.Value;
-            sections.Add(
-                new ImpactSection(
-                    JsonNamingPolicy.SnakeCaseLower.ConvertName(action.ToString()),
-                    result
-                )
-            );
-        }
-
-        return new ImpactReport(sections);
+        // Roslyn lists a member that nothing overrides as its own implementation
+        return section.Value is Locations implementations && action is LspAction.Implementation
+            ? Without(implementations, paths.RelativePath(paths.Resolve(file)), position)
+            : section;
     }
 
     private static Locations Without(Locations locations, string file, SourcePosition position)

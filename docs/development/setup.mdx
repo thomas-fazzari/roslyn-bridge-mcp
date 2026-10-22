@@ -15,7 +15,7 @@ The pre-commit hook formats staged files. The pre-push hook validates the hook c
 
 ## Local settings
 
-Put local environment variables in the `[env]` table of `mise.local.toml`. mise loads it for every task and Git ignores it. Existing environment variables take precedence. MCP clients launch the bridge with their own environment, not this one.
+Put local environment variables in the `[env]` table of `mise.local.toml`. mise loads it for every task and Git ignores it. Existing environment variables take precedence. MCP clients launch the bridge with their own environment, so it does not see these variables.
 
 ## Builds
 

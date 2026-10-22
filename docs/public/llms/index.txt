@@ -1,8 +1,8 @@
 ROSLYN CODEX LSP: AGENT REFERENCE
-===============================
+=================================
 
 MCP server: roslyn
-MCP tools: diagnostics, navigate, symbols (read-only), edit, lsp
+MCP tools: diagnostics, navigate, bulk_navigate, symbols (read-only), edit, lsp
 Purpose: C# compiler diagnostics, symbol navigation and semantic edits.
 Workspace: the agent session's working directory unless configured otherwise.
 Source: saved files on disk. Unsaved editor buffers are not available.
@@ -25,7 +25,7 @@ REFERENCE FILES
 Fetch only the file needed for the task. URLs share this index's directory.
 
 diagnostics.txt - File and glob scans, result fields, limits and verification.
-navigation.txt - Definitions, references, call and type hierarchies, hover, symbols.
+navigation.txt - Definitions, references, call and type hierarchies, hover, symbols, bulk navigation.
 edits.txt - Rename and code action preview/apply sequences, stale proposals.
 session.txt - Status, capabilities, reload and raw requests.
 

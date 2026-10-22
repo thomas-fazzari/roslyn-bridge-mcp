@@ -16,7 +16,7 @@ Partial declarations in one project count as one symbol. Same-named types in
 different projects are separate symbols.
 
 If the name matches several symbols, the error ambiguous_symbol lists up to 20
-candidates. Each candidate symbol can be sent back unchanged. When candidates share
+candidates. Send any candidate symbol back unchanged. When candidates share
 a name, send the symbol with the candidate's file. symbol_not_found means no
 declaration matched. Use the symbols tool to search by partial name.
 
@@ -100,10 +100,30 @@ src/Calculator.cs
 Prefix a member with the type name to send it back, as in MyApp.Calculator.Add(int, int).
 
 impact resolves the symbol once and returns one section per navigation, each
-headed by "# ACTION" and shaped like that action's own result. A section that
-does not apply reads "# ACTION: none". limit applies to each section. When the
-sections do not all fit, the largest ones are left out and named on a final
-"omitted to fit:" line. Request those alone.
+headed by "## ACTION" and shaped like that action's own result. A section that
+does not apply reads "## ACTION: none". limit applies to each section. When the
+sections do not all fit, the largest ones are left out and named with their
+sizes on a final "omitted to fit:" line. Request those alone.
+
+BULK NAVIGATION
+---------------
+bulk_navigate runs up to 16 independent navigate queries in one call,
+concurrently. A query cannot use another query's result. Each query takes the
+action, symbol, file, line and character of navigate. context and limit sit at
+the top level and apply to every query:
+bulk_navigate {"queries":[{"action":"source","symbol":"Calculator.Add"},{"action":"references","symbol":"Calculator.Add"}],"limit":20}
+
+The result has one section per query in request order, headed
+"## NUMBER ACTION TARGET". NUMBER starts at 1. TARGET is the symbol, or
+file:line:character for a position:
+## 2 references Calculator.Add
+A query with no result reads "## NUMBER ACTION TARGET: none". A query that fails
+shows its "error CODE: message" line in its own section, and the others still
+run. A call that times out keeps the finished sections, and the rest report
+the error timeout. An impact query lists its sections under "###" headers.
+When the sections do not all fit, the largest ones are left out and named with
+their sizes on a final "omitted to fit:" line. Request those alone or in a
+smaller batch.
 
 Symbols use the same line shape. Document symbols omit the file, give the
 declaration end after a dash, as in 5:18-9:2, and indent members under their

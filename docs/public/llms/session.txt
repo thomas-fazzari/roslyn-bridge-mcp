@@ -8,15 +8,16 @@ Status returns running, loading, workspace and server lines, such as
 running: true
 loading: false
 
-Server capabilities:
-lsp {"action":"capabilities"}
-
-Use capabilities when support for an operation is uncertain.
 Roslyn starts loading when the bridge launches if a .sln, .slnx, .slnf or
 .csproj file sits at the workspace root or up to two folders below it.
 Otherwise it loads on the first language request. If the load outlasts
 the startup timeout, the call returns the error loading and the load goes on.
 Retry the same call. Status answers at once and reports loading true meanwhile.
+
+Server capabilities:
+lsp {"action":"capabilities"}
+
+Use capabilities when support for an operation is uncertain.
 
 Reload:
 lsp {"action":"reload"}
@@ -32,7 +33,7 @@ lsp {"action":"request","method":"textDocument/hover","parameters":{"textDocumen
 
 Replace the example URI with the actual document URI.
 Raw LSP positions are zero-based, unlike the other tools.
-Lifecycle and document synchronization methods are owned by the bridge.
-workspace/applyEdit is also reserved.
+The bridge reserves lifecycle and document synchronization methods and
+workspace/applyEdit.
 Unknown methods and workspace/executeCommand require apply true because they
 may write files. Use them only within the user's authorized scope.

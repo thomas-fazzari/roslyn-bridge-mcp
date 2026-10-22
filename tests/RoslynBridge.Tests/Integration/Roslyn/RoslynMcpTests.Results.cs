@@ -60,12 +60,12 @@ public sealed partial class RoslynMcpTests
         );
     }
 
-    // The lines of one impact section, up to the next section header
+    // The lines of one section, up to the next section header
     private static IEnumerable<string> Section(string[] lines, string name) =>
         lines
-            .SkipWhile(line => !string.Equals(line, "# " + name, StringComparison.Ordinal))
+            .SkipWhile(line => !string.Equals(line, "## " + name, StringComparison.Ordinal))
             .Skip(1)
-            .TakeWhile(line => !line.StartsWith("# ", StringComparison.Ordinal));
+            .TakeWhile(line => !line.StartsWith("## ", StringComparison.Ordinal));
 
     // Result lines that are not indented details, totals or notes start with a workspace file
     private static bool IsFileLine(string line) =>

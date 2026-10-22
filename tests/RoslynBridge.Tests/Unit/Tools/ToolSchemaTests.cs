@@ -16,6 +16,7 @@ public sealed class ToolSchemaTests
     [Theory]
     [InlineData(DiagnosticsTool.Name)]
     [InlineData(NavigateTool.Name)]
+    [InlineData(BulkNavigateTool.Name)]
     [InlineData(SymbolsTool.Name)]
     public void MarksQueryToolsReadOnly(string name)
     {
@@ -46,12 +47,13 @@ public sealed class ToolSchemaTests
     }
 
     [Fact]
-    public void ExposesExactlyTheFiveTools() =>
+    public void ExposesExactlyTheSixTools() =>
         _tools
             .Keys.Should()
             .BeEquivalentTo([
                 DiagnosticsTool.Name,
                 NavigateTool.Name,
+                BulkNavigateTool.Name,
                 SymbolsTool.Name,
                 EditTool.Name,
                 ServerTool.Name,
@@ -104,6 +106,26 @@ public sealed class ToolSchemaTests
                 .Should()
                 .BeEquivalentTo(actions);
         }
+    }
+
+    [Fact]
+    public void BulkNavigateTakesQueriesWithTheNavigateActions()
+    {
+        var schema = _tools[BulkNavigateTool.Name].InputSchema;
+        var query = schema.GetProperty("properties").GetProperty("queries").GetProperty("items");
+
+        Names(schema, "required").Should().BeEquivalentTo(["queries"]);
+        Names(query, "required").Should().BeEquivalentTo(["action"]);
+        Names(query.GetProperty("properties").GetProperty("action"), "enum")
+            .Should()
+            .BeEquivalentTo(
+                Names(
+                    _tools[NavigateTool.Name]
+                        .InputSchema.GetProperty("properties")
+                        .GetProperty("action"),
+                    "enum"
+                )
+            );
     }
 
     private static string[] Names(JsonElement element, string property) =>

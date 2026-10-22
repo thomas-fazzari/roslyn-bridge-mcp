@@ -46,6 +46,8 @@ internal enum LspAction
     Members = 19,
 
     Impact = 20,
+
+    Bulk = 21,
 }
 
 internal static class LspActions

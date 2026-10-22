@@ -12,6 +12,7 @@ internal sealed record LspRequest
 {
     internal const int DefaultResultLimit = 50;
     internal const int MaximumResultLimit = 250;
+    internal const int MaximumBulkQueries = 16;
 
     public required LspAction Action { get; init; }
 
@@ -44,6 +45,11 @@ internal sealed record LspRequest
     public string? Method { get; init; }
 
     public JsonObject? Parameters { get; init; }
+
+    /// <summary>
+    /// The independent navigation requests of a bulk request. They take their limit and context from it.
+    /// </summary>
+    public IReadOnlyList<LspRequest> Queries { get; init; } = [];
 
     public DiagnosticSeverity Severity { get; init; } = DiagnosticSeverity.Warning;
 

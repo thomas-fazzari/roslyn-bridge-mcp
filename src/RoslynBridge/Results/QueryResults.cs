@@ -77,10 +77,11 @@ internal sealed record TypeMembers(
     bool Truncated
 ) : ToolResult;
 
-/// <param name="Name">The navigate action that produced the section, which can be requested alone.</param>
-internal sealed record ImpactSection(string Name, ToolResult Result);
+/// <param name="Label">What produced the section, which a client can request alone.</param>
+/// <param name="Result">The section's result, or the error that kept it from having one.</param>
+internal sealed record ReportSection(string Label, Result<ToolResult> Result);
 
 /// <summary>
-/// The references, callers and implementations of one declaration, and the subtypes of a type.
+/// Independent navigations reported together, such as the impact of one declaration or a bulk call.
 /// </summary>
-internal sealed record ImpactReport(IReadOnlyList<ImpactSection> Sections) : ToolResult;
+internal sealed record SectionsReport(IReadOnlyList<ReportSection> Sections) : ToolResult;

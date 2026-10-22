@@ -12,6 +12,8 @@ namespace RoslynBridge.Tools;
 /// </summary>
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 [JsonSerializable(typeof(NavigationAction))]
+[JsonSerializable(typeof(BulkQuery))]
+[JsonSerializable(typeof(BulkQuery[]))]
 [JsonSerializable(typeof(EditAction))]
 [JsonSerializable(typeof(ServerAction))]
 [JsonSerializable(typeof(DiagnosticSeverity))]

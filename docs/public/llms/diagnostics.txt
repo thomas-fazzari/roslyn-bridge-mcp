@@ -31,8 +31,8 @@ src/Calculator.cs
   12:9 error CS0246 The type or namespace name 'Foo' could not be found
 
 12:9 is the one-based line and character of the start. Pass them unchanged
-to the edit tool's code_actions, or pass the code as its diagnostic. severity is error, warning, information or hint.
-Clean files are not listed.
+to the edit tool's code_actions, or pass the code as its diagnostic.
+severity is error, warning, information or hint. Clean files are not listed.
 
 A summary line follows the files:
 4 files checked, 3 diagnostics in 2 files, 5 below the severity
@@ -50,7 +50,6 @@ limit defaults to 50 and accepts 1 through 250 across the whole response.
 It caps returned items, not the files analyzed or the analysis time.
 A scan accepts at most 1000 files. Narrow the glob if it exceeds this limit.
 When the result is truncated, split the selection into narrower requests.
-Omitted files are not necessarily clean when the result is truncated.
 Report the checked scope. A failed, incomplete or truncated response cannot
 establish that the workspace is clean.
 After writing files yourself, rerun diagnostics on them. An edit applied
