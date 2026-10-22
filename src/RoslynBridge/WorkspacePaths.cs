@@ -165,6 +165,30 @@ internal sealed class WorkspacePaths(string root)
     public string RelativePath(string fullPath) =>
         Relative(fullPath).Replace(Path.DirectorySeparatorChar, '/');
 
+    /// <summary>
+    /// Returns the workspace-relative paths of the files outside excluded directories whose trailing
+    /// path segments are <paramref name="name"/>, in ordinal order.
+    /// </summary>
+    public List<string> RelativePathsEndingWith(IEnumerable<string> files, string name)
+    {
+        var suffix = name.Replace('\\', '/');
+        var fileName = Path.GetFileName(suffix);
+        return
+        [
+            .. files
+                .Where(file =>
+                    file.EndsWith(fileName, StringComparison.Ordinal) && !IsExcluded(file)
+                )
+                .Select(RelativePath)
+                .Where(relative => EndsWithSegments(relative, suffix))
+                .Order(StringComparer.Ordinal),
+        ];
+    }
+
+    private static bool EndsWithSegments(string relative, string suffix) =>
+        relative.EndsWith(suffix, StringComparison.Ordinal)
+        && (relative.Length == suffix.Length || relative[^(suffix.Length + 1)] == '/');
+
     private static bool IsOutside(string relative) =>
         Path.IsPathRooted(relative)
         || string.Equals(relative, "..", StringComparison.Ordinal)

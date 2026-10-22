@@ -16,9 +16,15 @@ An unknown or missing argument returns invalid_request. For an unknown
 argument, the message lists the valid names. An array argument may also be
 sent as a JSON string.
 
-Paths are workspace-relative. Inputs and results use one-based lines and
-one-based UTF-16 characters, so returned positions can be reused as inputs.
-Raw LSP requests keep zero-based coordinates.
+Paths are workspace-relative. When no file has the given path, a file name or
+a path suffix of whole segments, such as Calculator.cs or Math/Calculator.cs,
+also works if it names exactly one workspace file. The response then starts
+with a "resolved file: PATH" line. Several matches return ambiguous_file with
+up to 20 paths. This applies to file in navigate, bulk_navigate, symbols and
+edit, and to diagnostics without glob characters, but not to newName.
+Inputs and results use one-based lines and one-based UTF-16 characters, so
+returned positions can be reused as inputs. Raw LSP requests keep zero-based
+coordinates.
 
 Results are compact text lines. Failed calls start with "error CODE: message"
 and set isError. Raw LSP results and capabilities are JSON.

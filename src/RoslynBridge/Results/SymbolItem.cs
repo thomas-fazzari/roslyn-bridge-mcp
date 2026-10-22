@@ -9,7 +9,7 @@ namespace RoslynBridge.Results;
 internal readonly record struct SourcePosition(int Line, int Character);
 
 /// <summary>
-/// A symbol as results show it: a declared or related symbol, or a candidate for an ambiguous name.
+/// A symbol as results show it: a declared or related symbol, or a candidate for an ambiguous or unknown name.
 /// </summary>
 /// <param name="Name">A name that navigate and edit accept, or Roslyn's name outside the workspace.</param>
 internal sealed record SymbolItem(string Name, string? Kind)

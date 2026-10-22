@@ -39,7 +39,7 @@ internal sealed class FakeRoslynServer : IRoslynServer
     }
 
     /// <summary>
-    /// Answers workspace/symbol, references, diagnostic, project context, code action and
+    /// Answers workspace/symbol, document symbol, references, diagnostic, project context, code action and
     /// workspace/executeCommand requests, given the method and its parameters.
     /// A references request that the bridge cancels ends without waiting for its answer.
     /// The default handler returns null.
@@ -143,6 +143,13 @@ internal sealed class FakeRoslynServer : IRoslynServer
         [JsonRpcMethod(LspMethods.WorkspaceSymbol, UseSingleObjectParameterDeserialization = true)]
         public Task<JsonNode?> WorkspaceSymbolAsync(JsonNode? parameters) =>
             server.Handle(LspMethods.WorkspaceSymbol, parameters);
+
+        [JsonRpcMethod(
+            LspMethods.TextDocumentDocumentSymbol,
+            UseSingleObjectParameterDeserialization = true
+        )]
+        public Task<JsonNode?> DocumentSymbolAsync(JsonNode? parameters) =>
+            server.Handle(LspMethods.TextDocumentDocumentSymbol, parameters);
 
         [JsonRpcMethod(
             LspMethods.TextDocumentReferences,

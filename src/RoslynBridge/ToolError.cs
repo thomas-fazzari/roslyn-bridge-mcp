@@ -8,7 +8,7 @@ namespace RoslynBridge;
 /// <summary>
 /// An expected failure, reported to the client as the structured error of a tool response.
 /// </summary>
-/// <param name="Candidates">Values the client can send instead, such as the symbols an ambiguous name matches.</param>
+/// <param name="Candidates">Values the client can send instead, such as the symbols an ambiguous or unknown name may mean.</param>
 internal sealed record ToolError(
     string Code,
     string Message,
@@ -72,4 +72,5 @@ internal static class ErrorCodes
     internal const string Internal = "internal_error";
     internal const string SymbolNotFound = "symbol_not_found";
     internal const string AmbiguousSymbol = "ambiguous_symbol";
+    internal const string AmbiguousFile = "ambiguous_file";
 }

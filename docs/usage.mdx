@@ -43,9 +43,15 @@ Generic arguments are optional unless a generic and a non-generic type share the
 
 A constructor needs its parameter list. An ambiguous name returns the error `ambiguous_symbol` with up to 20 candidates, one per line.
 Send any candidate symbol back unchanged. When candidates share a name, send the symbol with the candidate's file.
+An unknown name returns the error `symbol_not_found`. When symbols with a similar name exist, it lists up to 10 of them as candidates, which you can also send back unchanged.
 
 Paths are relative to the workspace. Input coordinates start at 1, with characters counted as UTF-16 code units.
 Only raw requests keep zero-based LSP positions.
+
+When no file has the given path, a `file` may be a file name or a path suffix, such as `Calculator.cs` or `Math/Calculator.cs`.
+It must match whole path segments and name exactly one workspace file. The response then starts with a `resolved file: path` line.
+When several files match, the error `ambiguous_file` lists up to 20 of them. In `bulk_navigate`, that error fails the whole call.
+This applies to `file` of `navigate`, `bulk_navigate`, `symbols` and `edit`, and to `file` of `diagnostics` without glob characters. It does not apply to `newName`.
 
 ## Results
 

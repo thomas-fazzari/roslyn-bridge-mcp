@@ -18,6 +18,7 @@ namespace RoslynBridge.Output;
 internal static partial class ResultText
 {
     internal const int MaximumResponseCharacters = 32_000;
+    internal const string ResolvedFilePrefix = "resolved file: ";
 
     private const string Indent = "  ";
 
@@ -72,6 +73,12 @@ internal static partial class ResultText
 
         return Finish(text);
     }
+
+    /// <summary>
+    /// Returns the lines that start a response whose file names were completed to workspace-relative paths.
+    /// </summary>
+    public static string ResolvedFiles(IEnumerable<string> files) =>
+        string.Concat(files.Select(file => $"{ResolvedFilePrefix}{file}\n"));
 
     public static string Error(ToolError error, int? rpcCode)
     {

@@ -88,7 +88,13 @@ internal sealed partial class LspTool(
                     ? options.RequestTimeout
                     : options.StartupTimeout + options.RequestTimeout
             );
-            var result = await DispatchAsync(request, timeout.Token);
+            var resolved = await ResolveFilesAsync(request, timeout.Token);
+            if (resolved.Error is { } fileError)
+            {
+                return Failure(fileError);
+            }
+
+            var result = await DispatchAsync(resolved.Value.Request, timeout.Token);
             if (result.Error is { } error)
             {
                 return Failure(error);
@@ -100,7 +106,7 @@ internal sealed partial class LspTool(
                 OperationCompleted(logger, request.Action, elapsedMilliseconds);
             }
 
-            return Response(result.Value);
+            return Response(result.Value, resolved.Value.Files);
         }
         catch (EditApplicationException exception)
         {
@@ -321,9 +327,15 @@ internal sealed partial class LspTool(
         return isLifecycle || isSynchronization || method is LspMethods.WorkspaceApplyEdit;
     }
 
-    internal static CallToolResult Response(ToolResult? result)
+    internal static CallToolResult Response(
+        ToolResult? result,
+        IReadOnlyList<string>? resolvedFiles = null
+    )
     {
-        var text = ResultText.Render(result, ResultText.MaximumResponseCharacters);
+        var heading = ResultText.ResolvedFiles(resolvedFiles ?? []);
+        var text =
+            heading
+            + ResultText.Render(result, ResultText.MaximumResponseCharacters - heading.Length);
         // A receipt must reach the client, and it drops trailing operations to fit
         return text.Length <= ResultText.MaximumResponseCharacters || result is EditReceipt
             ? Text(text, isError: false)

@@ -3,9 +3,14 @@
 This repository contains **Roslyn Bridge MCP**, an MCP server that gives coding agents C# diagnostics, navigation and refactoring through the official Roslyn language server.
 It ships as a native ahead-of-time executable that any MCP client can launch.
 
-## Resources
+## Code navigation
 
-Start with the [developer guide](docs/development/index.mdx). It states the design rules, and its common changes table names the page to read for each kind of change.
+Use the `roslyn` MCP tools for C# code before `grep` or reading whole files. When they are deferred, load them with ToolSearch first.
+
+- Find a symbol with `symbols`, and read its declaration with `navigate` and `source`.
+- List a type with `members`. Find usages with `references`, `callers` or `impact`.
+- Batch independent lookups with `bulk_navigate`.
+- Read a whole file only to edit it.
 
 ## Validation
 
@@ -21,6 +26,8 @@ Follow the [C# conventions](docs/development/conventions/csharp.mdx) and the [te
 - Do not write interim code that a later step will delete.
 - Before writing a type or helper, search for an existing one. After each change, reread the diff for duplication and leftovers.
 - Change only what the task needs. Report unrelated problems instead of fixing them.
+- Treat tool names, parameters, result lines, error codes, command-line options and release asset names as a public contract. Ask before changing one.
+- Ask before adding a lock or holding one across a Roslyn request, a file walk or another wait.
 
 ## Reviews
 
@@ -35,3 +42,7 @@ Follow [documentation](docs/development/documentation.mdx) when writing pages un
 - Expand uncommon abbreviations on first use.
 - Avoid semicolons, em dashes, filler and repeated facts.
 - Write standalone prose. Keep the reason for a decision without referring to conversations, agent activity or the sequence of edits.
+
+## Resources
+
+The [developer guide](docs/development/index.mdx) states the design rules, and its common changes table names the page to read for each kind of change.

@@ -189,6 +189,16 @@ internal sealed partial class RoslynSession
         return new Dictionary<string, FileStamp>(_workspaceFiles, StringComparer.Ordinal);
     }
 
+    /// <summary>
+    /// Returns the full paths of the workspace files the session knows, after synchronizing with the disk.
+    /// </summary>
+    public async Task<string[]> WorkspaceFilesAsync(CancellationToken cancellationToken)
+    {
+        await SynchronizeAsync(cancellationToken);
+        using var held = await LockDocumentsAsync(cancellationToken);
+        return [.. _workspaceFiles.Keys];
+    }
+
     internal void RegisterCapabilities(JsonObject parameters)
     {
         if (parameters["registrations"] is not JsonArray registrations)

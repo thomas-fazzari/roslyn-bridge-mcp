@@ -16,6 +16,7 @@ public sealed class LspToolTests : IDisposable
 {
     private const string SourceFile = "Source.cs";
     private const string SourceText = "class A {}\nclass B {}\nclass C {}\nclass D {}\n";
+    private const int LspClassKind = 5;
 
     private readonly string _root = Directory.CreateTempSubdirectory("roslyn-lsp-tool-").FullName;
 
@@ -520,6 +521,143 @@ public sealed class LspToolTests : IDisposable
         sections[2].Should().EndWith("Found.cs 1:1");
     }
 
+    [Fact]
+    public async Task UnknownSymbolListsSimilarSymbolsThatResolveWhenSentBackAsync()
+    {
+        var path = await WriteFileAsync(_root, "Calculator.cs", "class Calculator\n{\n}\n");
+        await using var session = CreateSession(
+            _root,
+            FakeServer(server =>
+                server.Handle = (method, _) =>
+                    Task.FromResult<JsonNode?>(
+                        method switch
+                        {
+                            LspMethods.WorkspaceSymbol => new JsonArray(
+                                WorkspaceSymbol("Calculator", path),
+                                WorkspaceSymbol("Zebra", Path.Combine(_root, "Zebra.cs"))
+                            ),
+                            LspMethods.TextDocumentDocumentSymbol => new JsonArray(
+                                DocumentSymbol("Calculator")
+                            ),
+                            _ => null,
+                        }
+                    )
+            )
+        );
+        using var tool = CreateTool(session);
+
+        var unknown = await tool.ExecuteAsync(SourceOf("Calculater"), TestCt);
+
+        ErrorCode(unknown).Should().Be(ErrorCodes.SymbolNotFound);
+        var candidate = ResponseText(unknown).Split('\n').Skip(1).Should().ContainSingle().Which;
+        var name = candidate.Split(' ', 3)[2];
+        var resolved = await tool.ExecuteAsync(SourceOf(name), TestCt);
+        resolved.IsError.Should().NotBeTrue();
+    }
+
+    [Fact]
+    public async Task UnknownSymbolStillReportsNotFoundWhenASimilarSymbolsFileIsGoneAsync()
+    {
+        await using var session = CreateSession(
+            _root,
+            FakeServer(server =>
+                server.Handle = (method, _) =>
+                    Task.FromResult<JsonNode?>(
+                        method is LspMethods.WorkspaceSymbol
+                            ? new JsonArray(
+                                WorkspaceSymbol("Calculator", Path.Combine(_root, "Gone.cs"))
+                            )
+                            : null
+                    )
+            )
+        );
+        using var tool = CreateTool(session);
+
+        var response = await tool.ExecuteAsync(SourceOf("Calculater"), TestCt);
+
+        ErrorCode(response).Should().Be(ErrorCodes.SymbolNotFound);
+        ResponseText(response).Split('\n').Should().ContainSingle();
+    }
+
+    [Theory]
+    [InlineData("Calculator.cs", true)]
+    [InlineData("Math/Calculator.cs", true)]
+    [InlineData("ator.cs", false)]
+    public async Task FileNameResolvesOnlyAtWholePathSegmentsAsync(string file, bool resolves)
+    {
+        await WriteFileAsync(_root, "src/Math/Calculator.cs", "class Calculator {}");
+        await using var session = CreateSession(_root, FakeServer());
+        using var tool = CreateTool(session);
+
+        var response = await tool.ExecuteAsync(
+            new LspRequest { Action = LspAction.Symbols, File = file },
+            TestCt
+        );
+
+        if (resolves)
+        {
+            ResponseText(response)
+                .Split('\n')[0]
+                .Should()
+                .Be(ResultText.ResolvedFilePrefix + "src/Math/Calculator.cs");
+            return;
+        }
+
+        ErrorCode(response).Should().Be(ErrorCodes.InvalidRequest);
+    }
+
+    [Fact]
+    public async Task FileNameThatMatchesSeveralFilesIsAmbiguousAsync()
+    {
+        await WriteFileAsync(_root, "A/Calculator.cs", "class A {}");
+        await WriteFileAsync(_root, "B/Calculator.cs", "class B {}");
+        await using var session = CreateSession(_root, FakeServer());
+        using var tool = CreateTool(session);
+
+        var response = await tool.ExecuteAsync(
+            new LspRequest { Action = LspAction.Symbols, File = "Calculator.cs" },
+            TestCt
+        );
+
+        ErrorCode(response).Should().Be(ErrorCodes.AmbiguousFile);
+        ResponseText(response).Should().Contain("A/Calculator.cs").And.Contain("B/Calculator.cs");
+    }
+
+    [Fact]
+    public async Task BulkResolvesEachQueryFileAndEchoesTheResolvedPathOnceAsync()
+    {
+        await WriteFileAsync(_root, "src/Math/Source.cs", SourceText);
+        await using var session = CreateSession(
+            _root,
+            FakeServer(server =>
+                server.Handle = (_, _) => Task.FromResult<JsonNode?>(Found("Found.cs"))
+            )
+        );
+        using var tool = CreateTool(session);
+
+        var response = await tool.ExecuteAsync(
+            Bulk(
+                ReferencesAt(1) with
+                {
+                    File = "Source.cs",
+                },
+                ReferencesAt(2) with
+                {
+                    File = "Math/Source.cs",
+                }
+            ),
+            TestCt
+        );
+
+        ResponseText(response)
+            .Should()
+            .Be(
+                $"{ResultText.ResolvedFilePrefix}src/Math/Source.cs\n"
+                    + "## 1 references src/Math/Source.cs:1:1\nFound.cs 1:1\n"
+                    + "## 2 references src/Math/Source.cs:2:1\nFound.cs 1:1"
+            );
+    }
+
     public void Dispose() => Directory.Delete(_root, recursive: true);
 
     private static LspRequest SymbolQuery() =>
@@ -527,6 +665,9 @@ public sealed class LspToolTests : IDisposable
 
     private static LspRequest Bulk(params LspRequest[] queries) =>
         new() { Action = LspAction.Bulk, Queries = queries };
+
+    private static LspRequest SourceOf(string symbol) =>
+        new() { Action = LspAction.Source, Symbol = symbol };
 
     private static LspRequest ReferencesAt(int line) =>
         new()
@@ -565,6 +706,39 @@ public sealed class LspToolTests : IDisposable
             ["range"] = new JsonObject
             {
                 ["start"] = new JsonObject { ["line"] = 0, ["character"] = 0 },
+            },
+        };
+
+    // The declaration of a class named at line 1, character 7
+    private static JsonObject WorkspaceSymbol(string name, string path) =>
+        new()
+        {
+            ["name"] = name,
+            ["kind"] = LspClassKind,
+            ["location"] = new JsonObject
+            {
+                ["uri"] = new Uri(path).AbsoluteUri,
+                ["range"] = new JsonObject
+                {
+                    ["start"] = new JsonObject { ["line"] = 0, ["character"] = 6 },
+                },
+            },
+        };
+
+    private static JsonObject DocumentSymbol(string name) =>
+        new()
+        {
+            ["name"] = name,
+            ["kind"] = LspClassKind,
+            ["range"] = new JsonObject
+            {
+                ["start"] = new JsonObject { ["line"] = 0, ["character"] = 0 },
+                ["end"] = new JsonObject { ["line"] = 2, ["character"] = 1 },
+            },
+            ["selectionRange"] = new JsonObject
+            {
+                ["start"] = new JsonObject { ["line"] = 0, ["character"] = 6 },
+                ["end"] = new JsonObject { ["line"] = 0, ["character"] = 16 },
             },
         };
 

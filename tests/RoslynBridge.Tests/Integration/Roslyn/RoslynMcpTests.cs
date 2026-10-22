@@ -590,6 +590,30 @@ public sealed partial class RoslynMcpTests
     }
 
     [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    public async Task MisspelledSymbolListsACandidateThatResolvesAsync()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var workspace = await RoslynTestWorkspace.CreateAsync(cancellationToken);
+
+        var unknown = await workspace.CallRawAsync(
+            new LspRequest { Action = LspAction.Definition, Symbol = "Greter" }
+        );
+
+        AssertError(unknown, ErrorCodes.SymbolNotFound);
+        var candidate = Candidates(unknown)
+            .Select(SymbolName)
+            .Should()
+            .ContainSingle(name => name.EndsWith(".Greeter", StringComparison.Ordinal))
+            .Which;
+        AssertSingleLocation(
+            await workspace.CallAsync(
+                new LspRequest { Action = LspAction.Definition, Symbol = candidate }
+            ),
+            ImplementationFile
+        );
+    }
+
+    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
     public async Task RenamesFilesOnlyWhenRoslynAdvertisesSupportAsync()
     {
         const string destination = "Application/RenamedGreeter.cs";
