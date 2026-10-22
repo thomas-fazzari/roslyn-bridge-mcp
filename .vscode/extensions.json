@@ -1,12 +1,15 @@
 {
   "recommendations": [
-    "DavidAnson.vscode-markdownlint",
+    "ms-dotnettools.csharp",
     "csharpier.csharpier-vscode",
+    "hverlin.mise-vscode",
+    "DavidAnson.vscode-markdownlint",
     "EditorConfig.EditorConfig",
     "redhat.vscode-yaml",
     "oxc.oxc-vscode",
     "tamasfe.even-better-toml",
-    "hverlin.mise-vscode",
-    "unifiedjs.vscode-mdx"
+    "unifiedjs.vscode-mdx",
+    "ms-vscode-remote.remote-containers",
+    "bscan.perlnavigator"
   ]
 }

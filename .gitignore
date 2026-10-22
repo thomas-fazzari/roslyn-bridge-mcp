@@ -25,6 +25,9 @@
 !/nuget.config
 !/lefthook.yml
 
+!/.devcontainer/
+!/.devcontainer/devcontainer.json
+!/.devcontainer/Dockerfile
 !/.github/
 !/.github/dependabot.yml
 !/.github/workflows/

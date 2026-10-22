@@ -9,6 +9,7 @@
   "files.associations": {
     "bun.lock": "plaintext",
     "LICENSE": "plaintext",
+    "NOTICE": "plaintext",
     "*.globalconfig": "properties",
     "*.csproj": "xml",
     "*.props": "xml",

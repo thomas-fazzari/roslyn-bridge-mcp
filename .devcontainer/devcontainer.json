@@ -1,0 +1,33 @@
+{
+  "name": "Roslyn Bridge MCP",
+  "build": { "dockerfile": "Dockerfile" },
+  "remoteUser": "vscode",
+  "containerEnv": {
+    "DOTNET_CLI_TELEMETRY_OPTOUT": "1",
+    "DOTNET_NOLOGO": "1",
+    "MISE_TRUSTED_CONFIG_PATHS": "${containerWorkspaceFolder}"
+  },
+  "remoteEnv": {
+    "PATH": "/home/vscode/.local/share/mise/shims:/home/vscode/.dotnet/tools:${containerEnv:PATH}"
+  },
+  "mounts": [
+    "source=roslyn-bridge-node-modules,target=${containerWorkspaceFolder}/node_modules,type=volume"
+  ],
+  "postCreateCommand": "sudo chown vscode:vscode node_modules && mise install && mise run install && dotnet tool install --global roslyn-language-server --prerelease",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "DavidAnson.vscode-markdownlint",
+        "csharpier.csharpier-vscode",
+        "EditorConfig.EditorConfig",
+        "redhat.vscode-yaml",
+        "oxc.oxc-vscode",
+        "tamasfe.even-better-toml",
+        "hverlin.mise-vscode",
+        "unifiedjs.vscode-mdx",
+        "ms-dotnettools.csharp",
+        "bscan.perlnavigator"
+      ]
+    }
+  }
+}
