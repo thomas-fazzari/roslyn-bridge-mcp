@@ -27,7 +27,7 @@ Unit tests simulate the protocol. Integration tests are explicit and run the bri
 
 ## Writing tests
 
-Assert error codes, result records and the result lines clients parse. Do not assert the wording of messages, because messages may change. Refer to values clients see, such as error codes and limits, through the constants the code defines. Tests reach them through `internal` access.
+Assert error codes, result records and the result lines clients parse. Do not assert the wording of messages, because messages may change. Refer to values clients see, such as error codes and limits, through the constants the code defines. Tests reach them through `internal` access. Assert tool responses with the assertions defined in `tests/RoslynBridge.Tests/Assertions`.
 
 Unit tests pass `TestCt` from `TestHelpers` as the test cancellation token. A test with a `Timeout` reads `TestContext.Current.CancellationToken` directly (as the xUnit1069 analyzer rule requires). When a test asserts on a call that throws, declare that call as a local function at the end of the test, after an explicit `return;`, instead of a lambda in a local variable.
 

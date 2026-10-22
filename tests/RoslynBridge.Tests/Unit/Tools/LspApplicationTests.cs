@@ -5,6 +5,7 @@ using System.Globalization;
 using RoslynBridge.Editing;
 using RoslynBridge.Output;
 using RoslynBridge.Results;
+using RoslynBridge.Tests.Assertions;
 using RoslynBridge.Tools;
 using static RoslynBridge.Tests.Unit.TestHelpers;
 
@@ -40,7 +41,7 @@ public sealed class LspApplicationTests
 
         var response = LspTool.Response(preview);
 
-        response.IsError.Should().BeFalse();
+        response.Should().BeSuccessful();
         var text = ResponseText(response);
         text.Should()
             .StartWith("proposal proposal: 1000 files, not applied")
@@ -66,8 +67,7 @@ public sealed class LspApplicationTests
 
         var response = LspTool.Response(locations);
 
-        response.IsError.Should().BeTrue();
-        ErrorCode(response).Should().Be(ErrorCodes.ResultTooLarge);
+        response.Should().BeError(ErrorCodes.ResultTooLarge);
     }
 
     [Fact]
@@ -81,7 +81,7 @@ public sealed class LspApplicationTests
 
         var response = LspTool.Response(receipt);
 
-        response.IsError.Should().NotBeTrue();
+        response.Should().BeSuccessful();
         var text = ResponseText(response);
         text.Should()
             .StartWith("applied: 1 file")
@@ -102,7 +102,7 @@ public sealed class LspApplicationTests
 
         var response = LspTool.Response(receipt);
 
-        response.IsError.Should().NotBeTrue();
+        response.Should().BeSuccessful();
         var text = ResponseText(response);
         text.Should()
             .StartWith("applied: 64 files")
@@ -126,8 +126,7 @@ public sealed class LspApplicationTests
 
         var response = LspTool.ApplicationFailure(exception, cancelled);
 
-        response.IsError.Should().BeTrue();
-        ErrorCode(response).Should().Be(expectedCode);
+        response.Should().BeError(expectedCode);
         ResponseText(response)
             .Should()
             .Contain("applied: 1 file, 1 operation, Roslyn not synchronized");

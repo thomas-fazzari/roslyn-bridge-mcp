@@ -7,6 +7,7 @@ using System.Text.Json;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
 using RoslynBridge.Requests;
+using RoslynBridge.Tests.Assertions;
 using RoslynBridge.Tools;
 using static RoslynBridge.Tests.Unit.TestHelpers;
 
@@ -71,9 +72,8 @@ internal sealed class RoslynTestWorkspace : IAsyncDisposable
     public async Task<string> CallAsync(LspRequest request)
     {
         var response = await CallRawAsync(request);
-        var text = ResponseText(response);
-        response.IsError.Should().NotBeTrue(text);
-        return text;
+        response.Should().BeSuccessful();
+        return ResponseText(response);
     }
 
     public async Task<CallToolResult> CallRawAsync(LspRequest request)

@@ -3,6 +3,7 @@
 
 using System.Text.Json.Nodes;
 using RoslynBridge.Lsp;
+using RoslynBridge.Tests.Assertions;
 using RoslynBridge.Tools;
 using static RoslynBridge.Tests.Unit.TestHelpers;
 
@@ -47,8 +48,7 @@ public sealed class ToolArgumentTests : IAsyncDisposable
             cancellationToken: cancellationToken
         );
 
-        response.IsError.Should().BeTrue();
-        ErrorCode(response).Should().Be(ErrorCodes.InvalidRequest);
+        response.Should().BeError(ErrorCodes.InvalidRequest);
         ResponseText(response).Should().Contain($"'{argument}'");
         if (suggestion is null)
         {
@@ -80,8 +80,7 @@ public sealed class ToolArgumentTests : IAsyncDisposable
             cancellationToken: cancellationToken
         );
 
-        response.IsError.Should().BeTrue();
-        ErrorCode(response).Should().Be(ErrorCodes.InvalidRequest);
+        response.Should().BeError(ErrorCodes.InvalidRequest);
         ResponseText(response).Should().Contain("'action'");
         _launches.Should().Be(0);
     }
@@ -103,7 +102,7 @@ public sealed class ToolArgumentTests : IAsyncDisposable
             cancellationToken: cancellationToken
         );
 
-        response.IsError.Should().NotBeTrue();
+        response.Should().BeSuccessful();
         ResponseText(response).Should().Be($"## 1 references {SourceFile}:1:1: none");
         _launches.Should().Be(1);
     }
@@ -122,8 +121,7 @@ public sealed class ToolArgumentTests : IAsyncDisposable
             cancellationToken: cancellationToken
         );
 
-        response.IsError.Should().BeTrue();
-        ErrorCode(response).Should().Be(ErrorCodes.InvalidRequest);
+        response.Should().BeError(ErrorCodes.InvalidRequest);
         ResponseText(response).Should().Contain("'queries'");
         _launches.Should().Be(0);
     }
@@ -151,8 +149,7 @@ public sealed class ToolArgumentTests : IAsyncDisposable
             cancellationToken: cancellationToken
         );
 
-        response.IsError.Should().BeTrue();
-        ErrorCode(response).Should().Be(ErrorCodes.InvalidRequest);
+        response.Should().BeError(ErrorCodes.InvalidRequest);
         ResponseText(response).Should().Contain("'bogus'");
         _launches.Should().Be(0);
     }

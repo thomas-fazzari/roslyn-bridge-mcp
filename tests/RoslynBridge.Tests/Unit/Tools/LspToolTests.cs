@@ -6,6 +6,7 @@ using System.Text.Json.Nodes;
 using RoslynBridge.Lsp;
 using RoslynBridge.Output;
 using RoslynBridge.Requests;
+using RoslynBridge.Tests.Assertions;
 using RoslynBridge.Tools;
 using StreamJsonRpc;
 using static RoslynBridge.Tests.Unit.TestHelpers;
@@ -58,7 +59,7 @@ public sealed class LspToolTests : IDisposable
             TestCt
         );
 
-        ErrorCode(response).Should().Be(ErrorCodes.InvalidRequest);
+        response.Should().BeError(ErrorCodes.InvalidRequest);
     }
 
     [Theory]
@@ -79,7 +80,7 @@ public sealed class LspToolTests : IDisposable
             TestCt
         );
 
-        ErrorCode(response).Should().Be(ErrorCodes.InvalidRequest);
+        response.Should().BeError(ErrorCodes.InvalidRequest);
     }
 
     [Fact]
@@ -116,7 +117,7 @@ public sealed class LspToolTests : IDisposable
             TestCt
         );
 
-        ErrorCode(response).Should().Be(ErrorCodes.Lsp);
+        response.Should().BeError(ErrorCodes.Lsp);
         ResponseText(response)
             .Should()
             .Contain("failed step: command")
@@ -138,7 +139,7 @@ public sealed class LspToolTests : IDisposable
 
         var response = await tool.ExecuteAsync(SymbolQuery(), TestCt);
 
-        ErrorCode(response).Should().Be(ErrorCodes.Io);
+        response.Should().BeError(ErrorCodes.Io);
     }
 
     [Fact]
@@ -159,7 +160,7 @@ public sealed class LspToolTests : IDisposable
 
         var response = await tool.ExecuteAsync(SymbolQuery(), TestCt);
 
-        ErrorCode(response).Should().Be(ErrorCodes.Loading);
+        response.Should().BeError(ErrorCodes.Loading);
         session.IsLoading.Should().BeTrue();
     }
 
@@ -188,7 +189,7 @@ public sealed class LspToolTests : IDisposable
         load.SetResult();
         var response = await tool.ExecuteAsync(SymbolQuery(), TestCt);
 
-        response.IsError.Should().NotBe(true);
+        response.Should().BeSuccessful();
         launches.Should().Be(1);
         return;
 
@@ -243,7 +244,7 @@ public sealed class LspToolTests : IDisposable
         session.IsLoading.Should().BeTrue();
         load.SetResult();
         var response = await tool.ExecuteAsync(SymbolQuery(), TestCt);
-        response.IsError.Should().NotBe(true);
+        response.Should().BeSuccessful();
         launches.Should().Be(1);
     }
 
@@ -498,7 +499,7 @@ public sealed class LspToolTests : IDisposable
 
         var response = await tool.ExecuteAsync(SymbolQuery() with { Offset = -1 }, TestCt);
 
-        ErrorCode(response).Should().Be(ErrorCodes.InvalidRequest);
+        response.Should().BeError(ErrorCodes.InvalidRequest);
     }
 
     [Fact]
@@ -596,7 +597,7 @@ public sealed class LspToolTests : IDisposable
             TestCt
         );
 
-        response.IsError.Should().NotBeTrue();
+        response.Should().BeSuccessful();
         var sections = ResponseText(response).Split("\n## ");
         sections.Should().HaveCount(3);
         sections[0].Should().EndWith("Found.cs 1:1");
@@ -655,7 +656,7 @@ public sealed class LspToolTests : IDisposable
             TestCt
         );
 
-        ErrorCode(response).Should().Be(ErrorCodes.InvalidRequest);
+        response.Should().BeError(ErrorCodes.InvalidRequest);
     }
 
     [Fact]
@@ -686,7 +687,7 @@ public sealed class LspToolTests : IDisposable
             TestCt
         );
 
-        response.IsError.Should().NotBeTrue();
+        response.Should().BeSuccessful();
         var text = ResponseText(response);
         text.Length.Should().BeLessThanOrEqualTo(ResultText.MaximumResponseCharacters);
         text.Should()
@@ -728,7 +729,7 @@ public sealed class LspToolTests : IDisposable
             cancellationToken
         );
 
-        response.IsError.Should().NotBeTrue();
+        response.Should().BeSuccessful();
         var sections = ResponseText(response).Split("\n## ");
         sections.Should().HaveCount(3);
         sections[0].Should().EndWith("Found.cs 1:1");
@@ -763,11 +764,11 @@ public sealed class LspToolTests : IDisposable
 
         var unknown = await tool.ExecuteAsync(SourceOf("Calculater"), TestCt);
 
-        ErrorCode(unknown).Should().Be(ErrorCodes.SymbolNotFound);
+        unknown.Should().BeError(ErrorCodes.SymbolNotFound);
         var candidate = ResponseText(unknown).Split('\n').Skip(1).Should().ContainSingle().Which;
         var name = candidate.Split(' ', 3)[2];
         var resolved = await tool.ExecuteAsync(SourceOf(name), TestCt);
-        resolved.IsError.Should().NotBeTrue();
+        resolved.Should().BeSuccessful();
     }
 
     [Fact]
@@ -790,7 +791,7 @@ public sealed class LspToolTests : IDisposable
 
         var response = await tool.ExecuteAsync(SourceOf("Calculater"), TestCt);
 
-        ErrorCode(response).Should().Be(ErrorCodes.SymbolNotFound);
+        response.Should().BeError(ErrorCodes.SymbolNotFound);
         ResponseText(response).Split('\n').Should().ContainSingle();
     }
 
@@ -818,7 +819,7 @@ public sealed class LspToolTests : IDisposable
             return;
         }
 
-        ErrorCode(response).Should().Be(ErrorCodes.InvalidRequest);
+        response.Should().BeError(ErrorCodes.InvalidRequest);
     }
 
     [Fact]
@@ -834,7 +835,7 @@ public sealed class LspToolTests : IDisposable
             TestCt
         );
 
-        ErrorCode(response).Should().Be(ErrorCodes.AmbiguousFile);
+        response.Should().BeError(ErrorCodes.AmbiguousFile);
         ResponseText(response).Should().Contain("A/Calculator.cs").And.Contain("B/Calculator.cs");
     }
 

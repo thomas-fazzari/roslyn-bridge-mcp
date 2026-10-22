@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Text.RegularExpressions;
 using ModelContextProtocol.Protocol;
 using RoslynBridge.Requests;
+using static RoslynBridge.Tests.Assertions.ResultLines;
 using static RoslynBridge.Tests.Unit.TestHelpers;
 
 namespace RoslynBridge.Tests.Integration.Roslyn;
@@ -12,8 +13,6 @@ namespace RoslynBridge.Tests.Integration.Roslyn;
 // Reads the text results the bridge returns
 public sealed partial class RoslynMcpTests
 {
-    private const int RegexTimeoutMilliseconds = 1_000;
-
     private static LspRequest ApplyProposal(LspAction action, string preview) =>
         new()
         {
@@ -21,17 +20,6 @@ public sealed partial class RoslynMcpTests
             ProposalId = ProposalPattern().Match(preview).Groups["id"].Value,
             Apply = true,
         };
-
-    private static void AssertApplied(string response) => response.Should().StartWith("applied:");
-
-    private static void AssertError(CallToolResult response, string expectedCode)
-    {
-        response.IsError.Should().BeTrue();
-        ErrorCode(response).Should().Be(expectedCode);
-    }
-
-    private static void AssertSingleLocation(string response, string expectedFile) =>
-        Locations(response).Should().ContainSingle().Which.Should().Be(expectedFile, response);
 
     /// <summary>
     /// Starts Roslyn and waits for the project load, so a file written next reaches Roslyn
@@ -49,8 +37,6 @@ public sealed partial class RoslynMcpTests
             )
         );
 
-    private static string[] Lines(string text) => text.Split('\n');
-
     private static int ActionIndex(string listing, Func<string, bool> match)
     {
         var action = Lines(listing).Should().ContainSingle(line => match(line), listing).Which;
@@ -67,20 +53,6 @@ public sealed partial class RoslynMcpTests
             .Skip(1)
             .TakeWhile(line => !line.StartsWith("## ", StringComparison.Ordinal));
 
-    // Result lines that are not indented details, totals or notes start with a workspace file
-    private static bool IsFileLine(string line) =>
-        !line.StartsWith(' ')
-        && !line.StartsWith("truncated:", StringComparison.Ordinal)
-        && !line.StartsWith("incomplete:", StringComparison.Ordinal)
-        && !SummaryPattern().IsMatch(line);
-
-    private static string FileOf(string line)
-    {
-        var token = line.TrimStart().Split(' ')[0];
-        var position = PositionSuffixPattern().Match(token);
-        return position.Success ? token[..position.Index] : token;
-    }
-
     // A symbol line ends with the name after its location and kind
     private static string SymbolName(string line)
     {
@@ -89,9 +61,6 @@ public sealed partial class RoslynMcpTests
         var container = name.IndexOf(" in ", StringComparison.Ordinal);
         return container < 0 ? name : name[..container];
     }
-
-    private static string[] Locations(string response) =>
-        [.. Lines(response).Where(IsFileLine).Select(FileOf)];
 
     private static string[] Candidates(CallToolResult response) =>
         [.. Lines(ResponseText(response)).Skip(1)];
@@ -173,16 +142,6 @@ public sealed partial class RoslynMcpTests
         RegexTimeoutMilliseconds
     )]
     private static partial Regex DiagnosticPattern();
-
-    [GeneratedRegex(
-        @"^(?<checked>\d+) files? checked, (?:no diagnostics|(?<total>\d+) diagnostics? in (?<files>\d+) files?)(?:, (?<below>\d+) below the severity)?$",
-        RegexOptions.None,
-        RegexTimeoutMilliseconds
-    )]
-    private static partial Regex SummaryPattern();
-
-    [GeneratedRegex(@":\d+:\d+$", RegexOptions.ExplicitCapture, RegexTimeoutMilliseconds)]
-    private static partial Regex PositionSuffixPattern();
 
     private readonly record struct Diagnostic(string Severity, string Code);
 

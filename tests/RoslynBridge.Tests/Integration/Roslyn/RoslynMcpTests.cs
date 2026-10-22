@@ -5,6 +5,8 @@ using System.Globalization;
 using System.Text.Json.Nodes;
 using RoslynBridge.Lsp;
 using RoslynBridge.Requests;
+using RoslynBridge.Tests.Assertions;
+using static RoslynBridge.Tests.Assertions.ResultLines;
 using static RoslynBridge.Tests.Unit.TestHelpers;
 
 namespace RoslynBridge.Tests.Integration.Roslyn;
@@ -59,7 +61,7 @@ public sealed partial class RoslynMcpTests
             "Greet("
         );
         var definition = await workspace.CallAsync(definitionRequest);
-        AssertSingleLocation(definition, ContractFile);
+        definition.Should().HaveSingleLocation(ContractFile);
         var target = await workspace.AtAsync(LspAction.Definition, ContractFile, "Greet(");
         definition
             .Should()
@@ -103,12 +105,12 @@ public sealed partial class RoslynMcpTests
         var typeDefinition = await workspace.CallAsync(
             await workspace.AtAsync(LspAction.TypeDefinition, ConsumerFile, "greeter.Greet")
         );
-        AssertSingleLocation(typeDefinition, ContractFile);
+        typeDefinition.Should().HaveSingleLocation(ContractFile);
 
         var implementation = await workspace.CallAsync(
             await workspace.AtAsync(LspAction.Implementation, ContractFile, "Greet(")
         );
-        AssertSingleLocation(implementation, ImplementationFile);
+        implementation.Should().HaveSingleLocation(ImplementationFile);
 
         var references = await workspace.CallAsync(
             await workspace.AtAsync(LspAction.References, ContractFile, "Greet(")
@@ -131,12 +133,10 @@ public sealed partial class RoslynMcpTests
         callers[1].Should().MatchRegex(@"^  calls \d+:\d+$");
 
         // A returned symbol name resolves back to its declaration
-        AssertSingleLocation(
-            await workspace.CallAsync(
-                new LspRequest { Action = LspAction.Definition, Symbol = SymbolName(callers[0]) }
-            ),
-            ConsumerFile
+        var resolved = await workspace.CallAsync(
+            new LspRequest { Action = LspAction.Definition, Symbol = SymbolName(callers[0]) }
         );
+        resolved.Should().HaveSingleLocation(ConsumerFile);
 
         var withContext = Lines(
             await workspace.CallAsync(
@@ -465,9 +465,9 @@ public sealed partial class RoslynMcpTests
             }
         );
 
-        AssertError(markdown, ErrorCodes.InvalidRequest);
-        AssertError(missing, ErrorCodes.InvalidRequest);
-        AssertError(pastTheEnd, ErrorCodes.InvalidRequest);
+        markdown.Should().BeError(ErrorCodes.InvalidRequest);
+        missing.Should().BeError(ErrorCodes.InvalidRequest);
+        pastTheEnd.Should().BeError(ErrorCodes.InvalidRequest);
         ResponseText(pastTheEnd).Should().Contain($"{ConsumerFile}, which has");
     }
 
@@ -534,23 +534,21 @@ public sealed partial class RoslynMcpTests
         var ambiguous = await workspace.CallRawAsync(
             new LspRequest { Action = LspAction.Definition, Symbol = "Program.Run" }
         );
-        AssertError(ambiguous, ErrorCodes.AmbiguousSymbol);
+        ambiguous.Should().BeError(ErrorCodes.AmbiguousSymbol);
         Candidates(ambiguous)
             .Select(FileOf)
             .Should()
             .BeEquivalentTo([applicationProgram, contractsProgram]);
 
-        AssertSingleLocation(
-            await workspace.CallAsync(
-                new LspRequest
-                {
-                    Action = LspAction.Definition,
-                    Symbol = "Program.Run",
-                    File = contractsProgram,
-                }
-            ),
-            contractsProgram
+        var resolved = await workspace.CallAsync(
+            new LspRequest
+            {
+                Action = LspAction.Definition,
+                Symbol = "Program.Run",
+                File = contractsProgram,
+            }
         );
+        resolved.Should().HaveSingleLocation(contractsProgram);
     }
 
     [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
@@ -567,16 +565,14 @@ public sealed partial class RoslynMcpTests
         var ambiguous = await workspace.CallRawAsync(
             new LspRequest { Action = LspAction.Definition, Symbol = "Greet" }
         );
-        AssertError(ambiguous, ErrorCodes.AmbiguousSymbol);
+        ambiguous.Should().BeError(ErrorCodes.AmbiguousSymbol);
         var candidates = Candidates(ambiguous).Select(SymbolName).ToArray();
         candidates.Should().HaveCount(3);
         var contract = candidates.Should().ContainSingle(name => name.Contains("IGreeter")).Which;
-        AssertSingleLocation(
-            await workspace.CallAsync(
-                new LspRequest { Action = LspAction.Definition, Symbol = contract }
-            ),
-            ContractFile
+        var resolved = await workspace.CallAsync(
+            new LspRequest { Action = LspAction.Definition, Symbol = contract }
         );
+        resolved.Should().HaveSingleLocation(ContractFile);
 
         var preview = await workspace.CallAsync(
             new LspRequest
@@ -599,18 +595,16 @@ public sealed partial class RoslynMcpTests
             new LspRequest { Action = LspAction.Definition, Symbol = "Greter" }
         );
 
-        AssertError(unknown, ErrorCodes.SymbolNotFound);
+        unknown.Should().BeError(ErrorCodes.SymbolNotFound);
         var candidate = Candidates(unknown)
             .Select(SymbolName)
             .Should()
             .ContainSingle(name => name.EndsWith(".Greeter", StringComparison.Ordinal))
             .Which;
-        AssertSingleLocation(
-            await workspace.CallAsync(
-                new LspRequest { Action = LspAction.Definition, Symbol = candidate }
-            ),
-            ImplementationFile
+        var resolved = await workspace.CallAsync(
+            new LspRequest { Action = LspAction.Definition, Symbol = candidate }
         );
+        resolved.Should().HaveSingleLocation(ImplementationFile);
     }
 
     [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
@@ -636,7 +630,7 @@ public sealed partial class RoslynMcpTests
         {
             var original = await workspace.ReadFileAsync(ImplementationFile);
             var rejected = await workspace.CallRawAsync(request);
-            AssertError(rejected, ErrorCodes.InvalidRequest);
+            rejected.Should().BeError(ErrorCodes.InvalidRequest);
             (await workspace.ReadFileAsync(ImplementationFile)).Should().Be(original);
             File.Exists(workspace.FilePath(destination)).Should().BeFalse();
             TestContext.Current.TestOutputHelper!.WriteLine(
@@ -650,14 +644,14 @@ public sealed partial class RoslynMcpTests
         File.Exists(workspace.FilePath(destination)).Should().BeFalse();
 
         var applied = await workspace.CallAsync(ApplyProposal(LspAction.RenameFile, preview));
-        AssertApplied(applied);
+        applied.Should().BeApplied();
         File.Exists(workspace.FilePath(ImplementationFile)).Should().BeFalse();
         File.Exists(workspace.FilePath(destination)).Should().BeTrue();
 
         var implementation = await workspace.CallAsync(
             await workspace.AtAsync(LspAction.Implementation, ContractFile, "Greet(")
         );
-        AssertSingleLocation(implementation, destination);
+        implementation.Should().HaveSingleLocation(destination);
         TestContext.Current.TestOutputHelper!.WriteLine(
             "Roslyn advertised file rename support. Preview, apply and navigation to the new path passed."
         );
@@ -687,7 +681,7 @@ public sealed partial class RoslynMcpTests
             });
 
         var applied = await workspace.CallAsync(ApplyProposal(LspAction.Rename, preview));
-        AssertApplied(applied);
+        applied.Should().BeApplied();
 
         foreach (var file in new[] { ContractFile, ImplementationFile, ConsumerFile })
         {
@@ -714,7 +708,7 @@ public sealed partial class RoslynMcpTests
         await workspace.WriteFileAsync(ConsumerFile, changed);
 
         var rejected = await workspace.CallRawAsync(ApplyProposal(LspAction.Rename, preview));
-        AssertError(rejected, ErrorCodes.StaleEdit);
+        rejected.Should().BeError(ErrorCodes.StaleEdit);
         (await workspace.ReadFileAsync(ConsumerFile)).Should().Be(changed);
         var contract = await workspace.ReadFileAsync(ContractFile);
         contract.Should().Contain("Greet(");
@@ -737,7 +731,7 @@ public sealed partial class RoslynMcpTests
             }
         );
 
-        AssertApplied(applied);
+        applied.Should().BeApplied();
         foreach (var file in new[] { ContractFile, ImplementationFile, ConsumerFile })
         {
             (await workspace.ReadFileAsync(file)).Should().Contain("Welcome(");
@@ -776,14 +770,16 @@ public sealed partial class RoslynMcpTests
             _ => request with { Apply = true },
         };
         var applied = await workspace.CallAsync(applyRequest);
-        AssertApplied(applied);
+        applied.Should().BeApplied();
 
         Diagnostics(applied).Should().Contain(item => item.Code == "CS8603");
         Diagnostics(applied).Should().NotContain(item => item.Code == "CS0246");
 
         if (mode is not ApplyWithoutProposal)
         {
-            AssertError(await workspace.CallRawAsync(applyRequest), ErrorCodes.InvalidRequest);
+            (await workspace.CallRawAsync(applyRequest))
+                .Should()
+                .BeError(ErrorCodes.InvalidRequest);
         }
 
         var text = await workspace.ReadFileAsync(ProblemsFile);
@@ -824,7 +820,7 @@ public sealed partial class RoslynMcpTests
             }
         );
 
-        AssertApplied(applied);
+        applied.Should().BeApplied();
         (await workspace.ReadFileAsync(file)).Should().NotContain("using");
     }
 }
