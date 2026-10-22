@@ -76,13 +76,14 @@ internal static class Program
     }
 
     /// <summary>
-    /// Registers MCP tools with the generated JSON metadata required by Native AOT.
+    /// Registers MCP tools with the generated JSON metadata required by Native AOT, and the check of their arguments.
     /// </summary>
     internal static IMcpServerBuilder WithRoslynTools(this IMcpServerBuilder builder)
     {
         var jsonOptions = new JsonSerializerOptions(McpJsonUtilities.DefaultOptions);
         jsonOptions.TypeInfoResolverChain.Insert(0, ToolJsonContext.Default);
         return builder
+            .WithRequestFilters(static filters => filters.AddCallToolFilter(ToolArguments.Validate))
             .WithTools<DiagnosticsTool>(serializerOptions: jsonOptions)
             .WithTools<NavigateTool>(serializerOptions: jsonOptions)
             .WithTools<BulkNavigateTool>(serializerOptions: jsonOptions)

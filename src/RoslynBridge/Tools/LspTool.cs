@@ -375,7 +375,7 @@ internal sealed partial class LspTool(
         return Text(text.ToString(), isError: true);
     }
 
-    private static CallToolResult Failure(ToolError failure, int? rpcCode = null) =>
+    internal static CallToolResult Failure(ToolError failure, int? rpcCode = null) =>
         Text(ResultText.Error(failure, rpcCode), isError: true);
 
     private static CallToolResult Text(string text, bool isError) =>

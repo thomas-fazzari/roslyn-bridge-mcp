@@ -33,6 +33,9 @@ Each tool takes flat arguments:
 { "action": "definition", "file": "src/Calculator.cs", "line": 12, "character": 9 }
 ```
 
+An unknown or missing argument returns the error `invalid_request`. For an unknown argument, the message lists the valid names.
+An array argument, such as `queries` of `bulk_navigate`, may also be sent as a JSON string.
+
 `navigate` and `edit` accept a `symbol` name instead of a position, for example `Calculator.Add`.
 The name matches the end of the fully qualified name. A parameter list selects an overload, as in `Calculator.Add(int, int)`.
 

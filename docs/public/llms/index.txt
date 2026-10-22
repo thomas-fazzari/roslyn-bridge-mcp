@@ -12,6 +12,10 @@ CALL FORMAT
 Each tool takes flat arguments. Examples in these files name the tool first:
 diagnostics {"file":"src/Calculator.cs"}
 
+An unknown or missing argument returns invalid_request. For an unknown
+argument, the message lists the valid names. An array argument may also be
+sent as a JSON string.
+
 Paths are workspace-relative. Inputs and results use one-based lines and
 one-based UTF-16 characters, so returned positions can be reused as inputs.
 Raw LSP requests keep zero-based coordinates.

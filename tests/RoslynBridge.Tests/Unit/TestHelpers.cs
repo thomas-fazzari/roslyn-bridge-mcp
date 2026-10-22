@@ -4,15 +4,19 @@
 using System.Text.Json.Nodes;
 using Microsoft.Extensions.Logging.Abstractions;
 using ModelContextProtocol.Protocol;
+using RoslynBridge.Changes;
 using RoslynBridge.Editing;
 using RoslynBridge.Lsp;
+using RoslynBridge.Queries;
 using RoslynBridge.Results;
+using RoslynBridge.Symbols;
 using RoslynBridge.Tests.Fakes;
+using RoslynBridge.Tools;
 
 namespace RoslynBridge.Tests.Unit;
 
 /// <summary>
-/// Provides the test cancellation token, writes workspace files and builds LSP workspace edits.
+/// Provides the test cancellation token, creates sessions and tools, writes workspace files and builds LSP workspace edits.
 /// </summary>
 internal static class TestHelpers
 {
@@ -29,6 +33,25 @@ internal static class TestHelpers
             launcher,
             NullLogger<RoslynSession>.Instance
         );
+
+    public static LspTool CreateTool(
+        string root,
+        RoslynSession session,
+        BridgeOptions? options = null
+    )
+    {
+        options ??= new BridgeOptions { WorkspaceRoot = root };
+        var paths = new WorkspacePaths(root);
+        var queries = new LspQueries(session, paths, new SymbolResolver(session, paths));
+        return new LspTool(
+            options,
+            paths,
+            session,
+            queries,
+            new LspChanges(session, paths, new WorkspaceEditService(paths), queries),
+            NullLogger<LspTool>.Instance
+        );
+    }
 
     public static WorkspaceSnapshot Snapshot(string root) =>
         new(

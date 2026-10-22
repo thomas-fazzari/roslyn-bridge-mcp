@@ -9,6 +9,7 @@ The release executables are Native AOT builds. They contain the components below
 ## NuGet packages
 
 - `DiffPlex`: copyright Matthew Manela, Apache-2.0 license.
+- `Fastenshtein`: copyright Dan Hartley, MIT license.
 - `MessagePack`: copyright Yoshifumi Kawai and contributors, MIT license.
 - `MessagePack.Annotations`: copyright Yoshifumi Kawai and contributors, MIT license.
 - `Microsoft.Extensions.AI.Abstractions`: copyright Microsoft Corporation, MIT license.

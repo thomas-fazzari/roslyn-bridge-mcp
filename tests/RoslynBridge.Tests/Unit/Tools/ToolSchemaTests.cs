@@ -1,7 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Thomas Fazzari
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+using System.Reflection;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.DependencyInjection;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
@@ -9,9 +11,16 @@ using RoslynBridge.Tools;
 
 namespace RoslynBridge.Tests.Unit.Tools;
 
-public sealed class ToolSchemaTests
+public sealed partial class ToolSchemaTests
 {
     private static readonly Dictionary<string, Tool> _tools = RegisteredTools();
+    private static readonly JsonElement[] _schemas =
+    [
+        .. _tools.Values.SelectMany(tool => Schemas(tool.InputSchema)),
+    ];
+
+    // An LSP method name in the lsp tool description
+    private static readonly string[] _otherCamelCaseWords = ["executeCommand"];
 
     [Theory]
     [InlineData(DiagnosticsTool.Name)]
@@ -126,6 +135,86 @@ public sealed class ToolSchemaTests
                     "enum"
                 )
             );
+    }
+
+    [Fact]
+    public void ProseNamesOnlyPublishedParameters()
+    {
+        var parameters = _schemas.SelectMany(schema =>
+            schema.TryGetProperty("properties", out var properties)
+                ? properties.EnumerateObject().Select(property => property.Name)
+                : []
+        );
+
+        ProseWords(CamelCaseWord())
+            .Except(parameters, StringComparer.Ordinal)
+            .Except(_otherCamelCaseWords, StringComparer.Ordinal)
+            .Should()
+            .BeEmpty("prose names parameters that no tool publishes");
+    }
+
+    [Fact]
+    public void ProseNamesOnlyPublishedToolsActionsAndErrorCodes()
+    {
+        var errorCodes = typeof(ErrorCodes)
+            .GetFields(BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public)
+            .Select(field => (string)field.GetRawConstantValue()!);
+
+        ProseWords(SnakeCaseWord())
+            .Except(_tools.Keys, StringComparer.Ordinal)
+            .Except(_schemas.SelectMany(schema => Names(schema, "enum")), StringComparer.Ordinal)
+            .Except(errorCodes, StringComparer.Ordinal)
+            .Should()
+            .BeEmpty("prose names tools, actions or error codes that do not exist");
+    }
+
+    [GeneratedRegex(
+        @"\b[a-z]+(?:[A-Z][a-z0-9]*)+\b",
+        RegexOptions.None,
+        matchTimeoutMilliseconds: 1_000
+    )]
+    private static partial Regex CamelCaseWord();
+
+    [GeneratedRegex(@"\b[a-z]+(?:_[a-z]+)+\b", RegexOptions.None, matchTimeoutMilliseconds: 1_000)]
+    private static partial Regex SnakeCaseWord();
+
+    private static IEnumerable<string> ProseWords(Regex pattern) =>
+        _tools
+            .Values.Select(tool => tool.Description)
+            .Concat(
+                _schemas.Select(schema =>
+                    schema.TryGetProperty("description", out var description)
+                        ? description.GetString()
+                        : null
+                )
+            )
+            .Append(ToolDescriptions.ServerInstructions)
+            .OfType<string>()
+            .SelectMany(text => pattern.Matches(text).Select(match => match.Value))
+            .Distinct(StringComparer.Ordinal);
+
+    private static IEnumerable<JsonElement> Schemas(JsonElement schema)
+    {
+        yield return schema;
+        if (schema.TryGetProperty("properties", out var properties))
+        {
+            foreach (
+                var nested in properties
+                    .EnumerateObject()
+                    .SelectMany(property => Schemas(property.Value))
+            )
+            {
+                yield return nested;
+            }
+        }
+
+        if (schema.TryGetProperty("items", out var items))
+        {
+            foreach (var nested in Schemas(items))
+            {
+                yield return nested;
+            }
+        }
     }
 
     private static string[] Names(JsonElement element, string property) =>

@@ -3,14 +3,9 @@
 
 using System.Globalization;
 using System.Text.Json.Nodes;
-using Microsoft.Extensions.Logging.Abstractions;
-using RoslynBridge.Changes;
-using RoslynBridge.Editing;
 using RoslynBridge.Lsp;
 using RoslynBridge.Output;
-using RoslynBridge.Queries;
 using RoslynBridge.Requests;
-using RoslynBridge.Symbols;
 using RoslynBridge.Tools;
 using StreamJsonRpc;
 using static RoslynBridge.Tests.Unit.TestHelpers;
@@ -573,18 +568,6 @@ public sealed class LspToolTests : IDisposable
             },
         };
 
-    private LspTool CreateTool(RoslynSession session, BridgeOptions? options = null)
-    {
-        options ??= new BridgeOptions { WorkspaceRoot = _root };
-        var paths = new WorkspacePaths(_root);
-        var queries = new LspQueries(session, paths, new SymbolResolver(session, paths));
-        return new LspTool(
-            options,
-            paths,
-            session,
-            queries,
-            new LspChanges(session, paths, new WorkspaceEditService(paths), queries),
-            NullLogger<LspTool>.Instance
-        );
-    }
+    private LspTool CreateTool(RoslynSession session, BridgeOptions? options = null) =>
+        TestHelpers.CreateTool(_root, session, options);
 }
