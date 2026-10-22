@@ -70,7 +70,7 @@ internal sealed partial class LspChanges(
 
         var parameters = position.Value;
         parameters["newName"] = request.NewName;
-        snapshot = WithDocumentVersions(snapshot);
+        snapshot = await WithDocumentVersionsAsync(snapshot, cancellationToken);
         if (
             await session.RequestAsync(LspMethods.TextDocumentRename, parameters, cancellationToken)
             is not JsonObject edit
@@ -336,14 +336,20 @@ internal sealed partial class LspChanges(
     private async Task<WorkspaceSnapshot> CaptureAsync(CancellationToken cancellationToken)
     {
         var files = await session.SynchronizeWorkspaceAsync(cancellationToken);
-        return new WorkspaceSnapshot(files, session.CopyDocumentVersions());
+        return new WorkspaceSnapshot(
+            files,
+            await session.CopyDocumentVersionsAsync(cancellationToken)
+        );
     }
 
     // Opening a document after the capture changes versions, so they are recorded again before the edit request
-    private WorkspaceSnapshot WithDocumentVersions(WorkspaceSnapshot snapshot) =>
+    private async Task<WorkspaceSnapshot> WithDocumentVersionsAsync(
+        WorkspaceSnapshot snapshot,
+        CancellationToken cancellationToken
+    ) =>
         snapshot with
         {
-            DocumentVersions = session.CopyDocumentVersions(),
+            DocumentVersions = await session.CopyDocumentVersionsAsync(cancellationToken),
         };
 
     private string Remember(PendingChange change)

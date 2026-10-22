@@ -68,7 +68,7 @@ public sealed class SessionLifecycleTests : IDisposable
         await session.SynchronizeAsync(TestCt);
         await session.SynchronizeAsync(TestCt);
 
-        session.CopyDocumentVersions().Should().NotContainKey(link);
+        (await session.CopyDocumentVersionsAsync(TestCt)).Should().NotContainKey(link);
     }
 
     public void Dispose() => Directory.Delete(_root, recursive: true);

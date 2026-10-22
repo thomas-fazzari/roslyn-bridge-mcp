@@ -1,6 +1,7 @@
 // Copyright (C) RoslynBridge contributors
 // SPDX-License-Identifier: GPL-3.0-only
 
+using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using System.Text.Json.Nodes;
@@ -19,6 +20,7 @@ internal sealed class FakeRoslynServer : IRoslynServer
     private readonly TaskCompletionSource _exited = new(
         TaskCreationOptions.RunContinuationsAsynchronously
     );
+    private readonly ConcurrentQueue<(string Method, JsonNode? Parameters)> _notifications = new();
 
     [SuppressMessage(
         "Reliability",
@@ -48,6 +50,12 @@ internal sealed class FakeRoslynServer : IRoslynServer
     /// Completes when the fake reports the project load, which defaults to at once.
     /// </summary>
     public Task ProjectLoad { get; set; } = Task.CompletedTask;
+
+    /// <summary>
+    /// The textDocument/didOpen and textDocument/didChange notifications received, in arrival order.
+    /// </summary>
+    public IReadOnlyCollection<(string Method, JsonNode? Parameters)> Notifications =>
+        _notifications;
 
     public Stream Input { get; }
 
@@ -116,6 +124,20 @@ internal sealed class FakeRoslynServer : IRoslynServer
             await server.ProjectLoad;
             await server._rpc.NotifyAsync(LspMethods.WorkspaceProjectInitializationComplete);
         }
+
+        [JsonRpcMethod(
+            LspMethods.TextDocumentDidOpen,
+            UseSingleObjectParameterDeserialization = true
+        )]
+        public void DidOpen(JsonNode? parameters) =>
+            server._notifications.Enqueue((LspMethods.TextDocumentDidOpen, parameters));
+
+        [JsonRpcMethod(
+            LspMethods.TextDocumentDidChange,
+            UseSingleObjectParameterDeserialization = true
+        )]
+        public void DidChange(JsonNode? parameters) =>
+            server._notifications.Enqueue((LspMethods.TextDocumentDidChange, parameters));
 
         [JsonRpcMethod(LspMethods.WorkspaceSymbol, UseSingleObjectParameterDeserialization = true)]
         public Task<JsonNode?> WorkspaceSymbolAsync(JsonNode? parameters) =>

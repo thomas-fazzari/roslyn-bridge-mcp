@@ -205,13 +205,13 @@ internal sealed partial class RoslynSession
             {
                 if (change.Type is FileDeleted)
                 {
-                    _createdFiles.Remove(change.Path);
+                    _createdFiles.TryRemove(change.Path, out _);
                     continue;
                 }
 
                 if (change.Type is FileCreated)
                 {
-                    _createdFiles.Add(change.Path);
+                    _createdFiles[change.Path] = 0;
                 }
 
                 await SynchronizeClosedDocumentAsync(change.Path, cancellationToken);

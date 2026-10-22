@@ -17,8 +17,7 @@ namespace RoslynBridge.Lsp;
 /// Owns one Roslyn process and its workspace for the lifetime of the MCP host.
 /// </summary>
 /// <remarks>
-/// Its document state is not thread-safe. Tool calls reach it one at a time, so only file watcher
-/// events and Roslyn callbacks arrive concurrently, and those use their own synchronization.
+/// Document and workspace file calls may run concurrently, and callers must serialize start, stop and reload.
 /// </remarks>
 [DebuggerDisplay("running = {IsRunning}, open documents = {_documents.Count}")]
 internal sealed partial class RoslynSession(
@@ -238,6 +237,7 @@ internal sealed partial class RoslynSession(
         _disposed = true;
         await StopAsync();
         _startupCancellation?.Dispose();
+        _documentLock.Dispose();
     }
 
     [UnconditionalSuppressMessage(

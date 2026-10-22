@@ -30,7 +30,7 @@ internal sealed partial class LspChanges
             return error;
         }
 
-        snapshot = WithDocumentVersions(snapshot);
+        snapshot = await WithDocumentVersionsAsync(snapshot, cancellationToken);
         // Roslyn computes the diagnostics in the range itself, so the context stays empty
         var parameters = target.Value;
         parameters["context"] = new JsonObject { ["diagnostics"] = new JsonArray() };

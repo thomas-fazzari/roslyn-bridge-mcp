@@ -65,7 +65,7 @@ internal sealed partial class RoslynSession
             foreach (var (file, _) in states.Where(state => state.Miscellaneous))
             {
                 // A file that existed at load and is still outside a project stays there
-                if (_createdFiles.Contains(file.First))
+                if (_createdFiles.ContainsKey(file.First))
                 {
                     pending.Add(file);
                 }
