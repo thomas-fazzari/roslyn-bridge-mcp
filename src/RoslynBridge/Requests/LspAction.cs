@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Thomas Fazzari
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+using System.Text.Json;
+
 namespace RoslynBridge.Requests;
 
 internal enum LspAction
@@ -54,6 +56,8 @@ internal static class LspActions
 {
     extension(LspAction action)
     {
+        public string Name => JsonNamingPolicy.SnakeCaseLower.ConvertName(action.ToString());
+
         /// <summary>
         /// Whether the action reads from the navigate tool.
         /// </summary>

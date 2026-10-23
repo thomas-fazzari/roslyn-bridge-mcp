@@ -44,6 +44,8 @@ Generic arguments are optional unless a generic and a non-generic type share the
 A constructor needs its parameter list. An ambiguous name returns the error `ambiguous_symbol` with up to 20 candidates, one per line.
 Send any candidate symbol back unchanged. When candidates share a name, send the symbol with the candidate's file.
 An unknown name returns the error `symbol_not_found`. When symbols with a similar name exist, it lists up to 10 of them as candidates, which you can also send back unchanged.
+When no symbol has the member's name and no type matches the container of a qualified name, as in `Nope.Missing`, the error says so and names up to 10 types with a similar name.
+When the container exists, its members with a similar name come first.
 
 Paths are relative to the workspace. Input coordinates start at 1, with characters counted as UTF-16 code units.
 Only raw requests keep zero-based LSP positions.
@@ -75,6 +77,9 @@ Everything after the kind is a symbol name that `navigate` and `edit` accept unc
 src/Consumer.cs:7:26 method MyApp.Consumer.Run(IGreeter)
   calls 7:59
 ```
+
+A constructor has the kind `constructor`. An explicit constructor is named like `MyApp.Box.Box(int)`. A primary constructor has no declaration of its own, so its line names the type.
+An empty result reads `no callers`, `no callees`, `no supertypes` or `no subtypes`. After `no callers`, a line says that reflection or code outside the workspace may still call the member.
 
 Set `context` to show each position on its own line with its trimmed source line.
 For `callers`, call sites are in the caller's file. For `callees`, they are in the requested file.

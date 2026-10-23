@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 using System.Globalization;
-using System.Text.Json;
 using RoslynBridge.Requests;
 using RoslynBridge.Results;
 
@@ -143,7 +142,7 @@ internal sealed partial class LspQueries
     private static string Label(int number, LspRequest query) =>
         string.Create(
             CultureInfo.InvariantCulture,
-            $"{number} {ActionName(query.Action)} {query.Symbol ?? Position(query)}"
+            $"{number} {query.Action.Name} {query.Symbol ?? Position(query)}"
         );
 
     private static string Position(LspRequest query) =>
@@ -156,7 +155,4 @@ internal sealed partial class LspQueries
             ({ } line, null) => string.Create(CultureInfo.InvariantCulture, $"{query.File}:{line}"),
             _ => query.File ?? string.Empty,
         };
-
-    private static string ActionName(LspAction action) =>
-        JsonNamingPolicy.SnakeCaseLower.ConvertName(action.ToString());
 }

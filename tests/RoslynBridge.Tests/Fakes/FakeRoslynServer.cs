@@ -39,8 +39,8 @@ internal sealed class FakeRoslynServer : IRoslynServer
     }
 
     /// <summary>
-    /// Answers workspace/symbol, document symbol, references, diagnostic, project context, code action and
-    /// workspace/executeCommand requests, given the method and its parameters.
+    /// Answers workspace/symbol, document symbol, references, diagnostic, project context, hierarchy, code action
+    /// and workspace/executeCommand requests, given the method and its parameters.
     /// A references request that the bridge cancels ends without waiting for its answer.
     /// The default handler returns null.
     /// </summary>
@@ -183,6 +183,48 @@ internal sealed class FakeRoslynServer : IRoslynServer
         )]
         public Task<JsonNode?> CodeActionAsync(JsonNode? parameters) =>
             server.Handle(LspMethods.TextDocumentCodeAction, parameters);
+
+        [JsonRpcMethod(
+            LspMethods.TextDocumentPrepareCallHierarchy,
+            UseSingleObjectParameterDeserialization = true
+        )]
+        public Task<JsonNode?> PrepareCallHierarchyAsync(JsonNode? parameters) =>
+            server.Handle(LspMethods.TextDocumentPrepareCallHierarchy, parameters);
+
+        [JsonRpcMethod(
+            LspMethods.CallHierarchyIncomingCalls,
+            UseSingleObjectParameterDeserialization = true
+        )]
+        public Task<JsonNode?> IncomingCallsAsync(JsonNode? parameters) =>
+            server.Handle(LspMethods.CallHierarchyIncomingCalls, parameters);
+
+        [JsonRpcMethod(
+            LspMethods.CallHierarchyOutgoingCalls,
+            UseSingleObjectParameterDeserialization = true
+        )]
+        public Task<JsonNode?> OutgoingCallsAsync(JsonNode? parameters) =>
+            server.Handle(LspMethods.CallHierarchyOutgoingCalls, parameters);
+
+        [JsonRpcMethod(
+            LspMethods.TextDocumentPrepareTypeHierarchy,
+            UseSingleObjectParameterDeserialization = true
+        )]
+        public Task<JsonNode?> PrepareTypeHierarchyAsync(JsonNode? parameters) =>
+            server.Handle(LspMethods.TextDocumentPrepareTypeHierarchy, parameters);
+
+        [JsonRpcMethod(
+            LspMethods.TypeHierarchySupertypes,
+            UseSingleObjectParameterDeserialization = true
+        )]
+        public Task<JsonNode?> SupertypesAsync(JsonNode? parameters) =>
+            server.Handle(LspMethods.TypeHierarchySupertypes, parameters);
+
+        [JsonRpcMethod(
+            LspMethods.TypeHierarchySubtypes,
+            UseSingleObjectParameterDeserialization = true
+        )]
+        public Task<JsonNode?> SubtypesAsync(JsonNode? parameters) =>
+            server.Handle(LspMethods.TypeHierarchySubtypes, parameters);
 
         [JsonRpcMethod(
             LspMethods.CodeActionResolveFixAll,

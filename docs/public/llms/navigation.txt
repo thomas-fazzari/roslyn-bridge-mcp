@@ -21,6 +21,10 @@ a name, send the symbol with the candidate's file. symbol_not_found means no
 declaration matched. When symbols with a similar name exist, it lists up to 10
 as candidates, one per line. Send one back unchanged. Without candidates, use
 the symbols tool to search by partial name.
+When no symbol has the member's name and no type matches the container of a
+qualified name, as in Nope.Missing, the error says so and names up to 10 types
+with a similar name. When the container exists, its members with a similar name
+come first.
 
 By position (file is workspace-relative, line and character are one-based,
 character counts UTF-16 code units):
@@ -77,6 +81,11 @@ Send everything after the kind back unchanged as the symbol argument. A result
 outside the workspace keeps Roslyn's name. The calls line is present only for
 callers and callees. callees lists calls only. A final line counts the
 property, field and constant accesses it leaves out.
+A constructor has the kind constructor. An explicit constructor is named like
+MyApp.Box.Box(int). A primary constructor has no declaration of its own, so its
+line names the type. An empty result reads "no callers", "no callees",
+"no supertypes" or "no subtypes". After "no callers", a line says that reflection
+or code outside the workspace may still call the member.
 
 PAGING
 ------

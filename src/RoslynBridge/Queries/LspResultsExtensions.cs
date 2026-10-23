@@ -5,6 +5,7 @@ using System.Text.Json.Nodes;
 using RoslynBridge.Lsp;
 using RoslynBridge.Requests;
 using RoslynBridge.Results;
+using RoslynBridge.Symbols;
 
 namespace RoslynBridge.Queries;
 
@@ -165,10 +166,17 @@ internal static class LspResultsExtensions
         var name = symbol["name"]?.GetValue<string>() ?? string.Empty;
         var range = symbol["selectionRange"] ?? symbol["location"]?["range"] ?? symbol["range"];
         var uri = (symbol["location"]?["uri"] ?? symbol["uri"])?.GetValue<string>();
+
+        var kind = symbol["kind"]?.GetValue<int>();
+        // A call hierarchy reports a ctor as a method named Type.Type(parameters)
+        if (kind is LspSymbolKinds.Method && SymbolName.Parse(name) is { IsConstructor: true })
+        {
+            kind = LspSymbolKinds.Constructor;
+        }
+
         return new SymbolItem(
             name,
-            symbol["kind"]?.GetValue<int>() is { } kind
-            && LspSymbolKinds.TryGetName(kind, out var kindName)
+            kind is { } value && LspSymbolKinds.TryGetName(value, out var kindName)
                 ? kindName
                 : null
         )

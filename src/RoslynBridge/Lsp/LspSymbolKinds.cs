@@ -13,8 +13,12 @@ internal static class LspSymbolKinds
 {
     internal const int Namespace = 3;
     internal const int Method = 6;
-    private const int Constructor = 9;
+    internal const int Constructor = 9;
+    private const int Class = 5;
+    private const int Enum = 10;
+    private const int Interface = 11;
     private const int Function = 12;
+    private const int Struct = 23;
     private const int Operator = 25;
 
     private static readonly FrozenDictionary<int, string> _names = new Dictionary<int, string>
@@ -23,13 +27,13 @@ internal static class LspSymbolKinds
         [2] = "module",
         [Namespace] = "namespace",
         [4] = "package",
-        [5] = "class",
+        [Class] = "class",
         [Method] = "method",
         [7] = "property",
         [8] = "field",
         [Constructor] = "constructor",
-        [10] = "enum",
-        [11] = "interface",
+        [Enum] = "enum",
+        [Interface] = "interface",
         [Function] = "function",
         [13] = "variable",
         [14] = "constant",
@@ -41,7 +45,7 @@ internal static class LspSymbolKinds
         [20] = "key",
         [21] = "null",
         [22] = "enum_member",
-        [23] = "struct",
+        [Struct] = "struct",
         [24] = "event",
         [Operator] = "operator",
         [26] = "type_parameter",
@@ -52,4 +56,6 @@ internal static class LspSymbolKinds
 
     public static bool IsInvocable(int? kind) =>
         kind is Method or Constructor or Function or Operator;
+
+    public static bool IsType(int? kind) => kind is Class or Enum or Interface or Struct;
 }

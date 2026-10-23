@@ -112,7 +112,7 @@ internal sealed partial class LspQueries
             : [LspAction.References, LspAction.Callers, LspAction.Implementation];
 
         return await SectionsAsync(
-            [.. actions.Select(ActionName)],
+            [.. actions.Select(action => action.Name)],
             (index, token) => ImpactSectionAsync(request, actions[index], file, position, token),
             cancellationToken
         );

@@ -32,7 +32,8 @@ internal sealed record SymbolList(
     IReadOnlyList<SymbolItem> Items,
     int Total,
     int? NextOffset,
-    int Accesses = 0
+    int Accesses = 0,
+    LspAction? Hierarchy = null
 ) : ToolResult;
 
 /// <summary>

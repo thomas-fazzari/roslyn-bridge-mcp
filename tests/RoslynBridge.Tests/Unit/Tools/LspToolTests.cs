@@ -3,6 +3,7 @@
 
 using System.Globalization;
 using System.Text.Json.Nodes;
+using ModelContextProtocol.Protocol;
 using RoslynBridge.Changes;
 using RoslynBridge.Lsp;
 using RoslynBridge.Output;
@@ -19,6 +20,8 @@ public sealed class LspToolTests : IDisposable
     private const string SourceFile = "Source.cs";
     private const string SourceText = "class A {}\nclass B {}\nclass C {}\nclass D {}\n";
     private const int LspClassKind = 5;
+    private const int MethodLine = 2;
+    private const int MethodCharacter = 11;
 
     private const int Error = (int)DiagnosticSeverity.Error;
     private const int Warning = (int)DiagnosticSeverity.Warning;
@@ -797,6 +800,266 @@ public sealed class LspToolTests : IDisposable
     }
 
     [Fact]
+    public async Task QualifiedNameWithAnUnknownContainerNamesSimilarTypesWithoutCandidatesAsync()
+    {
+        var path = await WriteFileAsync(_root, "Nopes.cs", "class Nopes\n{\n}\n");
+        await using var session = CreateSession(
+            _root,
+            FakeServer(server =>
+                server.Handle = (method, parameters) =>
+                    Task.FromResult<JsonNode?>(
+                        method switch
+                        {
+                            LspMethods.WorkspaceSymbol => QueryOf(parameters) switch
+                            {
+                                "Missing" => new JsonArray(
+                                    WorkspaceSymbol(
+                                        "MissingFile",
+                                        path,
+                                        LspSymbolKinds.Method,
+                                        MethodLine,
+                                        MethodCharacter
+                                    )
+                                ),
+                                "Nope" => new JsonArray(
+                                    WorkspaceSymbol("Nopes", path),
+                                    WorkspaceSymbol(
+                                        "Nope",
+                                        path,
+                                        LspSymbolKinds.Method,
+                                        MethodLine,
+                                        MethodCharacter
+                                    )
+                                ),
+                                _ => new JsonArray(),
+                            },
+                            LspMethods.TextDocumentDocumentSymbol => new JsonArray(
+                                DocumentSymbol("Nopes", DocumentMethod("MissingFile()"))
+                            ),
+                            _ => null,
+                        }
+                    )
+            )
+        );
+        using var tool = CreateTool(session);
+
+        var response = await tool.ExecuteAsync(
+            new LspRequest { Action = LspAction.References, Symbol = "Nope.Missing" },
+            TestCt
+        );
+
+        response.Should().BeError(ErrorCodes.SymbolNotFound);
+        ResultLines
+            .Lines(ResponseText(response))
+            .Should()
+            .ContainSingle()
+            .Which.Should()
+            .Contain("Nopes")
+            .And.NotContain("MissingFile");
+    }
+
+    [Fact]
+    public async Task QualifiedNameWithAKnownContainerListsItsMembersFirstAsync()
+    {
+        var calculator = await WriteFileAsync(_root, "Calculator.cs", "class Calculator {}\n");
+        var other = await WriteFileAsync(_root, "Other.cs", "class Other {}\n");
+        await using var session = CreateSession(
+            _root,
+            FakeServer(server =>
+                server.Handle = (method, parameters) =>
+                    Task.FromResult<JsonNode?>(
+                        method switch
+                        {
+                            LspMethods.WorkspaceSymbol => QueryOf(parameters) switch
+                            {
+                                "Missing" => new JsonArray(
+                                    WorkspaceSymbol(
+                                        "MissingA",
+                                        other,
+                                        LspSymbolKinds.Method,
+                                        MethodLine,
+                                        MethodCharacter
+                                    )
+                                ),
+                                "Calculator" => new JsonArray(
+                                    WorkspaceSymbol("Calculator", calculator)
+                                ),
+                                _ => new JsonArray(),
+                            },
+                            LspMethods.TextDocumentDocumentSymbol => new JsonArray(
+                                parameters!["textDocument"]!["uri"]!
+                                    .GetValue<string>()
+                                    .EndsWith("Calculator.cs", StringComparison.Ordinal)
+                                    ? DocumentSymbol(
+                                        "Calculator",
+                                        DocumentMethod("MissingTotalValue()")
+                                    )
+                                    : DocumentSymbol("Other", DocumentMethod("MissingA()"))
+                            ),
+                            _ => null,
+                        }
+                    )
+            )
+        );
+        using var tool = CreateTool(session);
+
+        var response = await tool.ExecuteAsync(
+            new LspRequest { Action = LspAction.References, Symbol = "Calculator.Missing" },
+            TestCt
+        );
+
+        response.Should().BeError(ErrorCodes.SymbolNotFound);
+        CandidateNames(response)
+            .Should()
+            .Equal("Calculator.MissingTotalValue()", "Other.MissingA()");
+    }
+
+    [Fact]
+    public async Task QualifiedNameInANamespaceStillListsTheSimilarTypeAsync()
+    {
+        var path = await WriteFileAsync(_root, "Calculator.cs", "class Calculator {}\n");
+        await using var session = CreateSession(
+            _root,
+            FakeServer(server =>
+                server.Handle = (method, parameters) =>
+                    Task.FromResult<JsonNode?>(
+                        method switch
+                        {
+                            LspMethods.WorkspaceSymbol => QueryOf(parameters) switch
+                            {
+                                "Calculater" => new JsonArray(WorkspaceSymbol("Calculator", path)),
+                                _ => new JsonArray(),
+                            },
+                            LspMethods.TextDocumentDocumentSymbol => new JsonArray(
+                                DocumentNamespace("Sample", DocumentSymbol("Calculator"))
+                            ),
+                            _ => null,
+                        }
+                    )
+            )
+        );
+        using var tool = CreateTool(session);
+
+        var response = await tool.ExecuteAsync(
+            new LspRequest { Action = LspAction.References, Symbol = "Sample.Calculater" },
+            TestCt
+        );
+
+        response.Should().BeError(ErrorCodes.SymbolNotFound);
+        CandidateNames(response).Should().Equal("Sample.Calculator");
+    }
+
+    [Fact]
+    public async Task CalleesListConstructorsWithTheConstructorKindAsync()
+    {
+        await WriteFileAsync(_root, SourceFile, SourceText);
+        var box = await WriteFileAsync(_root, "Box.cs", "class Box\n{\n    public Box() {}\n}\n");
+        var greeter = await WriteFileAsync(_root, "Greeter.cs", "class Greeter(string name);\n");
+        await using var session = CreateSession(
+            _root,
+            FakeServer(server =>
+                server.Handle = (method, parameters) =>
+                    Task.FromResult<JsonNode?>(
+                        method switch
+                        {
+                            LspMethods.TextDocumentPrepareCallHierarchy => PreparedItem(),
+                            LspMethods.CallHierarchyOutgoingCalls => new JsonArray(
+                                OutgoingCall("Box.Box()", box, MethodLine, MethodCharacter),
+                                OutgoingCall("Greeter.Greeter(string)", greeter, 0, 6)
+                            ),
+                            LspMethods.TextDocumentDocumentSymbol => parameters!["textDocument"]![
+                                "uri"
+                            ]!
+                                .GetValue<string>()
+                                .EndsWith("Box.cs", StringComparison.Ordinal)
+                                ? new JsonArray(DocumentSymbol("Box", DocumentMethod("Box()")))
+                                : new JsonArray(DocumentSymbol("Greeter")),
+                            _ => null,
+                        }
+                    )
+            )
+        );
+        using var tool = CreateTool(session);
+
+        var response = await tool.ExecuteAsync(
+            new LspRequest
+            {
+                Action = LspAction.Callees,
+                File = SourceFile,
+                Line = 1,
+                Character = 1,
+            },
+            TestCt
+        );
+
+        ResultLines
+            .Lines(ResponseText(response))
+            .Where(ResultLines.IsFileLine)
+            .Should()
+            .Equal("Box.cs:3:12 constructor Box.Box()", "Greeter.cs:1:7 constructor Greeter");
+    }
+
+    [Theory]
+    [InlineData("callers", 2)]
+    [InlineData("callees", 1)]
+    [InlineData("supertypes", 1)]
+    [InlineData("subtypes", 1)]
+    public async Task EmptyHierarchyResultNamesWhatIsMissingAsync(string action, int lineCount)
+    {
+        await WriteFileAsync(_root, SourceFile, SourceText);
+        await using var session = CreateSession(
+            _root,
+            FakeServer(server =>
+                server.Handle = (method, _) =>
+                    Task.FromResult<JsonNode?>(
+                        method
+                            is LspMethods.TextDocumentPrepareCallHierarchy
+                                or LspMethods.TextDocumentPrepareTypeHierarchy
+                            ? PreparedItem()
+                            : null
+                    )
+            )
+        );
+        using var tool = CreateTool(session);
+
+        var response = await tool.ExecuteAsync(
+            new LspRequest
+            {
+                Action = Enum.Parse<LspAction>(action, ignoreCase: true),
+                File = SourceFile,
+                Line = 1,
+                Character = 1,
+            },
+            TestCt
+        );
+
+        var lines = ResultLines.Lines(ResponseText(response));
+        lines[0].Should().Be($"no {action}");
+        lines.Should().HaveCount(lineCount);
+    }
+
+    [Fact]
+    public async Task HierarchyWithoutAPreparedItemReportsNoSymbolsAsync()
+    {
+        await WriteFileAsync(_root, SourceFile, SourceText);
+        await using var session = CreateSession(_root, FakeServer());
+        using var tool = CreateTool(session);
+
+        var response = await tool.ExecuteAsync(
+            new LspRequest
+            {
+                Action = LspAction.Callers,
+                File = SourceFile,
+                Line = 1,
+                Character = 1,
+            },
+            TestCt
+        );
+
+        ResponseText(response).Should().Be("no symbols");
+    }
+
+    [Fact]
     public async Task CodeActionListingHidesSuppressionsButKeepsTheIndexesAsync()
     {
         await WriteFileAsync(_root, SourceFile, SourceText);
@@ -1024,23 +1287,28 @@ public sealed class LspToolTests : IDisposable
             },
         };
 
-    // The declaration of a class named at line 1, character 7
-    private static JsonObject WorkspaceSymbol(string name, string path) =>
+    private static JsonObject WorkspaceSymbol(
+        string name,
+        string path,
+        int kind = LspClassKind,
+        int line = 0,
+        int character = 6
+    ) =>
         new()
         {
             ["name"] = name,
-            ["kind"] = LspClassKind,
+            ["kind"] = kind,
             ["location"] = new JsonObject
             {
                 ["uri"] = new Uri(path).AbsoluteUri,
                 ["range"] = new JsonObject
                 {
-                    ["start"] = new JsonObject { ["line"] = 0, ["character"] = 6 },
+                    ["start"] = new JsonObject { ["line"] = line, ["character"] = character },
                 },
             },
         };
 
-    private static JsonObject DocumentSymbol(string name) =>
+    private static JsonObject DocumentSymbol(string name, params JsonObject[] children) =>
         new()
         {
             ["name"] = name,
@@ -1055,6 +1323,54 @@ public sealed class LspToolTests : IDisposable
                 ["start"] = new JsonObject { ["line"] = 0, ["character"] = 6 },
                 ["end"] = new JsonObject { ["line"] = 0, ["character"] = 16 },
             },
+            ["children"] = new JsonArray([.. children]),
+        };
+
+    private static JsonObject DocumentNamespace(string name, params JsonObject[] children)
+    {
+        var symbol = DocumentSymbol(name, children);
+        symbol["kind"] = LspSymbolKinds.Namespace;
+        return symbol;
+    }
+
+    private static JsonObject DocumentMethod(string name) =>
+        new()
+        {
+            ["name"] = name,
+            ["kind"] = LspSymbolKinds.Method,
+            ["range"] = new JsonObject
+            {
+                ["start"] = new JsonObject { ["line"] = MethodLine, ["character"] = 4 },
+                ["end"] = new JsonObject { ["line"] = MethodLine, ["character"] = 30 },
+            },
+            ["selectionRange"] = new JsonObject
+            {
+                ["start"] = new JsonObject
+                {
+                    ["line"] = MethodLine,
+                    ["character"] = MethodCharacter,
+                },
+                ["end"] = new JsonObject { ["line"] = MethodLine, ["character"] = 20 },
+            },
+        };
+
+    private static JsonArray PreparedItem() =>
+        new(new JsonObject { ["name"] = "A.Run()", ["kind"] = LspSymbolKinds.Method });
+
+    private static JsonObject OutgoingCall(string name, string path, int line, int character) =>
+        new()
+        {
+            ["to"] = new JsonObject
+            {
+                ["name"] = name,
+                ["kind"] = LspSymbolKinds.Method,
+                ["uri"] = new Uri(path).AbsoluteUri,
+                ["selectionRange"] = new JsonObject
+                {
+                    ["start"] = new JsonObject { ["line"] = line, ["character"] = character },
+                },
+            },
+            ["fromRanges"] = new JsonArray(),
         };
 
     private static JsonArray FixesAroundASuppressionGroup()
@@ -1098,6 +1414,16 @@ public sealed class LspToolTests : IDisposable
             Fix("Add it"),
         ];
     }
+
+    private static string QueryOf(JsonNode? parameters) => parameters!["query"]!.GetValue<string>();
+
+    private static string[] CandidateNames(CallToolResult response) =>
+        [
+            .. ResultLines
+                .Lines(ResponseText(response))
+                .Skip(1)
+                .Select(line => line.Split(' ', 3)[2]),
+        ];
 
     private LspTool CreateTool(RoslynSession session, BridgeOptions? options = null) =>
         TestHelpers.CreateTool(_root, session, options);

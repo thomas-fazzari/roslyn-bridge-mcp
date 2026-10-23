@@ -65,6 +65,11 @@ internal sealed record SymbolName(ImmutableArray<string> Segments, string? Param
         return typeSeparator >= 0 ? name[..typeSeparator] : name;
     }
 
+    public bool IsConstructor =>
+        Parameters is not null
+        && Segments is [.., var type, var member]
+        && string.Equals(BaseName(type), member, StringComparison.Ordinal);
+
     /// <summary>
     /// Returns whether this requested name selects a declared symbol.
     /// The requested segments must end the declared segments, and a requested parameter list must match.

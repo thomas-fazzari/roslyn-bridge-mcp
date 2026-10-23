@@ -137,6 +137,7 @@ internal sealed partial class LspQueries(
             related.ToRelatedSymbols(paths, request.Limit, request.Offset) with
             {
                 Accesses = accesses,
+                Hierarchy = items is { Count: > 0 } ? request.Action : null,
             },
             cancellationToken
         );

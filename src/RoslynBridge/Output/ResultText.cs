@@ -6,6 +6,7 @@ using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using RoslynBridge.Requests;
 using RoslynBridge.Results;
 
 namespace RoslynBridge.Output;
@@ -278,13 +279,36 @@ internal static partial class ResultText
             AppendSymbolTree(text, symbol, indent: string.Empty);
         }
 
-        AppendPageEnd(text, symbols.Total, symbols.Items.Count == 0, symbols.NextOffset, "symbols");
+        if (symbols is { Total: 0, Hierarchy: { } hierarchy })
+        {
+            AppendNoRelated(text, hierarchy);
+        }
+        else
+        {
+            AppendPageEnd(
+                text,
+                symbols.Total,
+                symbols.Items.Count == 0,
+                symbols.NextOffset,
+                "symbols"
+            );
+        }
+
         if (symbols.Accesses > 0)
         {
             text.Append(
                 CultureInfo.InvariantCulture,
                 $"{symbols.Accesses} property, field or constant accesses omitted\n"
             );
+        }
+    }
+
+    private static void AppendNoRelated(StringBuilder text, LspAction hierarchy)
+    {
+        text.Append("no ").Append(hierarchy.Name).Append('\n');
+        if (hierarchy is LspAction.Callers)
+        {
+            text.Append("reflection or code outside the workspace may still call the member\n");
         }
     }
 

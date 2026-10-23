@@ -45,11 +45,7 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
         if (file is null)
         {
             matches = await CandidateMatchesAsync(requested, cancellationToken);
-            files = matches
-                .Where(match => IsNamed(match, name))
-                .Select(match => match.File)
-                .Distinct(StringComparer.Ordinal)
-                .Order(StringComparer.Ordinal);
+            files = FilesNamed(matches, name);
         }
         else
         {
@@ -78,15 +74,7 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
 
         if (symbols.Count == 0)
         {
-            matches ??= await WorkspaceMatchesAsync(name, cancellationToken);
-            var suggestions = await SuggestionsAsync(name, matches, cancellationToken);
-            return new ToolError(
-                ErrorCodes.SymbolNotFound,
-                suggestions.Count == 0
-                    ? $"No declaration matches '{text}'. Use symbols to search by name."
-                    : $"No declaration matches '{text}'. Send one candidate symbol instead.",
-                suggestions
-            );
+            return await NotFoundAsync(text, requested, name, matches, cancellationToken);
         }
 
         var sameNames = symbols.DistinctBy(symbol => symbol.Name, StringComparer.Ordinal).Count();
@@ -357,7 +345,7 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
             {
                 yield return new DeclaredSymbol(
                     name,
-                    IsConstructor(member, container),
+                    name.IsConstructor,
                     new SymbolDeclaration(
                         display,
                         rawName.Trim(),
@@ -392,15 +380,6 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
     private static bool IsExtensionBlock(SymbolName member, int? kind) =>
         member is { Segments: ["extension"], Parameters: not null }
         && kind is not LspSymbolKinds.Method;
-
-    private static bool IsConstructor(SymbolName member, SymbolName? container) =>
-        container is not null
-        && member.Parameters is not null
-        && string.Equals(
-            member.Segments[^1],
-            SymbolName.BaseName(container.Segments[^1]),
-            StringComparison.Ordinal
-        );
 
     private async Task<
         Dictionary<(string File, SourcePosition Position), SymbolDeclaration>
@@ -475,7 +454,8 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
                         new SourcePosition(
                             start["line"]!.GetValue<int>() + 1,
                             start["character"]!.GetValue<int>() + 1
-                        )
+                        ),
+                        result["kind"]?.GetValue<int>()
                     )
                 );
             }
@@ -487,33 +467,159 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
     private static bool IsNamed(WorkspaceMatch match, string name) =>
         string.Equals(match.Name, name, StringComparison.Ordinal);
 
-    private async Task<List<SymbolItem>> SuggestionsAsync(
+    private static IEnumerable<string> FilesNamed(
+        IEnumerable<WorkspaceMatch> matches,
+        string name
+    ) =>
+        matches
+            .Where(match => IsNamed(match, name))
+            .Select(match => match.File)
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal);
+
+    // A candidate file that cannot be opened must not hide the error the suggestions belong to
+    private static bool IsUnreadable(Exception exception) =>
+        exception
+            is ToolErrorException
+                or IOException
+                or InvalidDataException
+                or UnauthorizedAccessException;
+
+    private async Task<ToolError> NotFoundAsync(
+        string text,
+        SymbolName requested,
+        string name,
+        List<WorkspaceMatch>? matches,
+        CancellationToken cancellationToken
+    )
+    {
+        matches ??= await WorkspaceMatchesAsync(name, cancellationToken);
+        var container = await ContainerAsync(requested, name, matches, cancellationToken);
+        var suggestions = await SuggestionsAsync(
+            name,
+            container?.Members ?? [],
+            matches,
+            cancellationToken
+        );
+        if (
+            container is { SimilarTypes: { } similar }
+            && suggestions.Count > 0
+            && !suggestions.Exists(suggestion => IsInside(suggestion, container.Name))
+        )
+        {
+            var display = string.Join('.', container.Name.Segments.Select(SymbolName.BaseName));
+            var types =
+                similar.Count == 0
+                    ? string.Empty
+                    : $" Similar types: {string.Join(", ", similar.Select(type => type.Name))}.";
+            return new ToolError(
+                ErrorCodes.SymbolNotFound,
+                $"No declaration matches '{text}' because no type matches '{display}'.{types} Use symbols to search by name."
+            );
+        }
+
+        return new ToolError(
+            ErrorCodes.SymbolNotFound,
+            suggestions.Count == 0
+                ? $"No declaration matches '{text}'. Use symbols to search by name."
+                : $"No declaration matches '{text}'. Send one candidate symbol instead.",
+            suggestions
+        );
+    }
+
+    private async Task<ContainerLookup?> ContainerAsync(
+        SymbolName requested,
         string name,
         List<WorkspaceMatch> matches,
         CancellationToken cancellationToken
     )
     {
-        var nearest = matches
-            .DistinctBy(match => match.Location)
-            .Select(match => match.Resembling(name))
-            .OfType<Suggestion>()
-            .Order(Suggestion.Nearest)
+        if (requested.Segments.Length == 1 || matches.Exists(match => IsNamed(match, name)))
+        {
+            return null;
+        }
+
+        var container = new SymbolName([.. requested.Segments[..^1]], Parameters: null);
+        var containerName = SymbolName.BaseName(container.Segments[^1]);
+        var candidates = await WorkspaceMatchesAsync(containerName, cancellationToken);
+        try
+        {
+            var types = FindDeclarations(
+                    await DocumentSymbolsAsync(
+                        FilesNamed(candidates, containerName),
+                        cancellationToken
+                    ),
+                    container
+                )
+                .ToList();
+            if (types.Count > 0)
+            {
+                return new ContainerLookup(
+                    container,
+                    await MemberMatchesAsync(types, cancellationToken),
+                    SimilarTypes: null
+                );
+            }
+        }
+        catch (Exception exception) when (IsUnreadable(exception))
+        {
+            return null;
+        }
+
+        var similar = await SuggestionsAsync(
+            containerName,
+            [],
+            [.. candidates.Where(match => LspSymbolKinds.IsType(match.Kind))],
+            cancellationToken
+        );
+        return new ContainerLookup(container, [], similar);
+    }
+
+    private static bool IsInside(SymbolItem suggestion, SymbolName container) =>
+        SymbolName.Parse(suggestion.Name) is { } name
+        && Enumerable
+            .Range(1, name.Segments.Length - 1)
+            .Any(length =>
+                container.Selects(
+                    new SymbolName([.. name.Segments[..length]], Parameters: null),
+                    exact: false
+                )
+            );
+
+    private async Task<List<WorkspaceMatch>> MemberMatchesAsync(
+        List<SymbolDeclaration> types,
+        CancellationToken cancellationToken
+    )
+    {
+        var members = new List<WorkspaceMatch>();
+        foreach (var type in types.GroupBy(type => type.Name, StringComparer.Ordinal))
+        {
+            members.AddRange(
+                (await MembersAsync([.. type], cancellationToken)).Select(WorkspaceMatch.Of)
+            );
+        }
+
+        return members;
+    }
+
+    private async Task<List<SymbolItem>> SuggestionsAsync(
+        string name,
+        IEnumerable<WorkspaceMatch> preferred,
+        List<WorkspaceMatch> matches,
+        CancellationToken cancellationToken
+    )
+    {
+        var nearest = Nearest(preferred, name)
+            .Concat(Nearest(matches, name))
+            .Distinct()
             .Take(MaximumSuggestions)
-            .Select(suggestion => suggestion.Match.Location)
             .ToList();
         Dictionary<(string File, SourcePosition Position), SymbolDeclaration> declarations;
         try
         {
             declarations = await DeclarationsAtAsync(nearest, cancellationToken);
         }
-        // a candidate file that cannot be opened must not hide the error the suggestions belong to
-        catch (Exception exception)
-            when (exception
-                    is ToolErrorException
-                        or IOException
-                        or InvalidDataException
-                        or UnauthorizedAccessException
-            )
+        catch (Exception exception) when (IsUnreadable(exception))
         {
             return [];
         }
@@ -526,6 +632,17 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
                 .Select(declaration => declaration.ToItem(paths)),
         ];
     }
+
+    private static IEnumerable<(string File, SourcePosition Position)> Nearest(
+        IEnumerable<WorkspaceMatch> matches,
+        string name
+    ) =>
+        matches
+            .DistinctBy(match => match.Location)
+            .Select(match => match.Resembling(name))
+            .OfType<Suggestion>()
+            .Order(Suggestion.Nearest)
+            .Select(suggestion => suggestion.Match.Location);
 
     private List<SymbolItem> Candidates(IEnumerable<SymbolDeclaration> declarations) =>
         [
@@ -543,9 +660,22 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
         Typo = 2,
     }
 
-    private readonly record struct WorkspaceMatch(string Name, string File, SourcePosition Position)
+    private readonly record struct WorkspaceMatch(
+        string Name,
+        string File,
+        SourcePosition Position,
+        int? Kind
+    )
     {
         public (string File, SourcePosition Position) Location => (File, Position);
+
+        public static WorkspaceMatch Of(SymbolDeclaration declaration) =>
+            new(
+                SymbolName.BaseName(SymbolName.Parse(declaration.Name)!.Segments[^1]),
+                declaration.File,
+                new SourcePosition(declaration.Line, declaration.Character),
+                declaration.Kind
+            );
 
         public Suggestion? Resembling(string requested)
         {
@@ -609,6 +739,12 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
                 : first.Match.Position.Character.CompareTo(second.Match.Position.Character);
         }
     }
+
+    private sealed record ContainerLookup(
+        SymbolName Name,
+        List<WorkspaceMatch> Members,
+        List<SymbolItem>? SimilarTypes
+    );
 
     private readonly record struct DeclaredSymbol(
         SymbolName Name,
