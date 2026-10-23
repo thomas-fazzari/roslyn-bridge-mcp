@@ -21,7 +21,7 @@ Push a tag such as `v0.1.0`. The workflow publishes the release and the [NuGet p
 
 The bridge is also a .NET tool on nuget.org with the package ID `ThomasFazzari.RoslynBridge`. Package IDs that start with `Roslyn` are reserved on nuget.org, so the ID uses the owner name. The installed command is still `roslyn-bridge-mcp`. The tool package only points to one runtime package per platform. A runtime package is named `ThomasFazzari.RoslynBridge.<rid>`, where `<rid>` is the runtime identifier, such as `osx-arm64`. It holds the native executable, `NOTICE` and the runtime notices, without debug symbols. `src/RoslynBridge/RoslynBridge.csproj` defines the metadata and the platforms.
 
-Native AOT cannot cross-compile, so each native job packs the runtime package of its own platform with `mise run pack` and uploads it as `nupkg-<rid>`. This runs on every build, so each runner proves its package before a release.
+Native AOT cannot cross-compile, so each native job packs the runtime package of its own platform with `mise run pack`. This runs on every build, so each runner proves its package before a release. On a tag, the job uploads the package as `nupkg-<rid>` and the executable as `native-<rid>`.
 
 On a tag, the `nuget` job downloads the runtime packages and packs the tool package. `mise run ci:nuget` then pushes the runtime packages first and the tool package last, so the tool package never points to a missing package. A push that nuget.org refuses fails the job.
 

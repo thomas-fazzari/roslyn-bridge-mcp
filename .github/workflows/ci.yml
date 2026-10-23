@@ -39,9 +39,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # Unit tests run on the managed runtime, so one runner per operating system is enough
           - os: ubuntu-latest
             rid: linux-x64
             executable: RoslynBridge
+            unit-tests: true
           - os: ubuntu-24.04-arm
             rid: linux-arm64
             executable: RoslynBridge
@@ -51,9 +53,11 @@ jobs:
           - os: macos-latest
             rid: osx-arm64
             executable: RoslynBridge
+            unit-tests: true
           - os: windows-latest
             rid: win-x64
             executable: RoslynBridge.exe
+            unit-tests: true
     defaults:
       run:
         shell: bash
@@ -75,6 +79,7 @@ jobs:
       - name: Set binary version
         run: mise run ci:version
       - name: Run unit tests
+        if: matrix.unit-tests
         run: mise run test
       - name: Publish native executable
         run: mise run publish
@@ -93,7 +98,9 @@ jobs:
           if-no-files-found: ignore
       - name: Package native executable
         run: mise run ci:package
+      # Only the tag jobs download them
       - uses: actions/upload-artifact@v7.0.2
+        if: github.ref_type == 'tag'
         with:
           name: native-${{ matrix.rid }}
           path: artifacts/release/*
@@ -102,6 +109,7 @@ jobs:
       - name: Pack .NET tool package
         run: mise run pack
       - uses: actions/upload-artifact@v7.0.2
+        if: github.ref_type == 'tag'
         with:
           name: nupkg-${{ matrix.rid }}
           path: artifacts/nupkg/*
