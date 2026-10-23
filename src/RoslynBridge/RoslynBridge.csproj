@@ -2,6 +2,7 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <PublishAot>true</PublishAot>
+    <InvariantGlobalization>true</InvariantGlobalization>
     <Description>Lightweight MCP for C# diagnostics, navigation and refactoring, backed by the official Roslyn language server.</Description>
   </PropertyGroup>
 

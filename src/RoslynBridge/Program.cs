@@ -40,14 +40,11 @@ internal static class Program
         }
 
         var options = BridgeOptions.Parse(args);
-        var builder = Host.CreateApplicationBuilder(
-            new HostApplicationBuilderSettings { ContentRootPath = AppContext.BaseDirectory }
-        );
+        var builder = Host.CreateEmptyApplicationBuilder(settings: null);
         builder.Logging.AddConsole(static options =>
             options.LogToStandardErrorThreshold = LogLevel.Trace
         );
         builder.Services.AddSingleton(options);
-
         var paths = new WorkspacePaths(options.WorkspaceRoot);
         builder.Services.AddSingleton(paths);
         builder.Services.AddSingleton<RoslynLauncher>(RoslynProcess.Start);

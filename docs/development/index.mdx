@@ -10,6 +10,7 @@ Roslyn Bridge MCP is a native executable that serves C# tools over the Model Con
 - Keep the bridge standalone and usable from any MCP client.
 - Use the official [MCP SDK](https://csharp.sdk.modelcontextprotocol.io/) for the tools and [StreamJsonRpc](https://microsoft.github.io/vs-streamjsonrpc/) for Roslyn.
 - Reserve standard output for MCP messages. Send logs to standard error.
+- Run in invariant globalization mode, so behavior does not depend on the machine's culture.
 - Before applying Roslyn changes, check that each file still matches the version used to compute them.
 - `.gitignore` is an allowlist. Allow each new project path explicitly.
 
