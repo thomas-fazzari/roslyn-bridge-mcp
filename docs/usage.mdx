@@ -52,7 +52,7 @@ Only raw requests keep zero-based LSP positions.
 
 When no file has the given path, a `file` may be a file name or a path suffix, such as `Calculator.cs` or `Math/Calculator.cs`.
 It must match whole path segments and name exactly one workspace file. The response then starts with a `resolved file: path` line.
-When several files match, the error `ambiguous_file` lists up to 20 of them. In `bulk_navigate`, that error fails the whole call.
+When several files match, the error `ambiguous_file` lists up to 20 of them. In `bulk_navigate`, it fills the section of each query that names the file, and the other queries run.
 This applies to `file` of `navigate`, `bulk_navigate`, `symbols` and `edit`, and to `file` of `diagnostics` without glob characters. It does not apply to `newName`.
 
 ## Results

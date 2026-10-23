@@ -1180,6 +1180,45 @@ public sealed class LspToolTests : IDisposable
             );
     }
 
+    [Fact]
+    public async Task BulkReportsAnAmbiguousFileInTheSectionOfItsQueryAsync()
+    {
+        await WriteFileAsync(_root, "A/Calculator.cs", SourceText);
+        await WriteFileAsync(_root, "B/Calculator.cs", SourceText);
+        await WriteFileAsync(_root, "src/Math/Source.cs", SourceText);
+        await using var session = CreateSession(
+            _root,
+            FakeServer(server =>
+                server.Handle = (_, _) => Task.FromResult<JsonNode?>(Found("Found.cs"))
+            )
+        );
+        using var tool = CreateTool(session);
+
+        var response = await tool.ExecuteAsync(
+            Bulk(
+                ReferencesAt(1) with
+                {
+                    File = "Calculator.cs",
+                },
+                ReferencesAt(2) with
+                {
+                    File = "Source.cs",
+                }
+            ),
+            TestCt
+        );
+
+        response.Should().BeSuccessful();
+        ResponseText(response)
+            .Should()
+            .Be(
+                $"{ResultText.ResolvedFilePrefix}src/Math/Source.cs\n"
+                    + "## 1 references Calculator.cs:1:1\n"
+                    + $"error {ErrorCodes.AmbiguousFile}: 'Calculator.cs' matches 2 files. Send more of the path. Matches: A/Calculator.cs, B/Calculator.cs\n"
+                    + "## 2 references src/Math/Source.cs:2:1\nFound.cs 1:1"
+            );
+    }
+
     public void Dispose() => Directory.Delete(_root, recursive: true);
 
     // a diagnostic is its file, zero-based line and character, LSP severity and code

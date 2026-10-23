@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 using System.Buffers;
+using System.Collections.ObjectModel;
 using RoslynBridge.Lsp;
 using RoslynBridge.Requests;
 
@@ -29,7 +30,7 @@ internal sealed partial class LspTool
             .ToList();
         if (names.Count == 0)
         {
-            return new ResolvedRequest(request, []);
+            return new ResolvedRequest(request, [], ReadOnlyDictionary<string, ToolError>.Empty);
         }
 
         await session.EnsureStartedAsync(cancellationToken);
@@ -40,15 +41,21 @@ internal sealed partial class LspTool
                 ? known
                 : known.Where(RoslynSession.IsCSharpFile);
         var resolved = new Dictionary<string, string>(StringComparer.Ordinal);
+        var ambiguous = new Dictionary<string, ToolError>(StringComparer.Ordinal);
         foreach (var name in names)
         {
             var matches = paths.RelativePathsEndingWith(candidates, name);
             if (matches.Count > 1)
             {
-                return AmbiguousFile(name, matches);
-            }
+                var error = AmbiguousFile(name, matches);
+                if (request.Action is not LspAction.Bulk)
+                {
+                    return error;
+                }
 
-            if (matches.Count == 1)
+                ambiguous[name] = error;
+            }
+            else if (matches.Count == 1)
             {
                 resolved[name] = matches[0];
             }
@@ -63,7 +70,8 @@ internal sealed partial class LspTool
                     .. request.Queries.Select(query => query with { File = Resolved(query.File) }),
                 ],
             },
-            [.. resolved.Values.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal)]
+            [.. resolved.Values.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal)],
+            ambiguous
         );
 
         string? Resolved(string? file) =>
@@ -84,5 +92,10 @@ internal sealed partial class LspTool
                 + (matches.Count > MaximumListedFiles ? ", ..." : string.Empty)
         );
 
-    private readonly record struct ResolvedRequest(LspRequest Request, IReadOnlyList<string> Files);
+    /// <param name="FileErrors">The errors of the bulk query files that match several files, by name.</param>
+    private readonly record struct ResolvedRequest(
+        LspRequest Request,
+        IReadOnlyList<string> Files,
+        IReadOnlyDictionary<string, ToolError> FileErrors
+    );
 }

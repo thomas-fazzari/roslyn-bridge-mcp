@@ -94,7 +94,11 @@ internal sealed partial class LspTool(
                 return Failure(fileError);
             }
 
-            var result = await DispatchAsync(resolved.Value.Request, timeout.Token);
+            var result = await DispatchAsync(
+                resolved.Value.Request,
+                resolved.Value.FileErrors,
+                timeout.Token
+            );
             if (result.Error is { } error)
             {
                 return Failure(error);
@@ -210,6 +214,7 @@ internal sealed partial class LspTool(
 
     private async Task<Result<ToolResult>> DispatchAsync(
         LspRequest request,
+        IReadOnlyDictionary<string, ToolError> fileErrors,
         CancellationToken cancellationToken
     )
     {
@@ -255,7 +260,7 @@ internal sealed partial class LspTool(
                 await queries.DiagnosticsAsync(request, cancellationToken)
             ).AsToolResult(),
             LspAction.Symbols => await queries.SymbolsAsync(request, cancellationToken),
-            LspAction.Bulk => await queries.BulkAsync(request, cancellationToken),
+            LspAction.Bulk => await queries.BulkAsync(request, fileErrors, cancellationToken),
             _ when request.Action.IsNavigation => await queries.NavigationAsync(
                 request,
                 cancellationToken

@@ -14,8 +14,10 @@ internal sealed partial class LspQueries
     /// <summary>
     /// Reports each query in request order, a failed one as its own section.
     /// </summary>
+    /// <param name="fileErrors">The errors of the query files that match several files, by name.</param>
     public async Task<Result<ToolResult>> BulkAsync(
         LspRequest request,
+        IReadOnlyDictionary<string, ToolError> fileErrors,
         CancellationToken cancellationToken
     )
     {
@@ -29,7 +31,7 @@ internal sealed partial class LspQueries
                 }
             )
             .ToList();
-        var located = await LocateAllAsync(queries, cancellationToken);
+        var located = await LocateAllAsync(queries, fileErrors, cancellationToken);
 
         return await SectionsAsync(
             [.. queries.Select((query, index) => Label(index + 1, query))],
@@ -89,11 +91,12 @@ internal sealed partial class LspQueries
     // A symbol that several queries name resolves once, and a failure to resolve it fails them all
     private async Task<Result<LspRequest>[]> LocateAllAsync(
         IReadOnlyList<LspRequest> queries,
+        IReadOnlyDictionary<string, ToolError> fileErrors,
         CancellationToken cancellationToken
     )
     {
         var named = queries
-            .Where(NeedsLocation)
+            .Where(query => NeedsLocation(query) && FileError(query, fileErrors) is null)
             .GroupBy(query => (query.Symbol, query.File))
             .ToList();
         var found = await RunConcurrentlyAsync(
@@ -102,7 +105,7 @@ internal sealed partial class LspQueries
             cancellationToken
         );
         var locations = named.Zip(found).ToDictionary(pair => pair.First.Key, pair => pair.Second);
-        return [.. queries.Select(query => Located(query, locations))];
+        return [.. queries.Select(query => Located(query, locations, fileErrors))];
     }
 
     private static Result<LspRequest> Located(
@@ -110,9 +113,15 @@ internal sealed partial class LspQueries
         Dictionary<
             (string? Symbol, string? File),
             Result<(string File, SourcePosition Position)>
-        > locations
+        > locations,
+        IReadOnlyDictionary<string, ToolError> fileErrors
     )
     {
+        if (FileError(query, fileErrors) is { } fileError)
+        {
+            return fileError;
+        }
+
         if (!NeedsLocation(query))
         {
             return query;
@@ -133,6 +142,11 @@ internal sealed partial class LspQueries
             Character = position.Character,
         };
     }
+
+    private static ToolError? FileError(
+        LspRequest query,
+        IReadOnlyDictionary<string, ToolError> fileErrors
+    ) => query.File is { } file ? fileErrors.GetValueOrDefault(file) : null;
 
     // source and members resolve declarations themselves
     private static bool NeedsLocation(LspRequest query) =>
