@@ -202,18 +202,17 @@ internal static class LspResultsExtensions
         public string? Code() => diagnostic["code"] is JsonValue code ? code.ToString() : null;
     }
 
-    private static SymbolItem Symbol(JsonNode symbol, WorkspacePaths paths)
+    /// <param name="parent">The name of the document symbol that contains this one, if any.</param>
+    private static SymbolItem Symbol(JsonNode symbol, WorkspacePaths paths, string? parent = null)
     {
         var name = symbol["name"]?.GetValue<string>() ?? string.Empty;
         var range = symbol["selectionRange"] ?? symbol["location"]?["range"] ?? symbol["range"];
         var uri = (symbol["location"]?["uri"] ?? symbol["uri"])?.GetValue<string>();
-
-        var kind = symbol["kind"]?.GetValue<int>();
-        // A call hierarchy reports a ctor as a method named Type.Type(parameters)
-        if (kind is LspSymbolKinds.Method && SymbolName.Parse(name) is { IsConstructor: true })
-        {
-            kind = LspSymbolKinds.Constructor;
-        }
+        var reported = symbol["kind"]?.GetValue<int>();
+        var kind =
+            Qualified(name, parent ?? ContainingType(symbol["containerName"]))
+                ?.CorrectedKind(reported)
+            ?? reported;
 
         return new SymbolItem(
             name,
@@ -234,7 +233,8 @@ internal static class LspResultsExtensions
         JsonArray symbols,
         WorkspacePaths paths,
         ref int skipped,
-        ref int remaining
+        ref int remaining,
+        string? parent = null
     )
     {
         var items = new List<SymbolItem>();
@@ -245,19 +245,20 @@ internal static class LspResultsExtensions
                 break;
             }
 
+            var name = symbol["name"]?.GetValue<string>();
             if (skipped > 0)
             {
                 skipped--;
                 if (symbol["children"] is JsonArray listed)
                 {
-                    items.AddRange(PageSymbols(listed, paths, ref skipped, ref remaining));
+                    items.AddRange(PageSymbols(listed, paths, ref skipped, ref remaining, name));
                 }
 
                 continue;
             }
 
             remaining--;
-            var item = Symbol(symbol, paths);
+            var item = Symbol(symbol, paths, parent);
             // A document symbol range covers the whole declaration, while selectionRange is its name
             if (symbol["selectionRange"] is not null && symbol["range"]?["end"] is { } end)
             {
@@ -268,7 +269,7 @@ internal static class LspResultsExtensions
             {
                 item = item with
                 {
-                    Children = PageSymbols(children, paths, ref skipped, ref remaining),
+                    Children = PageSymbols(children, paths, ref skipped, ref remaining, name),
                 };
             }
 
@@ -292,6 +293,31 @@ internal static class LspResultsExtensions
     // Roslyn words some containers as "in Type", which the rendering already says
     private static string? ContainerName(string? container) =>
         container?.StartsWith("in ", StringComparison.Ordinal) is true ? container[3..] : container;
+
+    /// <returns>The name after the name of its type when the type is known, or null for an invalid name.</returns>
+    private static SymbolName? Qualified(string name, string? type)
+    {
+        var member = SymbolName.Parse(name);
+        if (member is null || type is null)
+        {
+            return member;
+        }
+
+        return SymbolName.Parse(type)?.Append(member);
+    }
+
+    // A workspace symbol names its type as "in Type (project Name)" in the en locale
+    private static string? ContainingType(JsonNode? container)
+    {
+        var text = container?.GetValue<string>();
+        if (text?.StartsWith("in ", StringComparison.Ordinal) is not true)
+        {
+            return null;
+        }
+
+        var project = text.IndexOf(" (project ", StringComparison.Ordinal);
+        return project < 0 ? text[3..] : text[3..project];
+    }
 
     private static SourcePosition OneBased(JsonNode position) =>
         new(position["line"]!.GetValue<int>() + 1, position["character"]!.GetValue<int>() + 1);

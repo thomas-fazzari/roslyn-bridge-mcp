@@ -345,11 +345,11 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
             {
                 yield return new DeclaredSymbol(
                     name,
-                    name.IsConstructor,
+                    name.IsCtor,
                     new SymbolDeclaration(
                         display,
                         rawName.Trim(),
-                        kind,
+                        name.CorrectedKind(kind),
                         file,
                         start["line"]!.GetValue<int>() + 1,
                         start["character"]!.GetValue<int>() + 1,

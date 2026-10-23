@@ -859,6 +859,71 @@ public sealed class LspToolTests : IDisposable
     }
 
     [Fact]
+    public async Task ConstructorsHaveTheConstructorKindInSymbolsMembersAndSourceAsync()
+    {
+        var box = await WriteFileAsync(
+            _root,
+            "Box.cs",
+            """
+            class Box
+            {
+                public Box(int value) {}
+            }
+            """
+        );
+        var constructor = WorkspaceSymbol(
+            "Box",
+            box,
+            LspSymbolKinds.Method,
+            MethodLine,
+            MethodCharacter
+        );
+        constructor["containerName"] = "in Box (project App)";
+        await using var session = CreateSession(
+            _root,
+            FakeServer(server =>
+                server.Handle = (method, _) =>
+                    Task.FromResult<JsonNode?>(
+                        method switch
+                        {
+                            LspMethods.WorkspaceSymbol => new JsonArray(
+                                WorkspaceSymbol("Box", box),
+                                constructor.DeepClone()
+                            ),
+                            LspMethods.TextDocumentDocumentSymbol => new JsonArray(
+                                DocumentSymbol("Box", DocumentMethod("Box(int)"))
+                            ),
+                            _ => null,
+                        }
+                    )
+            )
+        );
+        using var tool = CreateTool(session);
+
+        var document = await tool.ExecuteAsync(
+            new LspRequest { Action = LspAction.Symbols, File = "Box.cs" },
+            TestCt
+        );
+        var workspace = await tool.ExecuteAsync(
+            new LspRequest { Action = LspAction.Symbols, Query = "Box" },
+            TestCt
+        );
+        var members = await tool.ExecuteAsync(
+            new LspRequest { Action = LspAction.Members, Symbol = "Box" },
+            TestCt
+        );
+        var source = await tool.ExecuteAsync(
+            new LspRequest { Action = LspAction.Source, Symbol = "Box.Box(int)" },
+            TestCt
+        );
+
+        ResponseText(document).Should().Contain(" constructor Box(int)");
+        ResponseText(workspace).Should().Contain("Box.cs:3:12 constructor Box in Box");
+        ResponseText(members).Should().Contain(" constructor Box(int)");
+        ResponseText(source).Should().Contain(" constructor Box.Box(int)");
+    }
+
+    [Fact]
     public async Task QualifiedNameWithAKnownContainerListsItsMembersFirstAsync()
     {
         var calculator = await WriteFileAsync(_root, "Calculator.cs", "class Calculator {}\n");

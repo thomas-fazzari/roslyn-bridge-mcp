@@ -4,6 +4,7 @@
 using System.Buffers;
 using System.Collections.Immutable;
 using System.Globalization;
+using RoslynBridge.Lsp;
 
 namespace RoslynBridge.Symbols;
 
@@ -65,9 +66,15 @@ internal sealed record SymbolName(ImmutableArray<string> Segments, string? Param
         return typeSeparator >= 0 ? name[..typeSeparator] : name;
     }
 
-    public bool IsConstructor =>
-        Parameters is not null
-        && Segments is [.., var type, var member]
+    public bool IsCtor => Parameters is not null && NamesItsType;
+
+    /// <returns>The constructor kind when Roslyn reports this constructor as a method, otherwise the reported kind.</returns>
+    public int? CorrectedKind(int? reported) =>
+        reported is LspSymbolKinds.Method && NamesItsType ? LspSymbolKinds.Constructor : reported;
+
+    // A member cannot have the name of its type, except a constructor
+    private bool NamesItsType =>
+        Segments is [.., var type, var member]
         && string.Equals(BaseName(type), member, StringComparison.Ordinal);
 
     /// <summary>
