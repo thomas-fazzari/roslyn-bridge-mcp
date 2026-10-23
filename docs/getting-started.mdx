@@ -42,13 +42,15 @@ roslyn-bridge-mcp setup
 
 `setup` works as described above. To update, run `dotnet tool update --global ThomasFazzari.RoslynBridge`.
 
-To skip the global install, let the MCP client start the bridge with `dnx`, which runs a .NET tool without installing it:
+To skip the global install, let the MCP client start the bridge with `dnx`, which runs a .NET tool without installing it. Pin the version, with `VERSION` replaced by a release number:
 
 ```sh
-claude mcp add --scope user roslyn -- dnx ThomasFazzari.RoslynBridge --yes
+claude mcp add --scope user roslyn -- dnx ThomasFazzari.RoslynBridge@VERSION --yes
 ```
 
-`dnx` runs the latest version and does not install the Roslyn language server. Run `dnx ThomasFazzari.RoslynBridge --yes -- setup` once for that, and ignore the registration commands it prints. The first launch of each version downloads the package, and on macOS and Linux the .NET SDK prints a line to standard output while it does. A client can fail on that line. Run `dnx ThomasFazzari.RoslynBridge --yes -- --help` in a terminal after each release to download the package ahead of time.
+Without a version, `dnx` runs the latest release, so the bridge changes whenever a release comes out. The first launch of each version downloads the package, and on macOS and Linux the .NET SDK prints a line to standard output while it does. A client can fail on that line.
+
+`dnx` does not install the Roslyn language server. Run `dnx ThomasFazzari.RoslynBridge@VERSION --yes -- setup` once in a terminal for that, and ignore the registration commands it prints. It also downloads the package ahead of time. To update, run `setup` the same way with the new version, then change the version in the client's registration.
 
 ## Use it
 
