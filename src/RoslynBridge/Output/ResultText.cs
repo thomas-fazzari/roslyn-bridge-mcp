@@ -266,7 +266,7 @@ internal static partial class ResultText
         var (total, noun) =
             report.CodeCount > 0 ? (report.CodeCount, "codes") : (report.Total, "diagnostics");
 
-        AppendTruncation(text, total, report.NextOffset is not null, noun, report.NextOffset);
+        AppendTruncation(text, total, noun, report.NextOffset);
 
         if (report.MiscellaneousFiles.Count > 0)
         {
@@ -522,15 +522,15 @@ internal static partial class ResultText
             return;
         }
 
-        AppendEmptyOrTruncation(text, total, nextOffset is not null, noun, nextOffset);
+        AppendEmptyOrTruncation(text, total, noun, nextOffset);
     }
 
     private static void AppendEmptyOrTruncation(
         StringBuilder text,
         int total,
-        bool truncated,
         string noun,
-        int? nextOffset = null
+        int? nextOffset,
+        bool limited = false
     )
     {
         if (total == 0)
@@ -539,18 +539,20 @@ internal static partial class ResultText
             return;
         }
 
-        AppendTruncation(text, total, truncated, noun, nextOffset);
+        AppendTruncation(text, total, noun, nextOffset, limited);
     }
 
+    /// <param name="nextOffset">The offset of the next page, which a truncated paged result always has.</param>
+    /// <param name="limited">Whether a result without pages left items out.</param>
     private static void AppendTruncation(
         StringBuilder text,
         int total,
-        bool truncated,
         string noun,
-        int? nextOffset = null
+        int? nextOffset,
+        bool limited = false
     )
     {
-        if (!truncated)
+        if (nextOffset is null && !limited)
         {
             return;
         }

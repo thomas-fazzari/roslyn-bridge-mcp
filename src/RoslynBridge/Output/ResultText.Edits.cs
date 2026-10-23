@@ -26,7 +26,13 @@ internal static partial class ResultText
             text.Append(' ').Append(OneLine(action.Title)).Append('\n');
         }
 
-        AppendEmptyOrTruncation(text, listing.Total, listing.Truncated, "actions");
+        AppendEmptyOrTruncation(
+            text,
+            listing.Total,
+            "actions",
+            nextOffset: null,
+            limited: listing.Truncated
+        );
 
         if (listing.Hidden > 0)
         {
