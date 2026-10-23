@@ -18,11 +18,13 @@ internal sealed record FileLocations(
 /// <param name="Total">Occurrences before paging.</param>
 /// <param name="NextOffset">The offset of the next page, or null on the last page.</param>
 /// <param name="Generated">Source-generated occurrences left out.</param>
+/// <param name="Access">Reads or Writes when the locations are the references filtered to that access, otherwise null.</param>
 internal sealed record Locations(
     IReadOnlyList<FileLocations> Files,
     int Total,
     int? NextOffset,
-    int Generated
+    int Generated,
+    LspAction? Access = null
 ) : ToolResult;
 
 /// <param name="Total">Symbols before paging, nested ones included.</param>

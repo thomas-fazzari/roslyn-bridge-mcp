@@ -209,7 +209,7 @@ public sealed partial class RoslynMcpTests
         var limited = await workspace.CallAsync(request with { Limit = 1 });
         var fullSummary = Summary(full);
 
-        fullSummary.FilesChecked.Should().Be(4);
+        fullSummary.FilesChecked.Should().Be(6);
         full.Should().NotContain("truncated:");
         fullSummary.FilesWithDiagnostics.Should().Be(Lines(full).Count(IsFileLine));
         Summary(limited).Should().Be(fullSummary);
@@ -401,6 +401,36 @@ public sealed partial class RoslynMcpTests
             )
         );
         Section(typeImpact, "subtypes").Select(FileOf).Should().Equal(ImplementationFile);
+    }
+
+    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    public async Task ListsTheReadsAndWritesOfAFieldAndAPropertyAcrossFilesAsync()
+    {
+        const string counterFile = "Application/Counter.cs";
+        const string readerFile = "Application/CounterReader.cs";
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var workspace = await RoslynTestWorkspace.CreateAsync(cancellationToken);
+
+        var totalReads = await workspace.CallAsync(
+            new LspRequest { Action = LspAction.Reads, Symbol = "Counter.Total" }
+        );
+        var totalWrites = await workspace.CallAsync(
+            new LspRequest { Action = LspAction.Writes, Symbol = "Counter.Total" }
+        );
+        var stepReads = await workspace.CallAsync(
+            new LspRequest { Action = LspAction.Reads, Symbol = "Counter.Step" }
+        );
+        var stepWrites = await workspace.CallAsync(
+            new LspRequest { Action = LspAction.Writes, Symbol = "Counter.Step" }
+        );
+
+        totalWrites.Should().Be($"{counterFile} 11:9 12:9 13:9 14:18 15:18\n{readerFile} 7:58");
+        totalReads.Should().Be($"{counterFile} 16:24\n{readerFile} 5:56");
+        stepReads.Should().Be($"{counterFile} 12:18");
+        stepWrites.Should().Be($"{counterFile} 17:9");
+
+        var status = await workspace.CallAsync(new LspRequest { Action = LspAction.Status });
+        status.Should().Contain("loading: false").And.NotContain("progress:");
     }
 
     [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]

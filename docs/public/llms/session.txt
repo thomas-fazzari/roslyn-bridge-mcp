@@ -13,6 +13,10 @@ Roslyn starts loading when the bridge launches if a .sln, .slnx, .slnf or
 Otherwise it loads on the first language request. If the load outlasts
 the startup timeout, the call returns the error loading and the load goes on.
 Retry the same call. Status answers at once and reports loading true meanwhile.
+While loading, a progress line follows the loading line when Roslyn reports
+progress, such as "progress: Loading Calculator.slnx 40%". It has no
+percentage when Roslyn reports none. The loading error repeats the progress in
+its message.
 
 Server capabilities:
 lsp {"action":"capabilities"}

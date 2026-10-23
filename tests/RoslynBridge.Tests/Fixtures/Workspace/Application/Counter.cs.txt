@@ -1,0 +1,23 @@
+namespace Sample.Application;
+
+public sealed class Counter
+{
+    public int Total = 5;
+
+    public int Step { get; set; }
+
+    public void Run()
+    {
+        Total = 1;
+        Total += Step;
+        Total++;
+        Bump(ref Total);
+        Fill(out Total);
+        var snapshot = Total;
+        Step = snapshot;
+    }
+
+    private static void Bump(ref int value) => value++;
+
+    private static void Fill(out int value) => value = 7;
+}

@@ -39,8 +39,8 @@ internal sealed class FakeRoslynServer : IRoslynServer
     }
 
     /// <summary>
-    /// Answers workspace/symbol, document symbol, references, diagnostic, project context, hierarchy, code action
-    /// and workspace/executeCommand requests, given the method and its parameters.
+    /// Answers workspace/symbol, document symbol, references, document highlight, diagnostic, project context,
+    /// hierarchy, code action and workspace/executeCommand requests, given the method and its parameters.
     /// A references request that the bridge cancels ends without waiting for its answer.
     /// The default handler returns null.
     /// </summary>
@@ -79,6 +79,26 @@ internal sealed class FakeRoslynServer : IRoslynServer
         JsonNode parameters,
         CancellationToken cancellationToken
     ) => _rpc.InvokeWithParameterObjectAsync<JsonNode?>(method, parameters, cancellationToken);
+
+    /// <summary>
+    /// Sends a $/progress notification, then waits for the bridge to answer a request sent after it,
+    /// which shows that the bridge handled the notification.
+    /// </summary>
+    public async Task ReportProgressAsync(
+        string token,
+        JsonObject value,
+        CancellationToken cancellationToken
+    )
+    {
+        await _rpc.NotifyWithParameterObjectAsync(
+            LspMethods.Progress,
+            new JsonObject { ["token"] = token, ["value"] = value }
+        );
+        await _rpc.InvokeWithCancellationAsync<JsonNode?>(
+            LspMethods.WorkspaceWorkspaceFolders,
+            cancellationToken: cancellationToken
+        );
+    }
 
     /// <summary>Ends the process abruptly, as a crash would.</summary>
     public void Crash()
@@ -162,6 +182,13 @@ internal sealed class FakeRoslynServer : IRoslynServer
             server
                 .Handle(LspMethods.TextDocumentReferences, parameters)
                 .WaitAsync(cancellationToken);
+
+        [JsonRpcMethod(
+            LspMethods.TextDocumentDocumentHighlight,
+            UseSingleObjectParameterDeserialization = true
+        )]
+        public Task<JsonNode?> DocumentHighlightAsync(JsonNode? parameters) =>
+            server.Handle(LspMethods.TextDocumentDocumentHighlight, parameters);
 
         [JsonRpcMethod(
             LspMethods.TextDocumentDiagnostic,

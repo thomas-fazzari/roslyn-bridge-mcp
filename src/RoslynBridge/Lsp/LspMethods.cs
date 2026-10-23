@@ -46,6 +46,7 @@ internal static class LspMethods
     public const string TypeHierarchySupertypes = "typeHierarchy/supertypes";
     public const string WindowLogMessage = "window/logMessage";
     public const string WindowShowMessage = "window/showMessage";
+    public const string WindowWorkDoneProgressCreate = "window/workDoneProgress/create";
     public const string WorkspaceApplyEdit = "workspace/applyEdit";
     public const string WorkspaceConfiguration = "workspace/configuration";
     public const string WorkspaceDiagnostic = "workspace/diagnostic";
@@ -60,4 +61,5 @@ internal static class LspMethods
     public const string Initialized = "initialized";
     public const string Shutdown = "shutdown";
     public const string Exit = "exit";
+    public const string Progress = "$/progress";
 }

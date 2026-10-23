@@ -87,6 +87,8 @@ public sealed partial class ToolSchemaTests
             "source",
             "members",
             "impact",
+            "reads",
+            "writes",
         }
     )]
     [InlineData(SymbolsTool.Name, new string[0], null)]

@@ -50,6 +50,10 @@ internal enum LspAction
     Impact = 20,
 
     Bulk = 21,
+
+    Reads = 22,
+
+    Writes = 23,
 }
 
 internal static class LspActions
@@ -71,7 +75,13 @@ internal static class LspActions
                     or LspAction.Source
                     or LspAction.Members
                     or LspAction.Impact
-            || action.IsHierarchy;
+            || action.IsHierarchy
+            || action.IsAccess;
+
+        /// <summary>
+        /// Whether the action lists the references that read or write a symbol.
+        /// </summary>
+        public bool IsAccess => action is LspAction.Reads or LspAction.Writes;
 
         /// <summary>
         /// Whether the action expands a call or type hierarchy.

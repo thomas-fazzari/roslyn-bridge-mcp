@@ -81,6 +81,22 @@ internal sealed partial class ClientCallbacks(
     [JsonRpcMethod(LspMethods.WorkspaceProjectInitializationComplete)]
     public void InitializationComplete() => initialized.TrySetResult();
 
+    // Roslyn waits for this answer before it reports progress
+    [JsonRpcMethod(
+        LspMethods.WindowWorkDoneProgressCreate,
+        UseSingleObjectParameterDeserialization = true
+    )]
+    public static void CreateProgress(JsonObject _) { }
+
+    [JsonRpcMethod(LspMethods.Progress, UseSingleObjectParameterDeserialization = true)]
+    public void ReportProgress(JsonObject parameters)
+    {
+        if (parameters["token"]?.ToString() is { } token && parameters["value"] is JsonObject value)
+        {
+            session.ReportProgress(token, value);
+        }
+    }
+
     [JsonRpcMethod(LspMethods.WindowLogMessage, UseSingleObjectParameterDeserialization = true)]
     public void LogMessage(JsonObject parameters)
     {

@@ -17,14 +17,14 @@ Available fixes and refactorings depend on the installed Roslyn version and proj
 
 ## Tools
 
-| Tool            | Arguments                                                                                                                                                                                                       | Result                                                                        |
-| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| `diagnostics`   | `file` path or glob, `severity`, `ids`, `summary`                                                                                                                                                               | Errors, warnings and suggestions                                              |
-| `navigate`      | `action` (`definition`, `type_definition`, `implementation`, `references`, `callers`, `callees`, `supertypes`, `subtypes`, `hover`, `source`, `members`, `impact`), and `symbol` or `file`, `line`, `character` | Locations, related symbols, hover text, source or members                     |
-| `bulk_navigate` | `queries` (1 to 16 items, each with the `action` and the `symbol` or `file`, `line`, `character` of `navigate`), `context`, `limit`, `offset`                                                                   | One section per query                                                         |
-| `symbols`       | `file` or `query`                                                                                                                                                                                               | Document or workspace symbols                                                 |
-| `edit`          | `action` (`rename`, `rename_file`, `code_actions`) and its inputs                                                                                                                                               | Edit previews, then applied changes                                           |
-| `lsp`           | `action` (`status`, `capabilities`, `reload`, `request`), `method`, `parameters`                                                                                                                                | Session state, a fresh session or a raw Language Server Protocol (LSP) result |
+| Tool            | Arguments                                                                                                                                                                                                                          | Result                                                                        |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `diagnostics`   | `file` path or glob, `severity`, `ids`, `summary`                                                                                                                                                                                  | Errors, warnings and suggestions                                              |
+| `navigate`      | `action` (`definition`, `type_definition`, `implementation`, `references`, `reads`, `writes`, `callers`, `callees`, `supertypes`, `subtypes`, `hover`, `source`, `members`, `impact`), and `symbol` or `file`, `line`, `character` | Locations, related symbols, hover text, source or members                     |
+| `bulk_navigate` | `queries` (1 to 16 items, each with the `action` and the `symbol` or `file`, `line`, `character` of `navigate`), `context`, `limit`, `offset`                                                                                      | One section per query                                                         |
+| `symbols`       | `file` or `query`                                                                                                                                                                                                                  | Document or workspace symbols                                                 |
+| `edit`          | `action` (`rename`, `rename_file`, `code_actions`) and its inputs                                                                                                                                                                  | Edit previews, then applied changes                                           |
+| `lsp`           | `action` (`status`, `capabilities`, `reload`, `request`), `method`, `parameters`                                                                                                                                                   | Session state, a fresh session or a raw Language Server Protocol (LSP) result |
 
 `diagnostics`, `navigate`, `bulk_navigate` and `symbols` are read-only. `edit` and `lsp` can write files.
 Each tool takes flat arguments:
@@ -69,6 +69,12 @@ src/Calculator.cs 12:9 40:17
 Workspace files use relative paths. External and generated locations keep their absolute URI.
 Location links use the target selection start. Use the `lsp` tool with `action=request` for full LSP ranges and metadata.
 
+`reads` and `writes` return the references of a field, property, local, parameter or event that read it or write it.
+They have the format of `references`, and `context`, `limit`, `offset` and the `truncated:` line work the same.
+`limit` and `offset` apply to the filtered list. An empty result reads `no reads` or `no writes`.
+The assignment `x += 1`, the increment `x++` and a `ref` or `out` argument count as writes.
+The declaration and its initializer are in neither list.
+
 `callers`, `callees`, `supertypes` and `subtypes` return one line per symbol: its declaration, its kind and its name.
 Everything after the kind is a symbol name that `navigate` and `edit` accept unchanged.
 `callers` and `callees` add an indented line with their call sites:
@@ -108,6 +114,10 @@ Send the next offset as `offset` to read the next page. `offset` skips that many
 An offset past the last result returns a line that gives the total.
 Pages do not overlap because results keep a fixed order. Locations, related symbols and members are in file and position order.
 Workspace symbols are ordered by how well the name matches, then by file and position. Diagnostics are in file, line and character order.
+
+`lsp` with `action=status` returns `running`, `loading` and `workspace` lines, and a `server` line when the `--server` option is set.
+While Roslyn loads the workspace and reports progress, a `progress:` line follows `loading:`, such as `progress: Loading Calculator.slnx 40%`.
+The line has no percentage when Roslyn reports none. The error `loading` repeats the progress in its message.
 
 For diagnostics, omit `file` to scan C# files or use a glob such as `src/**/*.cs`. Braces list alternatives, so `src/{Calculator,Program}.cs` checks two files in one call. Only `.cs` and `.csx` files are analyzed.
 `severity` defaults to `warning`, which reports errors and warnings. Set it to `information` or `hint` to include analyzer suggestions.

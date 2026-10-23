@@ -28,6 +28,7 @@ internal static class ClientCapabilities
                   "failureHandling": "abort"
                 }
               },
+              "window": { "workDoneProgress": true },
               "textDocument": {
                 "diagnostic": { "relatedDocumentSupport": false },
                 "publishDiagnostics": { "relatedInformation": true, "versionSupport": true },

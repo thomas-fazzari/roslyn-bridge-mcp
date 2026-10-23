@@ -190,9 +190,13 @@ internal static partial class ResultText
             .Append(status.Running ? "true" : "false")
             .Append("\nloading: ")
             .Append(status.Loading ? "true" : "false")
-            .Append("\nworkspace: ")
-            .Append(status.Workspace)
             .Append('\n');
+        if (status.Progress is { } progress)
+        {
+            text.Append("progress: ").Append(progress).Append('\n');
+        }
+
+        text.Append("workspace: ").Append(status.Workspace).Append('\n');
         if (status.Server is { } server)
         {
             text.Append("server: ").Append(server).Append('\n');
@@ -360,13 +364,21 @@ internal static partial class ResultText
             text.Append(' ').AppendJoin(' ', file.Positions.Select(Position)).Append('\n');
         }
 
-        AppendPageEnd(
-            text,
-            locations.Total,
-            locations.Files.Count == 0,
-            locations.NextOffset,
-            "locations"
-        );
+        if (locations is { Total: 0, Access: { } access })
+        {
+            text.Append("no ").Append(access.Name).Append('\n');
+        }
+        else
+        {
+            AppendPageEnd(
+                text,
+                locations.Total,
+                locations.Files.Count == 0,
+                locations.NextOffset,
+                "locations"
+            );
+        }
+
         if (locations.Generated > 0)
         {
             text.Append(

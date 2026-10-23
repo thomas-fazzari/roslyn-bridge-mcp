@@ -92,6 +92,7 @@ Files under build and tool folders such as `bin`, `obj` and `node_modules` do no
 Otherwise, Roslyn loads on the first language request.
 A call waits up to the startup timeout for the load.
 When the load takes longer, the call returns the error `loading` and the load continues for later calls.
+Both the error and `lsp` with `action=status` report the progress of the load when Roslyn gives it.
 For large projects, set `tool_timeout_sec = 200` under `[mcp_servers.roslyn]` in Codex.
 In Claude Code, set the `MCP_TOOL_TIMEOUT` environment variable in milliseconds, for example `200000`.
 

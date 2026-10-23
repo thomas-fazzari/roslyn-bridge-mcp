@@ -1,0 +1,8 @@
+namespace Sample.Application;
+
+public static class CounterReader
+{
+    public static int Peek(Counter counter) => counter.Total;
+
+    public static void Reset(Counter counter) => counter.Total = 0;
+}

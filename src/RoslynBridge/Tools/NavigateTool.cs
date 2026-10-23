@@ -22,7 +22,7 @@ internal sealed class NavigateTool(LspTool lsp)
         OpenWorld = false
     )]
     [Description(
-        "Find the definition, type definition, implementations, references, callers, callees, supertypes or subtypes of a C# symbol, read its hover information or source, list a type's members, or gather the impact of changing it. Name the symbol, or give its one-based position."
+        "Find the definition, type definition, implementations, references, callers, callees, supertypes or subtypes of a C# symbol, read its hover information or source, list a type's members, gather the impact of changing it, or list the reads or writes of a field, property, local, parameter or event. Name the symbol, or give its one-based position."
     )]
     public Task<CallToolResult> NavigateAsync(
         [Description("Navigation to perform.")] NavigationAction action,
@@ -89,6 +89,12 @@ internal enum NavigationAction
 
     [JsonStringEnumMemberName("impact")]
     Impact = 11,
+
+    [JsonStringEnumMemberName("reads")]
+    Reads = 12,
+
+    [JsonStringEnumMemberName("writes")]
+    Writes = 13,
 }
 
 internal static class NavigationActions
@@ -110,6 +116,8 @@ internal static class NavigationActions
                 NavigationAction.Source => LspAction.Source,
                 NavigationAction.Members => LspAction.Members,
                 NavigationAction.Impact => LspAction.Impact,
+                NavigationAction.Reads => LspAction.Reads,
+                NavigationAction.Writes => LspAction.Writes,
                 _ => throw new ArgumentOutOfRangeException(nameof(action)),
             };
     }

@@ -77,7 +77,13 @@ internal static class LspResultsExtensions
             int limit,
             bool skipGenerated,
             int offset = 0
-        )
+        ) => result.FindLocations(paths, skipGenerated).Page(limit, offset);
+
+        /// <summary>
+        /// Collects locations, in path and position order, without duplicates.
+        /// With <paramref name="skipGenerated"/>, source-generated locations are only counted.
+        /// </summary>
+        public FoundLocations FindLocations(WorkspacePaths paths, bool skipGenerated)
         {
             var locations = result switch
             {
@@ -113,11 +119,46 @@ internal static class LspResultsExtensions
                 found.Add((LocationFile(uri, paths), OneBased(start)));
             }
 
+            return new FoundLocations(
+                [
+                    .. found
+                        .OrderBy(location => location.File, StringComparer.Ordinal)
+                        .ThenBy(location => location.Position.Line)
+                        .ThenBy(location => location.Position.Character),
+                ],
+                generated
+            );
+        }
+
+        /// <summary>
+        /// Returns the one-based start of each document highlight of the given LSP kind.
+        /// </summary>
+        public List<SourcePosition> ToHighlightStarts(int kind) =>
+            [
+                .. (result as JsonArray ?? [])
+                    .Where(highlight => highlight?["kind"]?.GetValue<int>() == kind)
+                    .Select(highlight =>
+                        OneBased(
+                            highlight?["range"]?["start"]
+                                ?? throw new ToolErrorException(
+                                    ToolError.InvalidLspData(
+                                        "Roslyn returned a highlight without a position."
+                                    )
+                                )
+                        )
+                    ),
+            ];
+    }
+
+    extension(FoundLocations found)
+    {
+        /// <summary>
+        /// Groups the page of locations that starts at <paramref name="offset"/> by file.
+        /// </summary>
+        public Locations Page(int limit, int offset)
+        {
             var files = found
-                .OrderBy(location => location.File, StringComparer.Ordinal)
-                .ThenBy(location => location.Position.Line)
-                .ThenBy(location => location.Position.Character)
-                .Skip(offset)
+                .Positions.Skip(offset)
                 .Take(limit)
                 .GroupBy(location => location.File, StringComparer.Ordinal)
                 .Select(group => new FileLocations(
@@ -127,9 +168,9 @@ internal static class LspResultsExtensions
                 .ToList();
             return new Locations(
                 files,
-                found.Count,
-                LspRequest.NextOffset(offset, limit, found.Count),
-                generated
+                found.Positions.Count,
+                LspRequest.NextOffset(offset, limit, found.Positions.Count),
+                found.Generated
             );
         }
     }
@@ -268,3 +309,10 @@ internal static class LspResultsExtensions
     private static string LocationFile(string value, WorkspacePaths paths) =>
         paths.TryGetWorkspaceFile(value) is { } file ? paths.RelativePath(file) : value;
 }
+
+/// <param name="Positions">The distinct locations, in path and position order.</param>
+/// <param name="Generated">Source-generated locations left out of <paramref name="Positions"/>.</param>
+internal sealed record FoundLocations(
+    IReadOnlyList<(string File, SourcePosition Position)> Positions,
+    int Generated
+);

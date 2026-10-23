@@ -56,14 +56,16 @@ internal sealed partial class LspQueries(
             LspAction.Definition => LspMethods.TextDocumentDefinition,
             LspAction.TypeDefinition => LspMethods.TextDocumentTypeDefinition,
             LspAction.Implementation => LspMethods.TextDocumentImplementation,
-            LspAction.References => LspMethods.TextDocumentReferences,
+            LspAction.References or LspAction.Reads or LspAction.Writes =>
+                LspMethods.TextDocumentReferences,
             LspAction.Hover => LspMethods.TextDocumentHover,
             _ => throw new InvalidOperationException(
                 $"Unsupported navigation action: {request.Action}."
             ),
         };
 
-        if (request.Action is LspAction.References)
+        var listsReferences = request.Action is LspAction.References || request.Action.IsAccess;
+        if (listsReferences)
         {
             // definition already gives the declaration, which would read as one more usage
             parameters["context"] = new JsonObject { ["includeDeclaration"] = false };
@@ -75,10 +77,15 @@ internal sealed partial class LspQueries(
             return new HoverText(result.ToHoverText());
         }
 
+        if (request.Action.IsAccess)
+        {
+            return await AccessAsync(request, result, cancellationToken);
+        }
+
         var locations = result.ToLocations(
             paths,
             request.Limit,
-            skipGenerated: request.Action is LspAction.References,
+            skipGenerated: listsReferences,
             offset: request.Offset
         );
         return request.Context ? SourceLines.Add(locations, paths) : locations;

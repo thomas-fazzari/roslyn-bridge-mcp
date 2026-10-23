@@ -112,7 +112,7 @@ internal sealed partial class RoslynSession(
         }
         catch (TimeoutException) when (IsLoading)
         {
-            throw new WorkspaceLoadingException();
+            throw new WorkspaceLoadingException(Progress);
         }
     }
 
@@ -405,6 +405,7 @@ internal sealed partial class RoslynSession(
     private async Task DisposeProcessResourcesAsync(JsonRpc? rpc, IRoslynServer server)
     {
         rpc?.Dispose();
+        ClearProgress();
         if (_messageHandler is not null)
         {
             await _messageHandler.DisposeAsync();

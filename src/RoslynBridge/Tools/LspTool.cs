@@ -270,7 +270,13 @@ internal sealed partial class LspTool(
     }
 
     private SessionStatus Status() =>
-        new(session.IsRunning, session.IsLoading, options.WorkspaceRoot, options.ServerPath);
+        new(
+            session.IsRunning,
+            session.IsLoading,
+            options.WorkspaceRoot,
+            options.ServerPath,
+            session.Progress?.Text
+        );
 
     private async Task<Result<ToolResult>> RawRequestAsync(
         LspRequest request,
