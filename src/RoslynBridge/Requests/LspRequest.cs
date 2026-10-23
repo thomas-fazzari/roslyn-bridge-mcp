@@ -38,6 +38,8 @@ internal sealed record LspRequest
 
     public bool Apply { get; init; }
 
+    public bool All { get; init; }
+
     public bool Context { get; init; }
 
     public string? ProposalId { get; init; }

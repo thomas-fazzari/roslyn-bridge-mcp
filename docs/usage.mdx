@@ -144,8 +144,9 @@ Some Roslyn commands reveal their edits only when executed.
 
 To fix a diagnostic without its position, pass its code as `diagnostic` with `file`, and optionally `line`.
 The listing then holds only the fixes for its first occurrence.
-Nested actions appear as one entry per choice, titled with their menu path, such as `Suppress or configure issues > Configure IDE0005 severity > None`.
+Nested actions appear as one entry per choice, titled with their menu path, such as `Introduce parameter for 'x' > into new overload`.
 A fix-all action appears once per scope, such as `Fix All: Remove unnecessary usings (Document)`, and fixes every occurrence in that scope.
+Entries under `Suppress or configure issues` are hidden, and a final line counts them. Set `all` to list them. Indexes count hidden entries, so they stay the same with `all` and can skip numbers without it.
 
 `apply: true` also works without a preview: on a fresh `rename`, on a code action listing with `actionIndex`, or on a fresh `code_actions` request with `actionIndex`.
 

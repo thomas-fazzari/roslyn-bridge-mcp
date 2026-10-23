@@ -11,6 +11,8 @@ namespace RoslynBridge.Changes;
 
 internal sealed partial class LspChanges
 {
+    internal const string SuppressionGroup = "Suppress or configure issues";
+
     private const string QuickFixKind = "quickfix";
 
     // VS Code implements these commands itself, so the server has no handler for them
@@ -71,17 +73,40 @@ internal sealed partial class LspChanges
             return ToolError.InvalidRequest("Choose actionIndex before applying a code action.");
         }
 
+        return Listing(Remember(pending), choices, request);
+    }
+
+    private static ActionListing Listing(
+        string proposalId,
+        List<CodeActionChoice> choices,
+        LspRequest request
+    )
+    {
+        var shown = choices
+            .Index()
+            .Where(entry => request.All || !IsSuppression(entry.Item))
+            .ToList();
         return new ActionListing(
-            Remember(pending),
+            proposalId,
             [
-                .. choices
+                .. shown
                     .Take(request.Limit)
-                    .Select((choice, index) => new ListedAction(index, choice.Kind, choice.Title)),
+                    .Select(entry => new ListedAction(
+                        entry.Index,
+                        entry.Item.Kind,
+                        entry.Item.Title
+                    )),
             ],
-            choices.Count,
-            choices.Count > request.Limit
+            shown.Count,
+            shown.Count > request.Limit,
+            choices.Count - shown.Count
         );
     }
+
+    // Roslyn marks the suppression group only by its title, which is English because the bridge requests the en locale
+    private static bool IsSuppression(CodeActionChoice choice) =>
+        choice.Action["data"]?["CodeActionPath"] is JsonArray { Count: > 0 } path
+        && string.Equals(path[0]?.GetValue<string>(), SuppressionGroup, StringComparison.Ordinal);
 
     private async Task<Result<JsonObject>> SelectionAsync(
         LspRequest request,

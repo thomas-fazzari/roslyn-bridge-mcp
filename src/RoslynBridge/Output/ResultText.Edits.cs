@@ -27,6 +27,14 @@ internal static partial class ResultText
         }
 
         AppendEmptyOrTruncation(text, listing.Total, listing.Truncated, "actions");
+
+        if (listing.Hidden > 0)
+        {
+            text.Append(
+                CultureInfo.InvariantCulture,
+                $"{Count(listing.Hidden, "suppress or configure action", "suppress or configure actions")} hidden. Set all to list them.\n"
+            );
+        }
     }
 
     private static void AppendPreview(StringBuilder text, ProposalPreview preview, int budget)

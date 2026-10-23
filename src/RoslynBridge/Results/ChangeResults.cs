@@ -20,10 +20,12 @@ internal sealed record ProposalPreview(
 
 internal sealed record ListedAction(int Index, string? Kind, string Title);
 
-/// <param name="Total">Actions before limiting.</param>
+/// <param name="Total">Listed actions before limiting, without hidden ones.</param>
+/// <param name="Hidden">Suppress or configure actions left out of the listing.</param>
 internal sealed record ActionListing(
     string ProposalId,
     IReadOnlyList<ListedAction> Actions,
     int Total,
-    bool Truncated
+    bool Truncated,
+    int Hidden
 ) : ToolResult;

@@ -201,6 +201,7 @@ internal sealed class RoslynTestWorkspace : IAsyncDisposable
                     "actionIndex",
                     "proposalId",
                     "apply",
+                    "all",
                     "limit",
                 ]
             ),
@@ -230,6 +231,7 @@ internal sealed class RoslynTestWorkspace : IAsyncDisposable
             ["method"] = request.Method,
             ["parameters"] = request.Parameters,
             ["apply"] = request.Apply ? true : null,
+            ["all"] = request.All ? true : null,
             ["context"] = request.Context ? true : null,
             ["limit"] = request.Limit,
             ["queries"] = request.Queries.Count > 0 ? QueryArguments(request.Queries) : null,

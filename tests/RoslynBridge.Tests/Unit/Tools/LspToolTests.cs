@@ -3,6 +3,7 @@
 
 using System.Globalization;
 using System.Text.Json.Nodes;
+using RoslynBridge.Changes;
 using RoslynBridge.Lsp;
 using RoslynBridge.Output;
 using RoslynBridge.Requests;
@@ -795,6 +796,48 @@ public sealed class LspToolTests : IDisposable
         ResponseText(response).Split('\n').Should().ContainSingle();
     }
 
+    [Fact]
+    public async Task CodeActionListingHidesSuppressionsButKeepsTheIndexesAsync()
+    {
+        await WriteFileAsync(_root, SourceFile, SourceText);
+        await using var session = CreateSession(
+            _root,
+            FakeServer(server =>
+                server.Handle = (method, _) =>
+                    Task.FromResult<JsonNode?>(
+                        method is LspMethods.TextDocumentCodeAction
+                            ? FixesAroundASuppressionGroup()
+                            : null
+                    )
+            )
+        );
+        using var tool = CreateTool(session);
+        var request = new LspRequest
+        {
+            Action = LspAction.CodeActions,
+            File = SourceFile,
+            Line = 1,
+            Character = 1,
+        };
+
+        var hidden = ResultLines.Lines(ResponseText(await tool.ExecuteAsync(request, TestCt)));
+        var all = ResultLines.Lines(
+            ResponseText(await tool.ExecuteAsync(request with { All = true }, TestCt))
+        );
+
+        hidden.Skip(1).SkipLast(1).Should().Equal("0 quickfix Remove it", "4 quickfix Add it");
+        hidden[^1].Should().StartWith("3 ");
+        all.Skip(1)
+            .Should()
+            .Equal(
+                "0 quickfix Remove it",
+                $"1 {LspChanges.SuppressionGroup} > Suppress X > in Source",
+                $"2 {LspChanges.SuppressionGroup} > Configure X severity > Error",
+                $"3 {LspChanges.SuppressionGroup} > Configure X severity > Warning",
+                "4 quickfix Add it"
+            );
+    }
+
     [Theory]
     [InlineData("Calculator.cs", true)]
     [InlineData("Math/Calculator.cs", true)]
@@ -1013,6 +1056,48 @@ public sealed class LspToolTests : IDisposable
                 ["end"] = new JsonObject { ["line"] = 0, ["character"] = 16 },
             },
         };
+
+    private static JsonArray FixesAroundASuppressionGroup()
+    {
+        static JsonObject Fix(string title) =>
+            new()
+            {
+                ["title"] = title,
+                ["kind"] = "quickfix",
+                ["data"] = new JsonObject { ["CodeActionPath"] = new JsonArray(title) },
+            };
+
+        static JsonObject Suppression(string title, params string[] path) =>
+            new()
+            {
+                ["title"] = title,
+                ["data"] = new JsonObject
+                {
+                    ["CodeActionPath"] = new JsonArray([
+                        .. path.Prepend(LspChanges.SuppressionGroup).Select(part => (JsonNode)part),
+                    ]),
+                },
+            };
+
+        return
+        [
+            Fix("Remove it"),
+            new JsonObject
+            {
+                ["title"] = LspChanges.SuppressionGroup,
+                ["kind"] = "quickfix",
+                ["data"] = new JsonObject
+                {
+                    ["NestedCodeActions"] = new JsonArray(
+                        Suppression("in Source", "Suppress X", "in Source"),
+                        Suppression("Error", "Configure X severity", "Error"),
+                        Suppression("Warning", "Configure X severity", "Warning")
+                    ),
+                },
+            },
+            Fix("Add it"),
+        ];
+    }
 
     private LspTool CreateTool(RoslynSession session, BridgeOptions? options = null) =>
         TestHelpers.CreateTool(_root, session, options);

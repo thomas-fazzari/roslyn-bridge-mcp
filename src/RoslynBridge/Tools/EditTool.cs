@@ -46,6 +46,7 @@ internal sealed class EditTool(LspTool lsp)
             string? proposalId = null,
         [Description("Apply the proposal. Without it, the call only returns a preview.")]
             bool apply = false,
+        [Description("Also list suppress or configure code actions.")] bool all = false,
         [Description(ToolDescriptions.Limit)] int limit = LspRequest.DefaultResultLimit,
         CancellationToken cancellationToken = default
     ) =>
@@ -71,6 +72,7 @@ internal sealed class EditTool(LspTool lsp)
                 ActionIndex = actionIndex,
                 ProposalId = proposalId,
                 Apply = apply,
+                All = all,
             },
             cancellationToken
         );

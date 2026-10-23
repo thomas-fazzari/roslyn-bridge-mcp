@@ -3,6 +3,7 @@
 
 using System.Globalization;
 using System.Text.Json.Nodes;
+using RoslynBridge.Changes;
 using RoslynBridge.Lsp;
 using RoslynBridge.Requests;
 using RoslynBridge.Tests.Assertions;
@@ -788,6 +789,34 @@ public sealed partial class RoslynMcpTests
         var diagnostics = await DiagnosticsAsync(workspace);
         diagnostics.Should().NotContain(item => item.Code == "CS0246");
         diagnostics.Should().Contain(item => item.Code == "CS8603");
+    }
+
+    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    public async Task ListsSuppressionsOnlyOnRequestAsync()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var workspace = await RoslynTestWorkspace.CreateAsync(cancellationToken);
+        var request = new LspRequest
+        {
+            Action = LspAction.CodeActions,
+            File = ProblemsFile,
+            Diagnostic = "CS0246",
+        };
+
+        var hidden = Lines(await workspace.CallAsync(request));
+        var all = Lines(await workspace.CallAsync(request with { All = true }));
+
+        var suppressions = all.Where(line =>
+                line.Contains(LspChanges.SuppressionGroup, StringComparison.Ordinal)
+            )
+            .ToArray();
+        suppressions.Should().NotBeEmpty();
+        hidden.Should().NotContain(suppressions);
+        hidden[^1]
+            .Split(' ')[0]
+            .Should()
+            .Be(suppressions.Length.ToString(CultureInfo.InvariantCulture));
+        all.Should().Contain(hidden.Skip(1).SkipLast(1));
     }
 
     [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
