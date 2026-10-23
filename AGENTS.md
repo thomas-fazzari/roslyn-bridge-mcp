@@ -9,7 +9,7 @@ Use the `roslyn` MCP tools for C# code before text search or reading whole files
 
 - Find a symbol with `symbols`, and read its declaration with `navigate` and `source`.
 - List a type with `members`. Find usages with `references`, `callers` or `impact`.
-- Batch independent lookups with `bulk_navigate`.
+- Send independent lookups of known symbols in one `bulk_navigate` call.
 - Read a whole file only to edit it.
 
 ## Validation

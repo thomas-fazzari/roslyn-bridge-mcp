@@ -46,6 +46,7 @@ Add these lines to your project's `AGENTS.md`, `CLAUDE.md` or the equivalent fil
 ## C# code navigation
 
 Use the `roslyn` MCP tools for C# code before text search or reading whole files. If your client defers MCP tools, load them first.
+Send independent lookups of known symbols in one `bulk_navigate` call.
 Read a whole file only to edit it.
 ```
 
