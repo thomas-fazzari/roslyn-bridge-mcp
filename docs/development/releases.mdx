@@ -15,6 +15,8 @@ Set `ROSLYN_BRIDGE_TEST_EXECUTABLE` to the absolute path of the published execut
 
 Push a tag such as `v0.1.0`. The workflow publishes the release and the [NuGet packages](#nuget-packages) after every check passes, in separate jobs. A failure in one job does not stop the other, and you can rerun a failed job on its own. Each release contains one executable per platform, `LICENSE`, `NOTICE`, `THIRD_PARTY_NOTICES.md`, `DOTNET_RUNTIME_NOTICES.txt` and `SHA256SUMS`, which lists the checksum of every other file. The CI scripts live in `eng/tasks/ci`.
 
+`.github/workflows/docs.yml` deploys the documentation site from the tagged commit after every job of the tag's build succeeds, so the site matches the latest release. To publish a documentation fix sooner, run that workflow by hand. A manual run deploys the branch it runs on, which may document unreleased changes.
+
 ## NuGet packages
 
 The bridge is also a .NET tool on nuget.org with the package ID `ThomasFazzari.RoslynBridge`. Package IDs that start with `Roslyn` are reserved on nuget.org, so the ID uses the owner name. The installed command is still `roslyn-bridge-mcp`. The tool package only points to one runtime package per platform. A runtime package is named `ThomasFazzari.RoslynBridge.<rid>`, where `<rid>` is the runtime identifier, such as `osx-arm64`. It holds the native executable, `NOTICE` and the runtime notices, without debug symbols. `src/RoslynBridge/RoslynBridge.csproj` defines the metadata and the platforms.

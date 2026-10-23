@@ -1,14 +1,9 @@
 name: Deploy documentation
 
 on:
-  push:
-    branches: [master]
-    paths:
-      - docs/**
-      - package.json
-      - bun.lock
-      - mise.toml
-      - .github/workflows/docs.yml
+  workflow_run:
+    workflows: [Build and release]
+    types: [completed]
   workflow_dispatch:
 
 permissions:
@@ -20,9 +15,16 @@ concurrency:
 
 jobs:
   build:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      startsWith(github.event.workflow_run.head_branch, 'v'))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
       - uses: jdx/mise-action@v5.1.1
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
