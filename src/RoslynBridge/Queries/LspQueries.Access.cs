@@ -26,7 +26,7 @@ internal sealed partial class LspQueries
         var found = references.FindLocations(paths, skipGenerated: true);
         var highlighted = await HighlightedAsync(
             found.Positions,
-            request.Action is LspAction.Writes ? WriteHighlight : ReadHighlight,
+            request.Action is LspAction.Writes,
             cancellationToken
         );
         if (highlighted.Error is { } error)
@@ -48,10 +48,10 @@ internal sealed partial class LspQueries
     /// <summary>
     /// Asks for the highlights of each workspace file once, at its first reference.
     /// </summary>
-    /// <returns>The positions of the highlights of the given kind, or the first error.</returns>
+    /// <returns>The positions of the reads or of the writes, or the first error.</returns>
     private async Task<Result<HashSet<(string File, SourcePosition Position)>>> HighlightedAsync(
         IReadOnlyList<(string File, SourcePosition Position)> references,
-        int kind,
+        bool writes,
         CancellationToken cancellationToken
     )
     {
@@ -63,7 +63,7 @@ internal sealed partial class LspQueries
         var results = await RunConcurrentlyAsync(
             firsts.Count,
             (index, token) =>
-                HighlightsAsync(firsts[index].File, firsts[index].Position, kind, token),
+                HighlightsAsync(firsts[index].File, firsts[index].Position, writes, token),
             cancellationToken
         );
         foreach (var result in results)
@@ -77,11 +77,14 @@ internal sealed partial class LspQueries
         return results.SelectMany(result => result.Value).ToHashSet();
     }
 
-    /// <returns>The highlights of the given kind in the file, with the file name of each.</returns>
+    /// <returns>
+    /// The reads or the writes in the file, with the file name of each. Roslyn highlights an argument
+    /// passed by reference as a write, so its text decides whether it also reads.
+    /// </returns>
     private async Task<Result<List<(string File, SourcePosition Position)>>> HighlightsAsync(
         string file,
         SourcePosition position,
-        int kind,
+        bool writes,
         CancellationToken cancellationToken
     )
     {
@@ -90,6 +93,17 @@ internal sealed partial class LspQueries
             await PositionParametersAsync(file, position, cancellationToken),
             cancellationToken
         );
-        return highlights.ToHighlightStarts(kind).ConvertAll(start => (file, start));
+        var written = highlights.ToHighlightStarts(WriteHighlight);
+        var lines = SourceLines.TryReadLines(paths.ResultFilePath(file));
+        var starts = writes
+            ? written.Where(start => ByRefAccess.Of(lines, start) is not ByRefUse.Read)
+            : highlights
+                .ToHighlightStarts(ReadHighlight)
+                .Concat(
+                    written.Where(start =>
+                        ByRefAccess.Of(lines, start) is ByRefUse.Read or ByRefUse.ReadWrite
+                    )
+                );
+        return starts.Select(start => (file, start)).ToList();
     }
 }

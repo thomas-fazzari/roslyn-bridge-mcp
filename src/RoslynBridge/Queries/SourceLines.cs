@@ -78,20 +78,29 @@ internal static class SourceLines
 
         if (!files.TryGetValue(file, out var text))
         {
-            try
-            {
-                text = ReadLines(file);
-            }
-            catch (Exception exception)
-                when (exception is IOException or UnauthorizedAccessException)
-            {
-                text = null;
-            }
-
+            text = TryReadLines(file);
             files[file] = text;
         }
 
         return text;
+    }
+
+    /// <returns>The lines of a saved file, or null when it cannot be read.</returns>
+    public static string[]? TryReadLines(string? file)
+    {
+        if (file is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            return ReadLines(file);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
     }
 
     /// <summary>Returns the lines of a saved file, without their line breaks.</summary>
