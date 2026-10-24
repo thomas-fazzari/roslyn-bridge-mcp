@@ -6,7 +6,7 @@ Work on `master` goes through pull requests from short-lived branches. `master` 
 
 ## Branches
 
-Name a branch after the type of its main commit, then a short subject: `fix/by-ref-reads` or `feat/settings-file`. The CI in `.github/workflows/ci.yml` runs on branches that start with a type below, and on every pull request.
+Name a branch after the type of its main commit, then a short subject (e.g. `fix/by-ref-reads`). The CI runs on every pull request, on `master` and on release tags. To check a branch before it is ready, open a draft or manually run the workflow.
 
 Open a pull request when the work is ready. The `ci-ok` check must pass before the merge. Merge with a squash, so each pull request is one commit on `master`. GitHub takes the commit message from the pull request title, so write the title like a commit message.
 
