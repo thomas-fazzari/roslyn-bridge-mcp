@@ -15,6 +15,8 @@ public sealed class Counter
         Fill(out Total);
         var snapshot = Total;
         Step = snapshot;
+        var seen = System.Threading.Volatile.Read(ref Total);
+        System.Threading.Interlocked.Exchange(ref Total, seen);
     }
 
     private static void Bump(ref int value) => value++;

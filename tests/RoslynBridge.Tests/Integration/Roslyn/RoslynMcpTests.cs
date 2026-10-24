@@ -424,8 +424,10 @@ public sealed partial class RoslynMcpTests
             new LspRequest { Action = LspAction.Writes, Symbol = "Counter.Step" }
         );
 
-        totalWrites.Should().Be($"{counterFile} 11:9 12:9 13:9 14:18 15:18\n{readerFile} 7:58");
-        totalReads.Should().Be($"{counterFile} 16:24\n{readerFile} 5:56");
+        totalWrites
+            .Should()
+            .Be($"{counterFile} 11:9 12:9 13:9 14:18 15:18 19:51\n{readerFile} 7:58");
+        totalReads.Should().Be($"{counterFile} 14:18 16:24 18:55 19:51\n{readerFile} 5:56");
         stepReads.Should().Be($"{counterFile} 12:18");
         stepWrites.Should().Be($"{counterFile} 17:9");
 
