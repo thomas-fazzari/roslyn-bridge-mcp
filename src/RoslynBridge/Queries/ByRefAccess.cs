@@ -33,11 +33,6 @@ internal static class ByRefAccess
         var line = lines[position.Line - 1];
         var before = WithoutQualifier(line[..Math.Min(position.Character - 1, line.Length)])
             .TrimEnd();
-        if (EndsWithKeyword(before, "readonly"))
-        {
-            before = before[..^"readonly".Length].TrimEnd();
-        }
-
         if (EndsWithKeyword(before, "out"))
         {
             return ByRefUse.Write;

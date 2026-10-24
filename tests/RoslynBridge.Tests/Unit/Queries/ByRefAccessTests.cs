@@ -13,7 +13,6 @@ public sealed class ByRefAccessTests
     [InlineData("Interlocked.Exchange(ref |_count, 0)", "ReadWrite")]
     [InlineData("Interlocked.Increment(ref this.|_count)", "ReadWrite")]
     [InlineData("Update(ref owner.state.|_count)", "ReadWrite")]
-    [InlineData("Update(ref readonly |_count)", "ReadWrite")]
     [InlineData("int.TryParse(text, out |_count)", "Write")]
     [InlineData("Volatile.Read(ref |_count)", "Read")]
     [InlineData("System.Threading.Volatile.Read(ref this.|_count)", "Read")]
