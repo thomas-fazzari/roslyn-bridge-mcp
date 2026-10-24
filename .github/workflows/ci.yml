@@ -48,7 +48,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7.0.1
-      - uses: jdx/mise-action@v5.1.1
+      - uses: jdx/mise-action@v5.2.2
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
       - run: mise run install
@@ -95,7 +95,7 @@ jobs:
       MISE_WINDOWS_DEFAULT_FILE_SHELL_ARGS: bash
     steps:
       - uses: actions/checkout@v7.0.1
-      - uses: jdx/mise-action@v5.1.1
+      - uses: jdx/mise-action@v5.2.2
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           install_args: dotnet
@@ -162,7 +162,7 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v7.0.1
-      - uses: jdx/mise-action@v5.1.1
+      - uses: jdx/mise-action@v5.2.2
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           install: false
@@ -188,7 +188,7 @@ jobs:
       id-token: write
     steps:
       - uses: actions/checkout@v7.0.1
-      - uses: jdx/mise-action@v5.1.1
+      - uses: jdx/mise-action@v5.2.2
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           install_args: dotnet

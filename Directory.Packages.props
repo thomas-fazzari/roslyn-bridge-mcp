@@ -8,7 +8,7 @@
     <PackageVersion Include="Fastenshtein" Version="1.0.12" />
     <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.13" />
     <PackageVersion Include="Microsoft.Extensions.FileSystemGlobbing" Version="10.0.13" />
-    <PackageVersion Include="ModelContextProtocol" Version="2.2.0" />
+    <PackageVersion Include="ModelContextProtocol" Version="2.3.0" />
     <PackageVersion Include="StreamJsonRpc" Version="2.26.150" />
   </ItemGroup>
 
@@ -20,6 +20,6 @@
 
   <ItemGroup Label="Analyzers">
     <GlobalPackageReference Include="Roslynator.Analyzers" Version="5.0.1" />
-    <GlobalPackageReference Include="Meziantou.Analyzer" Version="3.0.299" />
+    <GlobalPackageReference Include="Meziantou.Analyzer" Version="3.0.316" />
   </ItemGroup>
 </Project>
