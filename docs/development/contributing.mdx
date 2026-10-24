@@ -1,0 +1,40 @@
+---
+title: "Branches and commits"
+---
+
+Work on `master` goes through pull requests from short-lived branches. `master` stays releasable, and a release is a tag on it.
+
+## Branches
+
+Name a branch after the type of its main commit, then a short subject: `fix/by-ref-reads` or `feat/settings-file`. The CI in `.github/workflows/ci.yml` runs on branches that start with a type below, and on every pull request.
+
+Open a pull request when the work is ready. The `ci-ok` check must pass before the merge. Merge with a squash, so each pull request is one commit on `master`. GitHub takes the commit message from the pull request title, so write the title like a commit message.
+
+To patch an older version, create a `release/MAJOR.MINOR` branch from its tag at that time.
+
+## Commit messages
+
+Commits follow [Conventional Commits](https://www.conventionalcommits.org/) with a title only. Put the description in the pull request.
+
+Pick the first type that applies:
+
+| Order | Question                                                      | Type       |
+| ----- | ------------------------------------------------------------- | ---------- |
+| 1     | Does it fix a bug?                                            | `fix`      |
+| 2     | Does it change functionality or the output a client sees?     | `feat`     |
+| 3     | Does it add or change tests?                                  | `test`     |
+| 4     | Does it change code style or formatting?                      | `style`    |
+| 5     | Does it change documentation?                                 | `docs`     |
+| 6     | Does it change the build or the deployment?                   | `build`    |
+| 7     | Does it change infrastructure, DevOps or backups?             | `ops`      |
+| 8     | Is it a maintenance or other non-code task?                   | `chore`    |
+| 9     | Does it restructure code specifically for performance?        | `perf`     |
+| 10    | None of the above, so it restructures code without a new use. | `refactor` |
+
+A tool name, a parameter, a result line, an error code, a command-line option or a release asset name is a public contract. Changing one is a `feat!` or `fix!`.
+
+## Checks
+
+The `commit-msg` Git hook in `lefthook.yml` runs `eng/tasks/commit-msg.pl`, which rejects a first line without a type and any text after it. Merge, revert, `fixup!` and `squash!` messages pass. Run `mise run hooks:install` once to enable it.
+
+The hook cannot see the title of a pull request, so check it yourself before the squash merge.

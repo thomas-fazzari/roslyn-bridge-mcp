@@ -87,7 +87,7 @@ description = "Lints Markdown, checks its formatting and builds the documentatio
 depends = ["docs:build"]
 run = [
   "bunx --bun markdownlint-cli2",
-  'bunx --bun oxfmt --check README.md AGENTS.md "docs/**/*.{mdx,mjs}"',
+  'bunx --bun oxfmt --check README.md AGENTS.md CONTRIBUTING.md "docs/**/*.{mdx,mjs}"',
 ]
 
 [tasks."notices:check"]

@@ -5,6 +5,7 @@ config:
 globs:
   - README.md
   - AGENTS.md
+  - CONTRIBUTING.md
   - "docs/**/*.mdx"
 ignores:
   - "**/node_modules/**"
