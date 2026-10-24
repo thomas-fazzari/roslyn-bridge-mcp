@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Thomas Fazzari
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+using System.Collections.Concurrent;
 using System.Globalization;
 using System.Text.Json.Nodes;
 using ModelContextProtocol.Protocol;
@@ -27,6 +28,7 @@ public sealed class LspToolTests : IDisposable
     private const int Error = (int)DiagnosticSeverity.Error;
     private const int Warning = (int)DiagnosticSeverity.Warning;
     private const int Hint = (int)DiagnosticSeverity.Hint;
+    private const string ReportedCode = "CS0168";
 
     private readonly string _root = Directory.CreateTempSubdirectory("roslyn-lsp-tool-").FullName;
 
@@ -320,6 +322,46 @@ public sealed class LspToolTests : IDisposable
         );
 
         ResponseText(response).Should().StartWith("2 files checked");
+    }
+
+    [Fact]
+    public async Task RepeatedDiagnosticsReuseTheReportThatRoslynKeepsUnchangedAsync()
+    {
+        await WriteFileAsync(_root, "A.cs", "class A {}");
+        var sent = new ConcurrentQueue<string?>();
+        await using var session = CreateSession(
+            _root,
+            FakeDiagnosticServer.WithResultIds(ReportedCode, sent)
+        );
+        using var tool = CreateTool(session);
+        var request = new LspRequest { Action = LspAction.Diagnostics, File = "A.cs" };
+
+        var first = ResponseText(await tool.ExecuteAsync(request, TestCt));
+        var second = ResponseText(await tool.ExecuteAsync(request, TestCt));
+
+        first.Should().Contain(ReportedCode);
+        second.Should().Be(first);
+        sent.Should().Equal(null, FakeDiagnosticServer.ResultId);
+    }
+
+    [Fact]
+    public async Task ReloadForgetsTheResultIdsOfTheStoppedServerAsync()
+    {
+        await WriteFileAsync(_root, "A.cs", "class A {}");
+        var sent = new ConcurrentQueue<string?>();
+        await using var session = CreateSession(
+            _root,
+            FakeDiagnosticServer.WithResultIds(ReportedCode, sent)
+        );
+        using var tool = CreateTool(session);
+        var request = new LspRequest { Action = LspAction.Diagnostics, File = "A.cs" };
+
+        await tool.ExecuteAsync(request, TestCt);
+        await tool.ExecuteAsync(new LspRequest { Action = LspAction.Reload }, TestCt);
+        var afterReload = ResponseText(await tool.ExecuteAsync(request, TestCt));
+
+        afterReload.Should().Contain(ReportedCode);
+        sent.Should().Equal(null, null);
     }
 
     [Fact]

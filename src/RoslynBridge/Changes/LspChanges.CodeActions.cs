@@ -157,7 +157,7 @@ internal sealed partial class LspChanges
         }
 
         var uri = await session.OpenDocumentAsync(request.File, cancellationToken);
-        var report = await queries.FileDiagnosticsAsync(uri, cancellationToken);
+        var report = await session.DiagnosticReportAsync(uri, cancellationToken);
         var diagnostic = (report["items"] as JsonArray ?? [])
             .OfType<JsonObject>()
             .Where(item =>

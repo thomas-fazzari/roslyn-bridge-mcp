@@ -306,7 +306,7 @@ internal sealed partial class LspQueries(
 
         var miscellaneous = await session.WaitForProjectsAsync(batch, cancellationToken);
         var reports = await Task.WhenAll(
-            uris.Select(uri => FileDiagnosticsAsync(uri, cancellationToken))
+            uris.Select(uri => session.DiagnosticReportAsync(uri, cancellationToken))
         );
         return batch.Select(
             (file, index) =>
@@ -395,22 +395,6 @@ internal sealed partial class LspQueries(
                 .OrderByDescending(summary => summary.Count)
                 .ThenBy(summary => summary.Example.Code, StringComparer.Ordinal),
         ];
-
-    public async Task<JsonObject> FileDiagnosticsAsync(
-        string uri,
-        CancellationToken cancellationToken
-    )
-    {
-        var response = await session.RequestAsync(
-            LspMethods.TextDocumentDiagnostic,
-            LspParameters.Document(uri),
-            cancellationToken
-        );
-        return response as JsonObject
-            ?? throw new ToolErrorException(
-                ToolError.InvalidLspData("Roslyn did not return a diagnostic report.")
-            );
-    }
 
     public async Task<Result<JsonObject>> PositionAsync(
         LspRequest request,
