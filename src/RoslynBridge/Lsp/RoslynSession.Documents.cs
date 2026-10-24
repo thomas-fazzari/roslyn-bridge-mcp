@@ -9,7 +9,7 @@ namespace RoslynBridge.Lsp;
 
 internal sealed partial class RoslynSession
 {
-    internal const int MaximumOpenDocuments = 128;
+    internal const int MaximumOpenDocuments = 1000;
     private const int MaximumDocumentCharacters = 1024 * 1024;
     private const int DocumentReadBufferCharacters = 4096;
     private const int InitialDocumentVersion = 1;

@@ -438,6 +438,7 @@ internal sealed partial class RoslynSession(
     {
         rpc?.Dispose();
         ClearProgress();
+        ClearDiagnosticReports();
         if (_messageHandler is not null)
         {
             await _messageHandler.DisposeAsync();

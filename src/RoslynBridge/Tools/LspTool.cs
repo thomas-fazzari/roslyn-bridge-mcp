@@ -29,6 +29,7 @@ internal sealed partial class LspTool(
 ) : IDisposable
 {
     private const int MaximumErrorCharacters = 2_000;
+    private const int MaximumCheckedFiles = 128;
 
     private static readonly FrozenSet<string> _readOnlyMethods = new[]
     {
@@ -168,7 +169,7 @@ internal sealed partial class LspTool(
                 .Distinct(StringComparer.Ordinal)
                 .Where(path => RoslynSession.IsCSharpFile(path) && File.Exists(path)),
         ];
-        if (files.Length is 0 or > RoslynSession.MaximumOpenDocuments)
+        if (files.Length is 0 or > MaximumCheckedFiles)
         {
             return receipt;
         }
