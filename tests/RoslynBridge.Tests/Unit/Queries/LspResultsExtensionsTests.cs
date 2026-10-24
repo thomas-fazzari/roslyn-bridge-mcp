@@ -6,6 +6,8 @@ using System.Text.Json.Nodes;
 using RoslynBridge.Queries;
 using RoslynBridge.Requests;
 using RoslynBridge.Results;
+using RoslynBridge.Tests.Fakes;
+using static RoslynBridge.Tests.Fakes.LspLocationJson;
 
 namespace RoslynBridge.Tests.Unit.Queries;
 
@@ -386,11 +388,7 @@ public sealed class LspResultsExtensionsTests
     }
 
     private static JsonObject Location(string file, int line, int character) =>
-        new()
-        {
-            ["uri"] = new Uri(Path.Combine(_paths.Root, file)).AbsoluteUri,
-            ["range"] = Range(line, character),
-        };
+        LspLocationJson.Location(Path.Combine(_paths.Root, file), line, character);
 
     private static JsonObject IncomingCall(string file, int line) =>
         new()
@@ -404,12 +402,5 @@ public sealed class LspResultsExtensionsTests
                 ["selectionRange"] = Range(line, 4),
             },
             ["fromRanges"] = new JsonArray(Range(line, 8)),
-        };
-
-    private static JsonObject Range(int line, int character) =>
-        new()
-        {
-            ["start"] = new JsonObject { ["line"] = line, ["character"] = character },
-            ["end"] = new JsonObject { ["line"] = line, ["character"] = character + 1 },
         };
 }

@@ -22,11 +22,15 @@ Add a test only when its failure would show that behavior is broken: a bug, a br
 
 Tests live in `tests/RoslynBridge.Tests`, under `Unit` or `Integration`, grouped by subject. Fixtures live under `Fixtures` as `.txt` files, so their deliberate errors do not affect the test build. Hand-written fakes live under `Fakes`. Do not add a mocking library. Replace a dependency with a small fake at a real seam, such as the Roslyn server process.
 
+Put a fake or a payload builder in `Fakes` as soon as a second test file needs it. Name each class after its subject, such as `FakeSymbolServer` for a server that answers from symbol tables, or `LspSymbolJson` for symbol payloads. Do not create a general `TestExtensions` class. A helper that only one file uses stays private in that file.
+
 Unit tests simulate the protocol. Integration tests are explicit and run the bridge against the real Roslyn language server in temporary workspaces copied from the fixtures. Never run them against a real project.
 
 ## Writing tests
 
 Assert error codes, result records and the result lines clients parse. Do not assert the wording of messages, because messages may change. Refer to values clients see, such as error codes and limits, through the constants the code defines. Tests reach them through `internal` access. Assert tool responses with the assertions defined in `tests/RoslynBridge.Tests/Assertions`.
+
+Declare a string or number that a test repeats as a `const`, such as a symbol name, a file path or a result line. Describe a scenario with a small table, as `FakeSymbolServer.With` does for symbols, instead of a `switch` over LSP methods in each test.
 
 Unit tests pass `TestCt` from `TestHelpers` as the test cancellation token. A test with a `Timeout` reads `TestContext.Current.CancellationToken` directly (as the xUnit1069 analyzer rule requires). When a test asserts on a call that throws, declare that call as a local function at the end of the test, after an explicit `return;`, instead of a lambda in a local variable.
 

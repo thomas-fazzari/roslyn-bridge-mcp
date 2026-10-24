@@ -3,6 +3,7 @@
 
 using System.Text.Json.Nodes;
 using RoslynBridge.Symbols;
+using static RoslynBridge.Tests.Fakes.LspSymbolJson;
 
 namespace RoslynBridge.Tests.Unit.Symbols;
 
@@ -12,29 +13,29 @@ public sealed class SymbolResolverTests
 
     // Document symbols in the shape Roslyn returns them
     private static readonly JsonArray _documentSymbols = new(
-        Symbol(
+        DocumentSymbol(
             "Sample.Application",
             3,
             0,
-            Symbol(
+            DocumentSymbol(
                 "Box<T>",
                 5,
                 2,
-                Symbol("Box(T)", 6, 4),
-                Symbol("Value : T", 7, 6),
-                Symbol("Put(int) : void", 6, 8),
-                Symbol("Put(string?) : void", 6, 10),
-                Symbol("Inner", 5, 12, Symbol("Run() : void", 6, 14)),
-                Symbol("operator <(Box<T>, Box<T>) : bool", 25, 16),
-                Symbol("Put(int", 6, 18)
+                DocumentSymbol("Box(T)", 6, 4),
+                DocumentSymbol("Value : T", 7, 6),
+                DocumentSymbol("Put(int) : void", 6, 8),
+                DocumentSymbol("Put(string?) : void", 6, 10),
+                DocumentSymbol("Inner", 5, 12, DocumentSymbol("Run() : void", 6, 14)),
+                DocumentSymbol("operator <(Box<T>, Box<T>) : bool", 25, 16),
+                DocumentSymbol("Put(int", 6, 18)
             ),
-            Symbol("Box", 5, 20, Symbol("Put(int) : void", 6, 22)),
-            Symbol(
+            DocumentSymbol("Box", 5, 20, DocumentSymbol("Put(int) : void", 6, 22)),
+            DocumentSymbol(
                 "Extensions",
                 5,
                 24,
-                Symbol("extension(Box)", 5, 26, Symbol("Count() : int", 6, 28)),
-                Symbol("Run() : void", 6, 30, Symbol("Step(int) : void", 6, 32))
+                DocumentSymbol("extension(Box)", 5, 26, DocumentSymbol("Count() : int", 6, 28)),
+                DocumentSymbol("Run() : void", 6, 30, DocumentSymbol("Step(int) : void", 6, 32))
             )
         )
     );
@@ -117,25 +118,4 @@ public sealed class SymbolResolverTests
 
     private static IEnumerable<SymbolDeclaration> Find(string requested) =>
         SymbolResolver.FindDeclarations([(File, _documentSymbols)], SymbolName.Parse(requested)!);
-
-    private static JsonObject Symbol(string name, int kind, int line, params JsonObject[] children)
-    {
-        var position = new JsonObject { ["line"] = line, ["character"] = 4 };
-        return new JsonObject
-        {
-            ["name"] = name,
-            ["kind"] = kind,
-            ["range"] = new JsonObject
-            {
-                ["start"] = position.DeepClone(),
-                ["end"] = position.DeepClone(),
-            },
-            ["selectionRange"] = new JsonObject
-            {
-                ["start"] = position,
-                ["end"] = position.DeepClone(),
-            },
-            ["children"] = new JsonArray([.. children]),
-        };
-    }
 }

@@ -5,6 +5,7 @@ using System.Collections.Concurrent;
 using System.Text.Json.Nodes;
 using RoslynBridge.Lsp;
 using RoslynBridge.Requests;
+using static RoslynBridge.Tests.Fakes.LspLocationJson;
 using static RoslynBridge.Tests.Unit.TestHelpers;
 
 namespace RoslynBridge.Tests.Unit.Tools;
@@ -182,7 +183,9 @@ public sealed class LspAccessTests : IDisposable
     private JsonArray References() =>
         new([
             .. _referencedFiles.SelectMany(file =>
-                Enumerable.Range(0, file is "A.cs" ? 3 : 4).Select(line => Location(file, line))
+                Enumerable
+                    .Range(0, file is "A.cs" ? 3 : 4)
+                    .Select(line => Location(Path.Combine(_root, file), line))
             ),
         ]);
 
@@ -196,18 +199,9 @@ public sealed class LspAccessTests : IDisposable
             .. _highlights[file]
                 .Select(highlight => new JsonObject
                 {
-                    ["range"] = Range(highlight.Line),
+                    ["range"] = Range(highlight.Line, 0),
                     ["kind"] = highlight.Kind,
                 }),
         ]);
     }
-
-    private JsonObject Location(string file, int line) =>
-        new() { ["uri"] = new Uri(Path.Combine(_root, file)).AbsoluteUri, ["range"] = Range(line) };
-
-    private static JsonObject Range(int line) =>
-        new()
-        {
-            ["start"] = new JsonObject { ["line"] = line, ["character"] = 0 },
-        };
 }
