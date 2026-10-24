@@ -416,8 +416,19 @@ internal static partial class ResultText
     {
         text.Append(members.Type.Kind).Append(' ').Append(members.Type.Name).Append('\n');
         string? file = null;
+        string? baseClass = null;
         foreach (var member in members.Members)
         {
+            if (
+                member.Container is { } container
+                && !string.Equals(container, baseClass, StringComparison.Ordinal)
+            )
+            {
+                baseClass = container;
+                file = null;
+                text.Append("inherited from ").Append(container).Append('\n');
+            }
+
             if (!string.Equals(member.File, file, StringComparison.Ordinal))
             {
                 file = member.File;

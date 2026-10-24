@@ -31,6 +31,7 @@ internal sealed class NavigateTool(LspTool lsp)
         [Description(ToolDescriptions.Line)] int? line = null,
         [Description(ToolDescriptions.Character)] int? character = null,
         [Description(ToolDescriptions.Context)] bool context = false,
+        [Description(ToolDescriptions.Inherited)] bool inherited = false,
         [Description(ToolDescriptions.Limit)] int limit = LspRequest.DefaultResultLimit,
         [Description(ToolDescriptions.Offset)] int offset = 0,
         CancellationToken cancellationToken = default
@@ -46,6 +47,7 @@ internal sealed class NavigateTool(LspTool lsp)
                 Line = line,
                 Character = character,
                 Context = context,
+                Inherited = inherited,
             },
             cancellationToken
         );

@@ -70,9 +70,11 @@ Raw requests and `capabilities` return JSON.
 | `hover`                                                         | Plain text.                                                                                                                                                     |
 | `symbols`                                                       | The symbol lines of the related actions. For a file, they give the declaration end after a dash, as in `5:18-9:2`, and are indented under their container.      |
 | `source`                                                        | The saved text of each declaration, documentation comment included, after a `file:first-last kind name` header. A partial type returns every part.              |
-| `members`                                                       | The type, then the members it declares grouped by file, with names relative to the type.                                                                        |
+| `members`                                                       | The type, then the members it declares grouped by file, with names relative to the type. With `inherited`, the members of its base classes follow.              |
 | `impact`                                                        | Sections headed by `## action`. A member gets its references, callers and implementations. A type gets its references and subtypes.                             |
 | `bulk_navigate`                                                 | One section per query in request order, headed `## number action target`.                                                                                       |
+
+With `inherited`, `members` follows the base classes in the workspace, nearest first, each under an `inherited from` line. A base class lists every member except private ones, constructors and finalizers. A `private protected` member counts as private. A member that a nearer type redeclares, such as an override, appears once. Base types outside the workspace, such as `System.Object`, are not listed. `inherited` with another action returns `invalid_request`.
 
 Locations:
 
@@ -126,7 +128,7 @@ truncated: 300 locations in total, next offset: 50. Raise limit or narrow the qu
 Send the next offset as `offset` to read the next page. `offset` skips that many results and never changes the totals.
 `navigate`, `bulk_navigate`, `symbols` and `diagnostics` accept it, and a negative offset returns `invalid_request`.
 An offset past the last result returns a line that gives the total.
-Pages do not overlap because results keep a fixed order. Locations, related symbols and members are in file and position order.
+Pages do not overlap because results keep a fixed order. Locations, related symbols and members are in file and position order, with inherited members after the type's own.
 Workspace symbols are ordered by how well the name matches, then by file and position. Diagnostics are in file, line and character order.
 
 `lsp` with `action=status` returns `running`, `loading` and `workspace` lines, and a `server` line when the `--server` option is set.

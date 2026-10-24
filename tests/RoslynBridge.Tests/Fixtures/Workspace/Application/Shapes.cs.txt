@@ -1,0 +1,36 @@
+namespace Sample.Application;
+
+public abstract class Shape
+{
+    private int _changes;
+
+    protected Shape(string name) => Name = name;
+
+    ~Shape() { }
+
+    public string Name { get; }
+
+    public virtual double Area() => 0;
+
+    protected void Touch() => _changes++;
+}
+
+public class Polygon : Shape
+{
+    public Polygon(string name, int sides)
+        : base(name) => Sides = sides;
+
+    public int Sides { get; }
+
+    public override double Area() => Sides;
+}
+
+public sealed class Square : Polygon
+{
+    public Square(double side)
+        : base("square", 4) => Side = side;
+
+    public double Side { get; }
+
+    public override double Area() => Side * Side;
+}
