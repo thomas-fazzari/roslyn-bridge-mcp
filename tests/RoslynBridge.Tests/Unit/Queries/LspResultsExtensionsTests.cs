@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Thomas Fazzari
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+using System.Globalization;
 using System.Text.Json.Nodes;
 using RoslynBridge.Queries;
 using RoslynBridge.Requests;
@@ -396,7 +397,7 @@ public sealed class LspResultsExtensionsTests
         {
             ["from"] = new JsonObject
             {
-                ["name"] = $"Caller{line}",
+                ["name"] = string.Create(CultureInfo.InvariantCulture, $"Caller{line}"),
                 ["kind"] = 6,
                 ["uri"] = Location(file, 0, 0)["uri"]!.DeepClone(),
                 ["range"] = Range(line, 4),

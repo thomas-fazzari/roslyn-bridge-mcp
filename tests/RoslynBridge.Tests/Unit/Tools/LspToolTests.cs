@@ -557,7 +557,7 @@ public sealed class LspToolTests : IDisposable
                         othersAnswered.SetResult();
                     }
 
-                    return Found($"Found{line}.cs");
+                    return Found(string.Create(CultureInfo.InvariantCulture, $"Found{line}.cs"));
                 }
             )
         );

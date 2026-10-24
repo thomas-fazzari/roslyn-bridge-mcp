@@ -179,13 +179,26 @@ internal sealed class RoslynTestWorkspace : IAsyncDisposable
     {
         var (tool, parameters) = request.Action switch
         {
-            LspAction.Diagnostics => (DiagnosticsTool.Name, ["file", "severity", "limit"]),
-            LspAction.Symbols => (SymbolsTool.Name, ["file", "query", "limit"]),
+            LspAction.Diagnostics => (
+                DiagnosticsTool.Name,
+                ["file", "severity", "limit", "offset"]
+            ),
+            LspAction.Symbols => (SymbolsTool.Name, ["file", "query", "limit", "offset"]),
             _ when request.Action.IsNavigation => (
                 NavigateTool.Name,
-                new[] { "action", "symbol", "file", "line", "character", "context", "limit" }
+                new[]
+                {
+                    "action",
+                    "symbol",
+                    "file",
+                    "line",
+                    "character",
+                    "context",
+                    "limit",
+                    "offset",
+                }
             ),
-            LspAction.Bulk => (BulkNavigateTool.Name, ["queries", "context", "limit"]),
+            LspAction.Bulk => (BulkNavigateTool.Name, ["queries", "context", "limit", "offset"]),
             _ when request.Action.IsChange => (
                 EditTool.Name,
                 [
@@ -234,6 +247,7 @@ internal sealed class RoslynTestWorkspace : IAsyncDisposable
             ["all"] = request.All ? true : null,
             ["context"] = request.Context ? true : null,
             ["limit"] = request.Limit,
+            ["offset"] = request.Offset,
             ["queries"] = request.Queries.Count > 0 ? QueryArguments(request.Queries) : null,
         };
 

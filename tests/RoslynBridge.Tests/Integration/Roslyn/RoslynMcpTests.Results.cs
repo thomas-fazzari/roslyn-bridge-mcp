@@ -27,13 +27,13 @@ public sealed partial class RoslynMcpTests
     /// </summary>
     private static async Task StartRoslynAsync(RoslynTestWorkspace workspace) =>
         await workspace.CallAsync(
-            new LspRequest { Action = LspAction.Diagnostics, File = ConsumerFile }
+            new LspRequest { Action = LspAction.Diagnostics, File = ConsumerTestFile }
         );
 
     private static async Task<Diagnostic[]> DiagnosticsAsync(RoslynTestWorkspace workspace) =>
         Diagnostics(
             await workspace.CallAsync(
-                new LspRequest { Action = LspAction.Diagnostics, File = ProblemsFile }
+                new LspRequest { Action = LspAction.Diagnostics, File = ProblemsTestFile }
             )
         );
 
@@ -64,6 +64,31 @@ public sealed partial class RoslynMcpTests
 
     private static string[] Candidates(CallToolResult response) =>
         [.. Lines(ResponseText(response)).Skip(1)];
+
+    // Each position of a location line, as the file followed by that position
+    private static string[] ReferenceLocations(string text) =>
+        [
+            .. Lines(text)
+                .Where(line => !line.StartsWith("truncated:", StringComparison.Ordinal))
+                .Select(line => line.Split(' '))
+                .SelectMany(parts => parts.Skip(1).Select(position => $"{parts[0]} {position}")),
+        ];
+
+    // The offset after a truncated page, or -1 on the last page
+    private static int NextOffset(string[] page)
+    {
+        const string marker = "next offset: ";
+        var line = page.SingleOrDefault(line =>
+            line.StartsWith("truncated:", StringComparison.Ordinal)
+        );
+        if (line is null)
+        {
+            return -1;
+        }
+
+        var start = line.IndexOf(marker, StringComparison.Ordinal) + marker.Length;
+        return int.Parse(line[start..line.IndexOf('.', start)], CultureInfo.InvariantCulture);
+    }
 
     private static string[] PreviewFiles(string preview) =>
         [
