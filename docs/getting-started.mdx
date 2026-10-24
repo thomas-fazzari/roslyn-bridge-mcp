@@ -104,6 +104,9 @@ In Claude Code, set the `MCP_TOOL_TIMEOUT` environment variable in milliseconds,
 | `--dotnet-root`     | The .NET install found as described below                     |
 | `--startup-timeout` | 120 seconds                                                   |
 | `--request-timeout` | 60 seconds                                                    |
+| `--exclude`         | None. Repeat it to add folders to the built-in list           |
+
+A project can also set these in [`.roslyn-bridge.json`](settings.mdx) (the argument wins).
 
 Timeout arguments accept 1 to 600 seconds. When you raise these limits, keep the client's tool timeout above the sum of the startup and request timeouts.
 

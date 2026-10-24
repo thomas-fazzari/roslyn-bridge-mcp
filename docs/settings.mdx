@@ -1,0 +1,54 @@
+---
+title: "Settings"
+---
+
+A project can keep its bridge settings in a file at the workspace root. The file is read at startup and again by `lsp` with `action=reload`. It is meant to be committed, so every client and every teammate gets the same behavior.
+
+Put in the file what is true for the project. Put in arguments what depends on the machine. The file cannot set `--workspace`, `--server` or `--dotnet-root`, because a cloned repository must not choose which program runs.
+
+## File
+
+The file is `.roslyn-bridge.json`. The bridge looks only in the workspace root. It accepts comments and trailing commas.
+
+```json
+{
+  "exclude": ["samples", "vendor"],
+  "startupTimeout": 300,
+  "requestTimeout": 90,
+  "solution": "src/App.slnx",
+  "diagnostics": { "severity": "information" }
+}
+```
+
+| Key                    | Value                                       | Argument            | Default                      |
+| ---------------------- | ------------------------------------------- | ------------------- | ---------------------------- |
+| `exclude`              | Folder names or workspace-relative paths    | `--exclude`         | `[]`, only the built-in list |
+| `startupTimeout`       | Seconds, 1 to 600                           | `--startup-timeout` | `120`                        |
+| `requestTimeout`       | Seconds, 1 to 600                           | `--request-timeout` | `60`                         |
+| `solution`             | Path of a `.sln`, `.slnx` or `.slnf` file   | None                | Not set, Roslyn finds it     |
+| `projects`             | Paths of `.csproj` files                    | None                | Not set, Roslyn finds them   |
+| `diagnostics.severity` | `error`, `warning`, `information` or `hint` | None                | `"warning"`                  |
+
+## Precedence
+
+A setting comes from the first source that gives it, in this order: an argument -> this file -> the default.
+
+`exclude` is the exception. The folders of the file and of every `--exclude` argument add to the built-in list.
+
+A `severity` in a `diagnostics` call always wins.
+
+## Choosing what Roslyn loads
+
+Without `solution` and `projects`, Roslyn finds what to load itself, which loads every solution and project at the workspace root.
+
+`solution` loads only that solution. `projects` loads only those projects. A file that sets both is invalid. Paths are relative to the workspace root and must stay inside it.
+
+## Invalid settings
+
+A fault in the file never stops the bridge. It ignores the faulty setting and keeps the rest. A bad `solution` or `projects` falls back to Roslyn's own choice.
+
+Faults are an unreadable file, an unknown key, a value out of range and a path that does not exist. Each one adds a `settings warning` line to `lsp` with `action=status`. A valid file, or no file, adds nothing.
+
+```text
+settings warning: solution src/Missing.slnx does not exist
+```
