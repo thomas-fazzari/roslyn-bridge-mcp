@@ -24,6 +24,11 @@ internal sealed partial class LspQueries(
         CancellationToken cancellationToken
     )
     {
+        if (request.Inherited && request.Action is not LspAction.Members)
+        {
+            return ToolError.InvalidRequest("inherited only applies to members.");
+        }
+
         if (request.Action is LspAction.Source)
         {
             return (await SourceAsync(request, cancellationToken)).AsToolResult();

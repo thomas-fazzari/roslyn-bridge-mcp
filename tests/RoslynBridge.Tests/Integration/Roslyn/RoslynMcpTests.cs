@@ -223,7 +223,7 @@ public sealed partial class RoslynMcpTests
         var limited = await workspace.CallAsync(request with { Limit = 1 });
         var fullSummary = Summary(full);
 
-        fullSummary.FilesChecked.Should().Be(6);
+        fullSummary.FilesChecked.Should().Be(7);
         full.Should().NotContain("truncated:");
         fullSummary.FilesWithDiagnostics.Should().Be(Lines(full).Count(IsFileLine));
         Summary(limited).Should().Be(fullSummary);
@@ -386,6 +386,56 @@ public sealed partial class RoslynMcpTests
         Lines(enclosing)[0]
             .Should()
             .StartWith($"{ConsumerTestFile}:7-7 method Sample.Application.Consumer.Run(");
+    }
+
+    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    public async Task ListsWhatBaseClassesPassOnAfterTheOwnMembersAsync()
+    {
+        const string shapesFile = "Application/Shapes.cs";
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var workspace = await RoslynTestWorkspace.CreateAsync(cancellationToken);
+
+        var request = new LspRequest
+        {
+            Action = LspAction.Members,
+            Symbol = "Square",
+            Inherited = true,
+        };
+
+        var members = await workspace.CallAsync(request);
+        var page = await workspace.CallAsync(request with { Offset = 3, Limit = 2 });
+
+        members
+            .Should()
+            .Be(
+                $"""
+                class Sample.Application.Square
+                {shapesFile}
+                  30:12 constructor Square(double)
+                  33:19 property Side : double
+                  35:28 method Area() : double
+                inherited from Sample.Application.Polygon
+                {shapesFile}
+                  23:16 property Sides : int
+                inherited from Sample.Application.Shape
+                {shapesFile}
+                  11:19 property Name : string
+                  15:20 method Touch() : void
+                """
+            );
+        page.Should()
+            .Be(
+                $"""
+                class Sample.Application.Square
+                inherited from Sample.Application.Polygon
+                {shapesFile}
+                  23:16 property Sides : int
+                inherited from Sample.Application.Shape
+                {shapesFile}
+                  11:19 property Name : string
+                truncated: 6 members in total, next offset: 5. Raise limit or narrow the query.
+                """
+            );
     }
 
     [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]

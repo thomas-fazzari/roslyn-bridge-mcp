@@ -47,6 +47,7 @@ internal sealed class BulkNavigateTool(LspTool lsp)
                         File = query.File,
                         Line = query.Line,
                         Character = query.Character,
+                        Inherited = query.Inherited,
                     }),
                 ],
             },
@@ -66,4 +67,7 @@ internal sealed record BulkQuery
     public int? Line { get; init; }
 
     public int? Character { get; init; }
+
+    [Description(ToolDescriptions.Inherited)]
+    public bool Inherited { get; init; }
 }

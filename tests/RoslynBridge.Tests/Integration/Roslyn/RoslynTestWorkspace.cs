@@ -201,6 +201,7 @@ internal sealed class RoslynTestWorkspace : IAsyncDisposable
                     "line",
                     "character",
                     "context",
+                    "inherited",
                     "limit",
                     "offset",
                 }
@@ -253,6 +254,7 @@ internal sealed class RoslynTestWorkspace : IAsyncDisposable
             ["apply"] = request.Apply ? true : null,
             ["all"] = request.All ? true : null,
             ["context"] = request.Context ? true : null,
+            ["inherited"] = request.Inherited ? true : null,
             ["limit"] = request.Limit,
             ["offset"] = request.Offset,
             ["queries"] = request.Queries.Count > 0 ? QueryArguments(request.Queries) : null,
@@ -268,7 +270,7 @@ internal sealed class RoslynTestWorkspace : IAsyncDisposable
     ) =>
         [
             .. queries.Select(query =>
-                Arguments(query, ["action", "symbol", "file", "line", "character"])
+                Arguments(query, ["action", "symbol", "file", "line", "character", "inherited"])
             ),
         ];
 

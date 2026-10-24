@@ -210,6 +210,34 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
     public async Task<IReadOnlyList<SymbolDeclaration>> MembersAsync(
         IReadOnlyList<SymbolDeclaration> parts,
         CancellationToken cancellationToken
+    ) =>
+        [
+            .. (await DeclaredMembersAsync(parts, cancellationToken)).Select(declared =>
+                declared.Declaration
+            ),
+        ];
+
+    /// <returns>
+    /// The members of the type that a derived class inherits, in file and line order:
+    /// every member except private ones, constructors and finalizers.
+    /// </returns>
+    public async Task<IReadOnlyList<SymbolDeclaration>> InheritableMembersAsync(
+        IReadOnlyList<SymbolDeclaration> parts,
+        CancellationToken cancellationToken
+    ) =>
+        [
+            .. (await DeclaredMembersAsync(parts, cancellationToken))
+                .Where(declared =>
+                    !declared.IsPrivate
+                    && !declared.IsConstructor
+                    && !declared.Declaration.Signature.StartsWith('~')
+                )
+                .Select(declared => declared.Declaration),
+        ];
+
+    private async Task<IEnumerable<DeclaredSymbol>> DeclaredMembersAsync(
+        IReadOnlyList<SymbolDeclaration> parts,
+        CancellationToken cancellationToken
     )
     {
         var type = SymbolName.Parse(parts[0].Name)!;
@@ -220,25 +248,21 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
                 .Order(StringComparer.Ordinal),
             cancellationToken
         );
-        return
-        [
-            .. documents
-                .SelectMany(document =>
-                    Declarations(
-                        document.Symbols,
-                        document.File,
-                        container: null,
-                        containerDisplay: null
-                    )
+        return documents
+            .SelectMany(document =>
+                Declarations(
+                    document.Symbols,
+                    document.File,
+                    container: null,
+                    containerDisplay: null
                 )
-                .Where(declared =>
-                    declared.Name.Segments.Length == type.Segments.Length + 1
-                    && declared
-                        .Name.Segments[..type.Segments.Length]
-                        .SequenceEqual(type.Segments, StringComparer.Ordinal)
-                )
-                .Select(declared => declared.Declaration),
-        ];
+            )
+            .Where(declared =>
+                declared.Name.Segments.Length == type.Segments.Length + 1
+                && declared
+                    .Name.Segments[..type.Segments.Length]
+                    .SequenceEqual(type.Segments, StringComparer.Ordinal)
+            );
     }
 
     /// <summary>
@@ -346,6 +370,7 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
                 yield return new DeclaredSymbol(
                     name,
                     name.IsCtor,
+                    RoslynGlyphs.IsPrivate(symbol["glyph"]?.GetValue<int>()),
                     new SymbolDeclaration(
                         display,
                         rawName.Trim(),
@@ -764,6 +789,7 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
     private readonly record struct DeclaredSymbol(
         SymbolName Name,
         bool IsConstructor,
+        bool IsPrivate,
         SymbolDeclaration Declaration
     );
 }

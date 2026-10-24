@@ -14,7 +14,7 @@ internal static class LspSymbolKinds
     internal const int Namespace = 3;
     internal const int Method = 6;
     internal const int Constructor = 9;
-    private const int Class = 5;
+    internal const int Class = 5;
     private const int Enum = 10;
     private const int Interface = 11;
     private const int Function = 12;

@@ -173,6 +173,7 @@ subtypes - Find the types that derive from or implement a type.
 hover - Read type information and documentation.
 source - Read the declaration's saved text with its documentation comment.
 members - List the members a type declares, across its partial declarations.
+  Add inherited: true to also list what its base classes in the workspace pass on.
 impact - In one call, gather the references, callers and implementations of a
   member, or the references and subtypes of a type.
 
@@ -238,7 +239,8 @@ bulk_navigate and symbols accept it, and bulk_navigate applies it to every
 query. A negative offset is an invalid_request error. An offset past the last
 result returns "offset past the end:" with the total.
 Results keep a fixed order, so pages do not overlap. Locations, related symbols
-and members are in file and position order. Workspace symbols are ordered by how
+and members are in file and position order, inherited members after the
+type's own. Workspace symbols are ordered by how
 well the name matches, then by file and position.
 
 CONTEXT
@@ -262,6 +264,14 @@ members returns the type, then its members grouped by file, relative to the type
 class MyApp.Calculator
 src/Calculator.cs
   12:16 method Add(int, int) : int
+With inherited: true, each base class in the workspace follows, nearest first:
+inherited from MyApp.CalculatorBase
+src/CalculatorBase.cs
+  8:19 property Name : string
+A base class lists every member except private ones, constructors and
+finalizers. A private protected member counts as private. An overridden member
+appears once. Base types outside the
+workspace, such as System.Object, are not listed.
 Prefix a member with the type name to send it back, as in MyApp.Calculator.Add(int, int).
 
 impact resolves the symbol once and returns one section per navigation, each
