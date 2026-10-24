@@ -924,7 +924,7 @@ public sealed class LspToolTests : IDisposable
     }
 
     [Fact]
-    public async Task QualifiedNameWithAKnownContainerListsItsMembersFirstAsync()
+    public async Task QualifiedNameWithAKnownContainerListsOnlyItsMembersAsync()
     {
         var calculator = await WriteFileAsync(_root, "Calculator.cs", "class Calculator {}\n");
         var other = await WriteFileAsync(_root, "Other.cs", "class Other {}\n");
@@ -974,9 +974,100 @@ public sealed class LspToolTests : IDisposable
         );
 
         response.Should().BeError(ErrorCodes.SymbolNotFound);
-        CandidateNames(response)
+        ResponseText(response)
             .Should()
-            .Equal("Calculator.MissingTotalValue()", "Other.MissingA()");
+            .Contain("'Calculator' has no member 'Missing'")
+            .And.NotContain("Other.MissingA()");
+        CandidateNames(response).Should().Equal("Calculator.MissingTotalValue()");
+    }
+
+    [Fact]
+    public async Task QualifiedNameWithAKnownContainerAndNoSimilarMemberPointsToMembersAsync()
+    {
+        var calculator = await WriteFileAsync(_root, "Calculator.cs", "class Calculator {}\n");
+        await using var session = CreateSession(
+            _root,
+            FakeServer(server =>
+                server.Handle = (method, parameters) =>
+                    Task.FromResult<JsonNode?>(
+                        method switch
+                        {
+                            LspMethods.WorkspaceSymbol => QueryOf(parameters) switch
+                            {
+                                "Calculator" => new JsonArray(
+                                    WorkspaceSymbol("Calculator", calculator)
+                                ),
+                                _ => new JsonArray(),
+                            },
+                            LspMethods.TextDocumentDocumentSymbol => new JsonArray(
+                                DocumentSymbol("Calculator", DocumentMethod("Add()"))
+                            ),
+                            _ => null,
+                        }
+                    )
+            )
+        );
+        using var tool = CreateTool(session);
+
+        var response = await tool.ExecuteAsync(
+            new LspRequest { Action = LspAction.References, Symbol = "Calculator.Missing" },
+            TestCt
+        );
+
+        response.Should().BeError(ErrorCodes.SymbolNotFound);
+        ResponseText(response)
+            .Should()
+            .Be(
+                "error symbol_not_found: No declaration matches 'Calculator.Missing' because 'Calculator' has no member 'Missing'. Use members to list its members."
+            );
+    }
+
+    [Fact]
+    public async Task SimilarTypesDeclaredInSeveralFilesAreNamedOnceAsync()
+    {
+        var first = await WriteFileAsync(_root, "Nopes.One.cs", "partial class Nopes {}\n");
+        var second = await WriteFileAsync(_root, "Nopes.Two.cs", "partial class Nopes {}\n");
+        await using var session = CreateSession(
+            _root,
+            FakeServer(server =>
+                server.Handle = (method, parameters) =>
+                    Task.FromResult<JsonNode?>(
+                        method switch
+                        {
+                            LspMethods.WorkspaceSymbol => QueryOf(parameters) switch
+                            {
+                                "Missing" => new JsonArray(
+                                    WorkspaceSymbol(
+                                        "MissingFile",
+                                        first,
+                                        LspSymbolKinds.Method,
+                                        MethodLine,
+                                        MethodCharacter
+                                    )
+                                ),
+                                "Nope" => new JsonArray(
+                                    WorkspaceSymbol("Nopes", first),
+                                    WorkspaceSymbol("Nopes", second)
+                                ),
+                                _ => new JsonArray(),
+                            },
+                            LspMethods.TextDocumentDocumentSymbol => new JsonArray(
+                                DocumentSymbol("Nopes", DocumentMethod("MissingFile()"))
+                            ),
+                            _ => null,
+                        }
+                    )
+            )
+        );
+        using var tool = CreateTool(session);
+
+        var response = await tool.ExecuteAsync(
+            new LspRequest { Action = LspAction.References, Symbol = "Nope.Missing" },
+            TestCt
+        );
+
+        response.Should().BeError(ErrorCodes.SymbolNotFound);
+        ResponseText(response).Should().Contain("Similar types: Nopes.");
     }
 
     [Fact]

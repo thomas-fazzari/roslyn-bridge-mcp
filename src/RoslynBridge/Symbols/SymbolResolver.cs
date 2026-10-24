@@ -495,27 +495,42 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
     {
         matches ??= await WorkspaceMatchesAsync(name, cancellationToken);
         var container = await ContainerAsync(requested, name, matches, cancellationToken);
+        var typeExists = container is { SimilarTypes: null };
         var suggestions = await SuggestionsAsync(
             name,
             container?.Members ?? [],
-            matches,
+            typeExists ? [] : matches,
             cancellationToken
         );
-        if (
-            container is { SimilarTypes: { } similar }
-            && suggestions.Count > 0
-            && !suggestions.Exists(suggestion => IsInside(suggestion, container.Name))
-        )
+        if (container is not null)
         {
             var display = string.Join('.', container.Name.Segments.Select(SymbolName.BaseName));
-            var types =
-                similar.Count == 0
-                    ? string.Empty
-                    : $" Similar types: {string.Join(", ", similar.Select(type => type.Name))}.";
-            return new ToolError(
-                ErrorCodes.SymbolNotFound,
-                $"No declaration matches '{text}' because no type matches '{display}'.{types} Use symbols to search by name."
-            );
+            if (typeExists)
+            {
+                return new ToolError(
+                    ErrorCodes.SymbolNotFound,
+                    suggestions.Count == 0
+                        ? $"No declaration matches '{text}' because '{display}' has no member '{name}'. Use members to list its members."
+                        : $"No declaration matches '{text}' because '{display}' has no member '{name}'. Send one candidate symbol instead.",
+                    suggestions
+                );
+            }
+
+            if (
+                container.SimilarTypes is { } similar
+                && suggestions.Count > 0
+                && !suggestions.Exists(suggestion => IsInside(suggestion, container.Name))
+            )
+            {
+                var types =
+                    similar.Count == 0
+                        ? string.Empty
+                        : $" Similar types: {string.Join(", ", similar.Select(type => type.Name).Distinct(StringComparer.Ordinal))}.";
+                return new ToolError(
+                    ErrorCodes.SymbolNotFound,
+                    $"No declaration matches '{text}' because no type matches '{display}'.{types} Use symbols to search by name."
+                );
+            }
         }
 
         return new ToolError(
