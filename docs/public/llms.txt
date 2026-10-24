@@ -1,0 +1,457 @@
+ROSLYN BRIDGE MCP: AGENT REFERENCE
+==================================
+
+MCP server: roslyn
+MCP tools: diagnostics, navigate, bulk_navigate, symbols (read-only), edit, lsp
+Purpose: C# compiler diagnostics, symbol navigation and semantic edits.
+Workspace: the agent session's working directory unless configured otherwise.
+Source: saved files on disk. Unsaved editor buffers are not available.
+
+CALL FORMAT
+-----------
+Each tool takes flat arguments. Examples in this file name the tool first:
+diagnostics {"file":"src/Calculator.cs"}
+
+An unknown or missing argument returns invalid_request. For an unknown
+argument, the message lists the valid names. An array argument may also be
+sent as a JSON string.
+
+Paths are workspace-relative. When no file has the given path, a file name or
+a path suffix of whole segments, such as Calculator.cs or Math/Calculator.cs,
+also works if it names exactly one workspace file. The response then starts
+with a "resolved file: PATH" line. Several matches return ambiguous_file with
+up to 20 paths. This applies to file in navigate, bulk_navigate, symbols and
+edit, and to diagnostics without glob characters, but not to newName.
+Inputs and results use one-based lines and one-based UTF-16 characters, so
+returned positions can be reused as inputs. Raw LSP requests keep zero-based
+coordinates.
+
+Results are compact text lines. Failed calls start with "error CODE: message"
+and set isError. Raw LSP results and capabilities are JSON.
+An error, incomplete report or truncated result does not establish success.
+
+CONTENTS
+--------
+DIAGNOSTICS - File and glob scans, result fields, limits and verification.
+SYMBOL NAVIGATION - Definitions, references, call and type hierarchies, hover, symbols, bulk navigation.
+SEMANTIC EDITS - Rename and code action preview/apply sequences, stale proposals.
+SESSION AND RAW REQUESTS - Status, capabilities, reload and raw requests.
+
+SETUP
+-----
+If roslyn is absent from the available MCP tools, follow the installation guide:
+https://thomas-fazzari.github.io/roslyn-bridge-mcp/getting-started/
+This reference describes the tool API.
+
+DIAGNOSTICS
+===========
+
+Read errors, warnings and analyzer suggestions from saved C# files.
+Start with the files affected by the task. To check that the MCP works,
+request diagnostics for one known C# file.
+
+One file:
+diagnostics {"file":"src/Calculator.cs"}
+
+Matching files in one project:
+diagnostics {"file":"src/Core/**/*.cs","limit":200}
+
+All C# files, only for a requested workspace audit:
+diagnostics {}
+
+Use a specific path or narrow glob. Braces check several files in one call:
+diagnostics {"file":"src/{Calculator,Program}.cs"}
+Omitting file, using "*" or "**/*.cs" selects all C# files. Split large audits
+by project or directory.
+
+severity sets the lowest reported severity. The default, warning, reports
+errors and warnings. Use information or hint to include analyzer suggestions:
+diagnostics {"file":"src/Calculator.cs","severity":"hint"}
+
+Only some codes. Codes match without regard to case, and ids applies before
+severity:
+diagnostics {"file":"src/Calculator.cs","ids":["CS0246","IDE0005"]}
+
+One line per code, for a large audit:
+diagnostics {"file":"src/Core/**/*.cs","summary":true}
+
+RESULT
+------
+Results are text lines. Each file with diagnostics is followed by one
+indented line per diagnostic:
+src/Calculator.cs
+  12:9 error CS0246 The type or namespace name 'Foo' could not be found
+
+12:9 is the one-based line and character of the start. Pass them unchanged
+to the edit tool's code_actions, or pass the code as its diagnostic.
+severity is error, warning, information or hint. Clean files are not listed.
+
+A totals line follows the files:
+4 files checked, 3 diagnostics in 2 files, 5 below the severity
+"below the severity" counts diagnostics left out by the severity filter.
+A clean scan reads: 1 file checked, no diagnostics
+
+With ids, the report lists and counts only matching diagnostics, and the
+totals line ends with "filtered by ids". A filtered scan with no match reads:
+1 file checked, no diagnostics, filtered by ids
+That is not a clean file. Other codes may remain.
+
+With summary, each code gets one line instead of one line per diagnostic, sorted
+by count and then by code:
+CS0246 x12 error src/Calculator.cs:12:9 The type or namespace name 'Foo' could not be found
+x12 is the count. The severity, an example location and its message follow. The
+totals line still counts diagnostics.
+
+A line starting with "truncated:" means the limit omitted diagnostics.
+A line starting with "incomplete:" lists files Roslyn has not attached to a
+project. These files get no semantic diagnostics. A file outside every project
+stays listed. Check the project file includes it.
+
+LIMITS AND VERIFICATION
+-----------------------
+limit defaults to 50 and accepts 1 through 250 across the whole response.
+It caps returned items, not the files analyzed or the analysis time. With
+summary, it caps the code lines.
+A truncated result gives the next offset. Send it as offset to skip that many
+diagnostics, or code lines with summary. Diagnostics are in file, line and
+character order, so pages do not overlap. offset never changes the totals.
+A scan accepts at most 1000 files. Narrow the glob if it exceeds this limit.
+When the result is truncated, split the selection into narrower requests.
+Report the checked scope. A failed, incomplete or truncated response cannot
+establish that the workspace is clean.
+After writing files yourself, rerun diagnostics on them. An edit applied
+through the edit tool already reports the diagnostics of its changed files.
+A clean diagnostic report does not replace tests or validate runtime behavior.
+
+After a timeout, narrow the selection. If a single-file retry also times out,
+report the failure and stop retrying that request.
+Attribute the cause only when logs support it.
+
+SYMBOL NAVIGATION
+=================
+
+Name the symbol, or select a position inside it.
+
+By name:
+navigate {"action":"references","symbol":"Calculator.Add"}
+
+symbol matches the end of the fully qualified name: Add, Calculator.Add or
+MyApp.Math.Calculator.Add. A parameter list selects an overload: Calculator.Add(int, int).
+Generic arguments are optional. When Box and Box<T> both exist, Box.Put names
+the non-generic one, and Box<T>.Put the generic one. A parameter type also
+matches its nullable form: Add(string) selects Add(string?).
+A constructor needs its parameter list: Calculator(ILogger).
+Partial declarations in one project count as one symbol. Same-named types in
+different projects are separate symbols.
+
+If the name matches several symbols, the error ambiguous_symbol lists up to 20
+candidates. Send any candidate symbol back unchanged. When candidates share
+a name, send the symbol with the candidate's file. symbol_not_found means no
+declaration matched. When symbols with a similar name exist, it lists up to 10
+as candidates, one per line. Send one back unchanged. Without candidates, use
+the symbols tool to search by partial name.
+When no symbol has the member's name and no type matches the container of a
+qualified name, as in Nope.Missing, the error says so and names up to 10 types
+with a similar name. When the container exists, as in Calculator.Missing, the
+error says that the type has no such member and lists its members with a
+similar name. Without any, use members to list the type.
+
+By position (file is workspace-relative, line and character are one-based,
+character counts UTF-16 code units):
+navigate {"action":"definition","file":"src/Calculator.cs","line":12,"character":9}
+
+Replace action with:
+type_definition - Find the symbol's type definition.
+implementation - Find implementations of an interface or abstract member.
+references - Find the references to a symbol. Use definition for its declaration.
+reads - Find the references that read a field, property, local, parameter or event.
+writes - Find the references that write it.
+callers - Find the methods that call this method, with their call sites.
+callees - Find the methods this method calls, with the call sites in this file.
+supertypes - Find the base types and interfaces of a type.
+subtypes - Find the types that derive from or implement a type.
+hover - Read type information and documentation.
+source - Read the declaration's saved text with its documentation comment.
+members - List the members a type declares, across its partial declarations.
+impact - In one call, gather the references, callers and implementations of a
+  member, or the references and subtypes of a type.
+
+source and members also accept a file and a line without a character. They then
+use the innermost declaration around that line.
+
+SYMBOL SEARCH
+-------------
+Document symbols:
+symbols {"file":"src/Calculator.cs"}
+
+Workspace symbols:
+symbols {"query":"Calculator","limit":50}
+
+For workspace search, omit file. When file is present, query is not used.
+Use symbols to locate a declaration, then navigation for semantic relationships.
+
+RESULTS
+-------
+Results are text lines. Positions are line:character, both one-based, with
+UTF-16 characters. Files inside the workspace use relative paths. External and
+generated locations keep their absolute URI.
+
+definition, type_definition, implementation and references return one line per file:
+src/Foo.cs 42:17 81:9
+Location links use the target selection start. limit caps occurrences, not
+files. limit defaults to 50 and accepts 1 through 250. A final line starting with
+"truncated:" gives the total count and the next offset. Inspect it before claiming
+a complete reference or implementation list. No match returns "no locations".
+References leave out source-generated code and end with a line counting the
+omitted occurrences. Use the lsp tool with action=request to list them.
+reads and writes return the lines of references, filtered to the references
+that read or write the symbol. x += 1, x++ and out x are writes. A ref argument
+is both, except that Volatile.Read and Interlocked.Read only read and
+Volatile.Write only writes. A ref argument to any other method that only reads
+is still a write. The declaration and its initializer are in neither list.
+context, limit, offset and the "truncated:" line work the same, and limit and
+offset apply to the filtered list. No match returns "no reads" or "no writes".
+
+callers, callees, supertypes and subtypes return one line per symbol:
+src/Consumer.cs:7:26 method MyApp.Consumer.Run(IGreeter)
+  calls 7:59
+The line gives the declaration position, the kind and then the symbol name.
+Send everything after the kind back unchanged as the symbol argument. A result
+outside the workspace keeps Roslyn's name. The calls line is present only for
+callers and callees. callees lists calls only. A final line counts the
+property, field and constant accesses it leaves out.
+In every result, a constructor has the kind constructor. An explicit
+constructor is named like MyApp.Box.Box(int). A primary constructor has no
+declaration of its own, so its line names the type. An empty result reads
+"no callers", "no callees", "no supertypes" or "no subtypes". After
+"no callers", a line says that reflection or code outside the workspace may
+still call the member.
+
+PAGING
+------
+A truncated result ends with its next offset:
+truncated: 300 locations in total, next offset: 50. Raise limit or narrow the query.
+Send it as offset to read the next page:
+navigate {"action":"references","symbol":"Calculator.Add","limit":50,"offset":50}
+offset is the number of results to skip. It never changes the total. navigate,
+bulk_navigate and symbols accept it, and bulk_navigate applies it to every
+query. A negative offset is an invalid_request error. An offset past the last
+result returns "offset past the end:" with the total.
+Results keep a fixed order, so pages do not overlap. Locations, related symbols
+and members are in file and position order. Workspace symbols are ordered by how
+well the name matches, then by file and position.
+
+CONTEXT
+-------
+Add "context":true to see the trimmed source line of each position without
+reading the file:
+navigate {"action":"references","symbol":"Calculator.Add","context":true}
+Each position then gets its own indented line:
+src/Foo.cs
+  42:17 var sum = calculator.Add(1, 2);
+For callers and callees, the lines are the call sites. Callee call sites are in
+the requested file. context uses more tokens, so request it only when needed.
+
+source returns a header per declaration, then its text:
+src/Calculator.cs:10-14 method MyApp.Calculator.Add(int, int)
+A partial type returns one block per part. When a large type does not fit, a
+final "truncated:" line counts the omitted lines. Use members, then source on one
+member.
+
+members returns the type, then its members grouped by file, relative to the type:
+class MyApp.Calculator
+src/Calculator.cs
+  12:16 method Add(int, int) : int
+Prefix a member with the type name to send it back, as in MyApp.Calculator.Add(int, int).
+
+impact resolves the symbol once and returns one section per navigation, each
+headed by "## ACTION" and shaped like that action's own result. A section that
+does not apply reads "## ACTION: none". limit and offset apply to each
+section. When the sections do not all fit, the largest ones are left out and
+named with their sizes on a final "omitted to fit:" line. Request those alone.
+
+BULK NAVIGATION
+---------------
+bulk_navigate runs up to 16 independent navigate queries in one call,
+concurrently. A query cannot use another query's result. Each query takes the
+action, symbol, file, line and character of navigate. context, limit and offset
+sit at the top level and apply to every query:
+bulk_navigate {"queries":[{"action":"source","symbol":"Calculator.Add"},{"action":"references","symbol":"Calculator.Add"}],"limit":20}
+
+The result has one section per query in request order, headed
+"## NUMBER ACTION TARGET". NUMBER starts at 1. TARGET is the symbol, or
+file:line:character for a position:
+## 2 references Calculator.Add
+A query with no result reads "## NUMBER ACTION TARGET: none". A query that fails
+shows its "error CODE: message" line in its own section, and the others still
+run. A call that times out keeps the finished sections, and the rest report
+the error timeout. An impact query lists its sections under "###" headers.
+When the sections do not all fit, the largest ones are left out and named with
+their sizes on a final "omitted to fit:" line. Request those alone or in a
+smaller batch.
+
+Symbols use the same line shape. Document symbols omit the file, give the
+declaration end after a dash, as in 5:18-9:2, and indent members under their
+container. limit and offset count nested members too. A skipped container leaves
+its listed members at its own level. Workspace symbols end with "in CONTAINER".
+Hover returns plain text.
+Use the lsp tool with action=request for raw LSP locations, full ranges and
+location link metadata. Raw results and capabilities are JSON.
+
+SEMANTIC EDITS
+==============
+
+Keep edits within the user's requested scope. A preview-only request does not
+authorize applying changes. Follow an implementation request through its
+authorized edits and validation without adding a separate approval step.
+
+RENAME A SYMBOL
+---------------
+1. Request a preview at a one-based symbol position:
+edit {"action":"rename","symbol":"Calculator.Add","newName":"Compute"}
+
+A symbol name replaces file, line and character, as in SYMBOL NAVIGATION.
+code_actions also accepts symbol. A selection still needs file and positions.
+
+2. Read the changed files and edits. Apply the returned proposalId:
+edit {"action":"rename","proposalId":"ID_FROM_PREVIEW","apply":true}
+
+When the user already authorized the change, apply in one call without a preview:
+edit {"action":"rename","symbol":"Calculator.Add","newName":"Compute","apply":true}
+
+RENAME A FILE
+-------------
+For a file, newName is the workspace-relative destination:
+edit {"action":"rename_file","file":"src/Calculator.cs","newName":"src/Math/Calculator.cs"}
+
+Apply its proposalId with the edit tool, action rename_file and apply true.
+This requires Roslyn to advertise file rename support.
+
+FIXES AND REFACTORINGS
+----------------------
+1. List actions at the diagnostic or selected code:
+edit {"action":"code_actions","file":"src/Calculator.cs","line":12,"character":9}
+
+For a selection, also pass endLine and endCharacter, both one-based.
+Available actions depend on the installed Roslyn version and loaded project.
+
+To fix a diagnostic, pass its code instead of a position. Add line to pick
+an occurrence. The listing then holds only fixes for that diagnostic:
+edit {"action":"code_actions","file":"src/Calculator.cs","diagnostic":"IDE0005"}
+
+2. Choose an action from the returned listing. Resolve its preview using the
+listing's proposalId and the action's zero-based index:
+edit {"action":"code_actions","proposalId":"ID_FROM_LISTING","actionIndex":0}
+
+3. Inspect the preview. Apply its new proposalId:
+edit {"action":"code_actions","proposalId":"ID_FROM_PREVIEW","apply":true}
+
+The listing's proposalId with actionIndex and apply true also applies the action,
+skipping the preview. So does a fresh request with a position, actionIndex and
+apply true, when the user already authorized the change.
+Some command-based actions reveal their edits only during execution.
+
+A listing starts with "proposal ID", then one line per action: its zero-based
+index, its kind when Roslyn gives one, and its title:
+0 quickfix using System.Collections.Generic;
+1 quickfix Fix All: Remove unnecessary usings (Document)
+2 refactor Introduce parameter for 'x' > into new overload
+A fix-all entry fixes every occurrence in the scope in parentheses. A title with
+">" is a choice inside a nested action.
+
+Entries under "Suppress or configure issues" are hidden, and a final line
+counts them:
+35 suppress or configure actions hidden. Set all to list them.
+Indexes count hidden entries, so they do not change with "all":true:
+edit {"action":"code_actions","file":"src/Calculator.cs","diagnostic":"IDE0005","all":true}
+
+A preview starts with "proposal ID: N files, not applied". Each file operation
+follows (change, create, delete, or rename OLD -> NEW), then its excerpts:
+@@ 12:9
+- int Add(int a, int b)
++ int Compute(int a, int b)
+@@ gives the one-based start of the excerpt, followed by "-> LINE:CHARACTER"
+when the start differs in the new text. Excerpts keep some unchanged context.
+"preview truncated:" marks an incomplete view of the changes.
+The preview is limited to 32 000 characters. "truncated: N of M files shown"
+marks omitted files, and "command omitted" an omitted command description.
+These display limits do not change the edit stored by proposalId.
+
+PROPOSAL LIFETIME AND FAILURES
+------------------------------
+Proposals expire after five minutes. Reload discards them.
+A change to a file the proposal edits, or to a project, props, solution or
+editorconfig file, makes it stale. Changes to other source files do not.
+On stale_edit, request a new preview against current files. Do not retry the old ID.
+After applying, read the errors and warnings that end the result.
+After a file creation or rename, the bridge waits for Roslyn to attach the new
+file to its project, and reloads Roslyn only if that takes too long.
+
+An application result starts with a status line, then one line per completed
+file operation, in order:
+applied: 2 files, 2 operations, Roslyn synchronized
+change src/Calculator.cs
+change src/Program.cs
+The status is applied, partially applied or not applied. "Roslyn synchronized"
+reports a successful Roslyn refresh. Commands add "command executed" and their
+result. On a later failure, the response starts with "error CODE: message" and
+"failed step: STEP", with the failed path and operation when known, and then
+the receipt. Read both before retrying. After an application failure, the
+bridge reloads Roslyn on the next request. Large receipts end with
+"truncated: N more operations not shown" or "result omitted".
+A successful result ends with the diagnostics of the changed C# files, in the
+format of DIAGNOSTICS, for example:
+src/Calculator.cs
+  12:9 warning CS8603 Possible null reference return.
+2 files checked, 1 diagnostic in 1 file
+Without that totals line, the check was skipped. Run diagnostics on the
+changed files then.
+
+Edits must remain inside the workspace. The bridge rejects symlinks below its
+root. Each file replacement is atomic. A failed multi-file operation can leave
+partial changes, so inspect the workspace before retrying.
+Limits: 256 edited files, 8 MiB per file and 64 MiB total edited content.
+
+SESSION AND RAW REQUESTS
+========================
+
+Session status:
+lsp {"action":"status"}
+
+Status returns running, loading, workspace and server lines, such as
+running: true
+loading: false
+
+Roslyn starts loading when the bridge launches if a .sln, .slnx, .slnf or
+.csproj file sits at the workspace root or up to two folders below it.
+Otherwise it loads on the first language request. If the load outlasts
+the startup timeout, the call returns the error loading and the load goes on.
+Retry the same call. Status answers at once and reports loading true meanwhile.
+While loading, a progress line follows the loading line when Roslyn reports
+progress, such as "progress: Loading Calculator.slnx 40%". It has no
+percentage when Roslyn reports none. The loading error repeats the progress in
+its message.
+
+Server capabilities:
+lsp {"action":"capabilities"}
+
+Use capabilities when support for an operation is uncertain.
+
+Reload:
+lsp {"action":"reload"}
+
+Reload discards pending proposals. Use it when results remain stale after an
+external change, then issue the original query again.
+
+RAW LSP
+-------
+Prefer the other tools when they cover the operation.
+For other methods, pass the LSP method and parameters directly:
+lsp {"action":"request","method":"textDocument/hover","parameters":{"textDocument":{"uri":"file:///absolute/workspace/src/Calculator.cs"},"position":{"line":11,"character":8}}}
+
+Replace the example URI with the actual document URI.
+Raw LSP positions are zero-based, unlike the other tools.
+The bridge reserves lifecycle and document synchronization methods and
+workspace/applyEdit.
+Unknown methods and workspace/executeCommand require apply true because they
+may write files. Use them only within the user's authorized scope.

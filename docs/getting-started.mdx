@@ -32,7 +32,7 @@ Releases target macOS x64 and ARM64, Linux x64 and ARM64 with glibc, and Windows
 
 ### .NET tool
 
-The bridge is also a .NET tool on [NuGet](https://www.nuget.org/packages/ThomasFazzari.RoslynBridge), built for the same platforms. The scripts above need only `curl` or PowerShell. The tool needs the .NET 10 SDK, which the Roslyn language server needs anyway.
+The bridge is also a .NET tool on [NuGet](https://www.nuget.org/packages/ThomasFazzari.RoslynBridge), built for the same platforms.
 
 ```sh
 dotnet tool install --global ThomasFazzari.RoslynBridge
@@ -41,15 +41,13 @@ roslyn-bridge-mcp setup
 
 `setup` works as described above. To update, run `dotnet tool update --global ThomasFazzari.RoslynBridge`.
 
-To skip the global install, let the MCP client start the bridge with `dnx`, which runs a .NET tool without installing it. Pin the version, with `VERSION` replaced by a release number:
+To run the tool without installing it, let the client start it with `dnx`, pinned to a release:
 
 ```sh
 claude mcp add --scope user roslyn -- dnx ThomasFazzari.RoslynBridge@VERSION --yes
 ```
 
-Without a version, `dnx` runs the latest release, so the bridge changes whenever a release comes out. The first launch of each version downloads the package, and on macOS and Linux the .NET SDK prints a line to standard output while it does. A client can fail on that line.
-
-`dnx` does not install the Roslyn language server. Run `dnx ThomasFazzari.RoslynBridge@VERSION --yes -- setup` once in a terminal for that, and ignore the registration commands it prints. It also downloads the package ahead of time. To update, run `setup` the same way with the new version, then change the version in the client's registration.
+First run `dnx ThomasFazzari.RoslynBridge@VERSION --yes -- setup` in a terminal. It installs the Roslyn language server and downloads the package, whose first download writes a line to standard output that can break a client. To update, do the same with the new version.
 
 ## Use it
 
@@ -66,7 +64,7 @@ Save editor changes before requesting diagnostics.
 
 ## Agent instructions (recommended)
 
-Agents keep their text-search habits, and some clients defer MCP tools until the agent loads them. Add a few lines like these to the project's agent instructions file, such as `AGENTS.md` or `CLAUDE.md`, or to the equivalent file of your client:
+Agents keep their text-search habits, so add these lines to the project's agent instructions, such as `AGENTS.md` or `CLAUDE.md`:
 
 ```markdown
 ## C# code navigation
@@ -76,24 +74,15 @@ Send independent lookups of known symbols in one `bulk_navigate` call.
 Read a whole file only to edit it.
 ```
 
-The snippet is all the agent needs. Do not describe the tools, their parameters or how the bridge works. The MCP server already sends each tool's description and its own usage instructions to the client when it connects. Repeating them in `AGENTS.md` costs context in every session and goes out of date when the tools change.
+Do not describe the tools there. The server already sends their descriptions and usage instructions when the client connects.
 
 ## Configuration
 
-Codex stores the global registration in `~/.codex/config.toml`, or under `CODEX_HOME` when set.
-A project-level `.codex/config.toml` can override it.
-See [Codex MCP configuration](https://developers.openai.com/codex/mcp/) for client settings and tool approvals.
+In Claude Code, add `mcp__roslyn__*` to `permissions.allow` to run the tools without prompts.
+See [Claude Code MCP](https://docs.claude.com/en/docs/claude-code/mcp) and [Codex MCP configuration](https://developers.openai.com/codex/mcp/) for client settings and tool approvals.
 
-Claude Code stores the user-scope registration in `~/.claude.json`, or under `CLAUDE_CONFIG_DIR` when set.
-Allow the tools without prompts by adding `mcp__roslyn__*` to `permissions.allow` in `~/.claude/settings.json`.
-See [Claude Code MCP](https://docs.claude.com/en/docs/claude-code/mcp) for client settings.
-
-The bridge starts loading the solution at launch when a `.sln`, `.slnx`, `.slnf` or `.csproj` file sits at the workspace root or up to two folders below it.
-Files under build and tool folders such as `bin`, `obj` and `node_modules` do not count.
-Otherwise, Roslyn loads on the first language request.
-A call waits up to the startup timeout for the load.
-When the load takes longer, the call returns the error `loading` and the load continues for later calls.
-Both the error and `lsp` with `action=status` report the progress of the load when Roslyn gives it.
+The bridge starts loading Roslyn at launch when a `.sln`, `.slnx`, `.slnf` or `.csproj` file sits up to two folders below the workspace root, outside folders such as `bin` and `obj`. Otherwise Roslyn loads on the first request.
+A call waits up to the startup timeout, then returns the error `loading` while the load goes on. The error and `lsp` with `action=status` show the load progress.
 For large projects, set `tool_timeout_sec = 200` under `[mcp_servers.roslyn]` in Codex.
 In Claude Code, set the `MCP_TOOL_TIMEOUT` environment variable in milliseconds, for example `200000`.
 
@@ -110,9 +99,7 @@ A project can also set these in [`.roslyn-bridge.json`](settings.mdx) (the argum
 
 Timeout arguments accept 1 to 600 seconds. When you raise these limits, keep the client's tool timeout above the sum of the startup and request timeouts.
 
-The `roslyn-language-server` tool only starts `Microsoft.CodeAnalysis.LanguageServer` from its own folder and relays every message. When the server path resolves to that folder, the bridge starts `Microsoft.CodeAnalysis.LanguageServer` directly.
-
-MCP clients often start the bridge without your shell environment. The bridge therefore finds the .NET install that runs Roslyn itself. It uses the first directory that holds a .NET 10 runtime and an SDK, checking `DOTNET_ROOT`, the `dotnet` on `PATH`, the location registered by the .NET installer, the default install location, then `~/.dotnet`. Pass `--dotnet-root` when your install is elsewhere.
+MCP clients often start the bridge without your shell environment, so it looks for a .NET 10 install itself, in `DOTNET_ROOT`, the `dotnet` on `PATH`, the installer's registered location, the default location, then `~/.dotnet`. Pass `--dotnet-root` when yours is elsewhere.
 
 ## Remove
 

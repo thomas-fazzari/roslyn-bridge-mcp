@@ -18,20 +18,11 @@ Tag a commit of `master` whose `ci-ok` check passed, and push the tag, such as `
 
 ## NuGet packages
 
-The bridge is also a .NET tool on nuget.org with the package ID `ThomasFazzari.RoslynBridge`. Package IDs that start with `Roslyn` are reserved on nuget.org, so the ID uses the owner name. The installed command is still `roslyn-bridge-mcp`. The tool package only points to one runtime package per platform. A runtime package is named `ThomasFazzari.RoslynBridge.<rid>`, where `<rid>` is the runtime identifier, such as `osx-arm64`. It holds the native executable, `NOTICE` and the runtime notices, without debug symbols. `src/RoslynBridge/RoslynBridge.csproj` defines the metadata and the platforms.
+The .NET tool `ThomasFazzari.RoslynBridge` points to one runtime package per platform, `ThomasFazzari.RoslynBridge.<rid>`, which holds the native executable. `src/RoslynBridge/RoslynBridge.csproj` defines the metadata and the platforms.
 
-Native AOT cannot cross-compile, so each native job packs the runtime package of its own platform with `mise run pack`. This runs on every build, so each runner proves its package before a release. On a tag, the job uploads the package as `nupkg-<rid>` and the executable as `native-<rid>`.
-
-On a tag, the `nuget` job downloads the runtime packages and packs the tool package. `mise run ci:nuget` then pushes the runtime packages first and the tool package last, so the tool package never points to a missing package. A push that nuget.org refuses fails the job.
+Native AOT cannot cross-compile, so each native job packs the runtime package of its own platform on every build. On a tag, the `nuget` job packs the tool package and pushes it after the runtime packages.
 
 To try a local build, run `RUNTIME_ID=osx-arm64 mise run pack` with your runtime identifier, then `mise run pack` for the tool package. Packages go to `artifacts/nupkg`. Install them with `dotnet tool install ThomasFazzari.RoslynBridge --tool-path DIRECTORY --add-source artifacts/nupkg --version 0.0.0-dev`.
-
-### Trusted publishing
-
-The `nuget` job uses trusted publishing, so the repository holds no NuGet API key. The job asks GitHub for an identity token with the permission `id-token: write`. `NuGet/login` swaps it for an API key that lasts one hour. Set this up once before the first release:
-
-1. On nuget.org, open Trusted Publishing from the account menu and add a policy. Use the owner `thomas-fazzari`, the repository `roslyn-bridge-mcp` and the workflow file `ci.yml`. Leave the environment empty. Set the package patterns to `ThomasFazzari.RoslynBridge` and `ThomasFazzari.RoslynBridge.*`, and allow new packages as well as new versions.
-2. In the repository settings, add the secret `NUGET_USER` with the nuget.org user name. Use the profile name, not the email address.
 
 ## License notices
 
