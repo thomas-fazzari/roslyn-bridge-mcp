@@ -17,11 +17,16 @@ pre-commit:
       run: bunx --bun markdownlint-cli2 --no-globs --fix {staged_files}
       stage_fixed: true
 
+commit-msg:
+  jobs:
+    - name: commit-type
+      run: perl eng/tasks/commit-msg.pl {1}
+
 pre-push:
   jobs:
     - name: check
       run: "mise run hooks:check ::: dotnet:fmt ::: tooling:fmt ::: build"
 
     - name: docs-check
-      glob: "{docs/**,README.md,AGENTS.md}"
+      glob: "{docs/**,README.md,AGENTS.md,CONTRIBUTING.md}"
       run: mise run docs:check

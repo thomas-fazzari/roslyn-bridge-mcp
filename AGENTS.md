@@ -16,6 +16,14 @@ Use the `roslyn` MCP tools for C# code before text search or reading whole files
 
 Before reporting work as done, run the checks that [validation](docs/development/validation.mdx) lists for the areas you changed.
 
+## Commits
+
+Follow [branches and commits](docs/development/contributing.mdx).
+
+- Start the title with a type, as in `fix: name the missing member`. Add `!` for a breaking change.
+- Keep the title within 50 characters. Write a title only. No description and no trailer, such as `Co-Authored-By`. The description goes in the pull request.
+- Name a branch `type/subject`. Never commit, push or tag without being asked.
+
 ## Code
 
 Follow the [C# conventions](docs/development/conventions/csharp.mdx) and the [testing conventions](docs/development/conventions/testing.mdx).
