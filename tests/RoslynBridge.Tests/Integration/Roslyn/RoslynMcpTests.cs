@@ -36,6 +36,9 @@ public sealed partial class RoslynMcpTests
     private const string ApplyFromPreview = "preview";
     private const string ApplyFromListing = "listing";
     private const string ApplyWithoutProposal = "direct";
+    private const string LoadingLine = "loading: true";
+    private const string IdleLine = "loading: false";
+    private const string ProgressLine = "progress:";
 
     private const string ContractTestFile = "Contracts/IGreeter.cs";
     private const string ImplementationTestFile = "Application/Greeter.cs";
@@ -444,7 +447,7 @@ public sealed partial class RoslynMcpTests
         stepWrites.Should().Be($"{counterFile} 17:9");
 
         var status = await workspace.CallAsync(new LspRequest { Action = LspAction.Status });
-        status.Should().Contain("loading: false").And.NotContain("progress:");
+        status.Should().Contain(IdleLine).And.NotContain(ProgressLine);
     }
 
     [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
@@ -487,6 +490,30 @@ public sealed partial class RoslynMcpTests
                 line.StartsWith(ConsumerTestFile + ":", StringComparison.Ordinal)
             );
         bulk.Should().Contain("### references").And.Contain("### callers");
+    }
+
+    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    public async Task StatusReportsTheLoadProgressWhileAReloadRunsAsync()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var workspace = await RoslynTestWorkspace.CreateAsync(cancellationToken);
+        await StartRoslynAsync(workspace);
+
+        var reload = workspace.CallAsync(new LspRequest { Action = LspAction.Reload });
+        var statuses = new List<string>();
+        while (!reload.IsCompleted)
+        {
+            statuses.Add(await workspace.CallAsync(new LspRequest { Action = LspAction.Status }));
+        }
+
+        await reload;
+        var loading = statuses.Where(status =>
+            status.Contains(LoadingLine, StringComparison.Ordinal)
+        );
+        loading.Should().NotBeEmpty("a status call during the reload sees the load");
+        loading.Should().Contain(status => status.Contains(ProgressLine, StringComparison.Ordinal));
+        var after = await workspace.CallAsync(new LspRequest { Action = LspAction.Status });
+        after.Should().Contain(IdleLine).And.NotContain(ProgressLine);
     }
 
     [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
