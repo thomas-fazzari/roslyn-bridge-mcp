@@ -40,6 +40,7 @@ public sealed partial class RoslynMcpTests
     private const string IdleLine = "loading: false";
     private const string ProgressLine = "progress:";
 
+    private const string ContractTestProject = "Contracts/Contracts.csproj";
     private const string ContractTestFile = "Contracts/IGreeter.cs";
     private const string ImplementationTestFile = "Application/Greeter.cs";
     private const string ConsumerTestFile = "Application/Consumer.cs";
@@ -514,6 +515,22 @@ public sealed partial class RoslynMcpTests
         loading.Should().Contain(status => status.Contains(ProgressLine, StringComparison.Ordinal));
         var after = await workspace.CallAsync(new LspRequest { Action = LspAction.Status });
         after.Should().Contain(IdleLine).And.NotContain(ProgressLine);
+    }
+
+    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    public async Task LoadsOnlyTheProjectsOfTheSettingsFileAsync()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var workspace = await RoslynTestWorkspace.CreateAsync(
+            cancellationToken,
+            settings: $$"""{ "projects": ["{{ContractTestProject}}"] }"""
+        );
+
+        var symbols = await workspace.CallAsync(
+            new LspRequest { Action = LspAction.Symbols, Query = "Greeter" }
+        );
+
+        symbols.Should().Contain(ContractTestFile).And.NotContain(ImplementationTestFile);
     }
 
     [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]

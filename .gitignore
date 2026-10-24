@@ -25,6 +25,7 @@
 !/bunfig.toml
 !/nuget.config
 !/lefthook.yml
+!/.roslyn-bridge.json
 
 !/.devcontainer/
 !/.devcontainer/devcontainer.json

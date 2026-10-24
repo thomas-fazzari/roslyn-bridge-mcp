@@ -5,11 +5,12 @@ using System.ComponentModel;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 using RoslynBridge.Requests;
+using RoslynBridge.Settings;
 
 namespace RoslynBridge.Tools;
 
 [McpServerToolType]
-internal sealed class DiagnosticsTool(LspTool lsp)
+internal sealed class DiagnosticsTool(LspTool lsp, SettingsMonitor settings)
 {
     internal const string Name = "diagnostics";
 
@@ -29,9 +30,9 @@ internal sealed class DiagnosticsTool(LspTool lsp)
         )]
             string? file = null,
         [Description(
-            "Lowest severity to report. The default reports errors and warnings. Use information or hint to include analyzer suggestions."
+            "Lowest severity to report. The default is the project's diagnostics.severity setting, or else warning, which reports errors and warnings. Use information or hint to include analyzer suggestions."
         )]
-            DiagnosticSeverity severity = DiagnosticSeverity.Warning,
+            DiagnosticSeverity? severity = null,
         [Description("Only these diagnostic codes, such as CS0246.")] string[]? ids = null,
         [Description("One line per code with count and example.")] bool summary = false,
         [Description(ToolDescriptions.Limit)] int limit = LspRequest.DefaultResultLimit,
@@ -43,7 +44,10 @@ internal sealed class DiagnosticsTool(LspTool lsp)
             {
                 Action = LspAction.Diagnostics,
                 File = file,
-                Severity = severity,
+                Severity =
+                    severity
+                    ?? settings.CurrentValue.DiagnosticsSeverity
+                    ?? DiagnosticSeverity.Warning,
                 Ids = ids,
                 Summary = summary,
                 Limit = limit,

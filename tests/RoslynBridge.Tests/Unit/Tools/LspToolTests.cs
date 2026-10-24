@@ -8,6 +8,7 @@ using RoslynBridge.Changes;
 using RoslynBridge.Lsp;
 using RoslynBridge.Output;
 using RoslynBridge.Requests;
+using RoslynBridge.Settings;
 using RoslynBridge.Tests.Assertions;
 using RoslynBridge.Tests.Fakes;
 using RoslynBridge.Tools;
@@ -25,6 +26,7 @@ public sealed class LspToolTests : IDisposable
 
     private const int Error = (int)DiagnosticSeverity.Error;
     private const int Warning = (int)DiagnosticSeverity.Warning;
+    private const int Hint = (int)DiagnosticSeverity.Hint;
 
     private readonly string _root = Directory.CreateTempSubdirectory("roslyn-lsp-tool-").FullName;
 
@@ -1255,6 +1257,76 @@ public sealed class LspToolTests : IDisposable
             );
     }
 
+    [Fact]
+    public async Task ReloadReadsTheSettingsAgainAndKeepsThemWhenTheFileIsInvalidAsync()
+    {
+        const int firstSeconds = 20;
+        const int secondSeconds = 40;
+
+        var settingsPath = Path.Combine(_root, ProjectSettings.FileName);
+        var arguments = LaunchArguments.Parse([LaunchArguments.WorkspaceArgument, _root]);
+
+        await File.WriteAllTextAsync(settingsPath, StartupTimeoutSetting(firstSeconds), TestCt);
+        var settings = new SettingsMonitor(() =>
+            BridgeOptions.From(arguments, ProjectSettingsReader.Read(_root))
+        );
+        await using var session = CreateSession(_root, FakeServer());
+        using var tool = CreateTool(session, settings);
+        var reload = new LspRequest { Action = LspAction.Reload };
+
+        await File.WriteAllTextAsync(settingsPath, StartupTimeoutSetting(secondSeconds), TestCt);
+        var reloaded = await tool.ExecuteAsync(reload, TestCt);
+        var afterReload = settings.CurrentValue.StartupTimeout;
+        await File.WriteAllTextAsync(settingsPath, "{ \"unknown\": 1 }", TestCt);
+        var invalid = await tool.ExecuteAsync(reload, TestCt);
+
+        reloaded.Should().BeSuccessful();
+        afterReload.Should().Be(TimeSpan.FromSeconds(secondSeconds));
+        invalid.Should().BeError(ErrorCodes.InvalidSettings);
+        ResponseText(invalid).Should().Contain("unknown");
+        settings.CurrentValue.StartupTimeout.Should().Be(TimeSpan.FromSeconds(secondSeconds));
+    }
+
+    [Fact]
+    public async Task DiagnosticsUseTheProjectSeverityWhenTheCallGivesNoneAsync()
+    {
+        const string hintCode = "IDE0005";
+        await WriteFileAsync(_root, "A.cs", "class A {}");
+        var options = new BridgeOptions
+        {
+            WorkspaceRoot = _root,
+            DiagnosticsSeverity = DiagnosticSeverity.Hint,
+        };
+        await using var session = CreateSession(
+            _root,
+            DiagnosticServer(("A.cs", 0, 0, Error, "CS0246"), ("A.cs", 1, 0, Hint, hintCode))
+        );
+        using var tool = CreateTool(session);
+        var withProjectSeverity = new DiagnosticsTool(tool, Monitor(options));
+        var withBuiltInSeverity = new DiagnosticsTool(
+            tool,
+            Monitor(options with { DiagnosticsSeverity = null })
+        );
+
+        var projectDefault = await withProjectSeverity.DiagnosticsAsync(
+            "A.cs",
+            cancellationToken: TestCt
+        );
+        var explicitWarning = await withProjectSeverity.DiagnosticsAsync(
+            "A.cs",
+            DiagnosticSeverity.Warning,
+            cancellationToken: TestCt
+        );
+        var builtInDefault = await withBuiltInSeverity.DiagnosticsAsync(
+            "A.cs",
+            cancellationToken: TestCt
+        );
+
+        ResponseText(projectDefault).Should().Contain(hintCode);
+        ResponseText(explicitWarning).Should().NotContain(hintCode);
+        ResponseText(builtInDefault).Should().NotContain(hintCode);
+    }
+
     public void Dispose() => Directory.Delete(_root, recursive: true);
 
     // a diagnostic is its file, zero-based line and character, LSP severity and code
@@ -1430,6 +1502,12 @@ public sealed class LspToolTests : IDisposable
                 .Skip(1)
                 .Select(line => line.Split(' ', 3)[2]),
         ];
+
+    private LspTool CreateTool(RoslynSession session, SettingsMonitor settings) =>
+        TestHelpers.CreateTool(_root, session, settings: settings);
+
+    private static string StartupTimeoutSetting(int seconds) =>
+        string.Create(CultureInfo.InvariantCulture, $"{{ \"startupTimeout\": {seconds} }}");
 
     private LspTool CreateTool(RoslynSession session, BridgeOptions? options = null) =>
         TestHelpers.CreateTool(_root, session, options);

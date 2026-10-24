@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 using System.Diagnostics;
+using RoslynBridge.Settings;
 
 namespace RoslynBridge.Lsp;
 
@@ -49,7 +50,12 @@ internal sealed class RoslynProcess(Process process) : IRoslynServer
             CreateNoWindow = true,
         };
         startInfo.ArgumentList.Add("--stdio");
-        startInfo.ArgumentList.Add("--autoLoadProjects");
+
+        if (options.Solution is null && options.Projects.Count == 0)
+        {
+            startInfo.ArgumentList.Add("--autoLoadProjects");
+        }
+
         startInfo.ArgumentList.Add("--logLevel");
         startInfo.ArgumentList.Add("Warning");
 

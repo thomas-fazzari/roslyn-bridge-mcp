@@ -45,7 +45,7 @@ public sealed class WorkspacePathsTests : IDisposable
         var paths = new WorkspacePaths(_root);
 
         paths.EnumerateFiles().Select(file => file.Path).Should().Equal(source);
-        WorkspacePaths.IsWatchedDirectory(directory).Should().BeTrue();
+        paths.IsWatchedDirectory(directory).Should().BeTrue();
     }
 
     [Fact]
@@ -157,8 +157,34 @@ public sealed class WorkspacePathsTests : IDisposable
     }
 
     [Fact]
+    public async Task ExcludedFoldersAreLeftOutAndReplacedByTheNextCallAsync()
+    {
+        const string samples = "samples";
+        const string vendor = "vendor";
+
+        var kept = await WriteFileAsync(_root, Path.Combine("src", "Source.cs"), "class Source {}");
+        var inSamples = await WriteFileAsync(
+            _root,
+            Path.Combine(samples, "Sample.cs"),
+            "class S {}"
+        );
+        var inVendor = await WriteFileAsync(_root, Path.Combine(vendor, "Vendor.cs"), "class V {}");
+        var paths = new WorkspacePaths(_root);
+
+        paths.Exclude([samples]);
+        var first = paths.EnumerateFiles().Select(file => file.Path).ToList();
+        paths.Exclude([vendor]);
+        var second = paths.EnumerateFiles().Select(file => file.Path).ToList();
+
+        first.Should().BeEquivalentTo([kept, inVendor]);
+        second.Should().BeEquivalentTo([kept, inSamples]);
+        paths.IsExcluded(inVendor).Should().BeTrue();
+        paths.IsExcludedDirectory(WorkspacePaths.IntermediateDirectoryName).Should().BeTrue();
+    }
+
+    [Fact]
     public void IntermediateOutputRemainsWatchedForRestoreChanges() =>
-        WorkspacePaths
+        new WorkspacePaths(_root)
             .IsWatchedDirectory(WorkspacePaths.IntermediateDirectoryName)
             .Should()
             .BeTrue();

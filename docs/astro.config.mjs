@@ -67,6 +67,7 @@ export default defineConfig({
       sidebar: [
         { label: "Overview", link: "/" },
         "getting-started",
+        "settings",
         "usage",
         {
           label: "Development",

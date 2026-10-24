@@ -62,6 +62,7 @@ internal static class ResultExtensions
 internal static class ErrorCodes
 {
     internal const string InvalidRequest = "invalid_request";
+    internal const string InvalidSettings = "invalid_settings";
     internal const string StaleEdit = "stale_edit";
     internal const string Loading = "loading";
     internal const string Timeout = "timeout";

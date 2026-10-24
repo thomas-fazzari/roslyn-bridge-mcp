@@ -9,6 +9,7 @@ using RoslynBridge.Editing;
 using RoslynBridge.Lsp;
 using RoslynBridge.Queries;
 using RoslynBridge.Results;
+using RoslynBridge.Settings;
 using RoslynBridge.Symbols;
 using RoslynBridge.Tests.Fakes;
 using RoslynBridge.Tools;
@@ -28,23 +29,26 @@ internal static class TestHelpers
         BridgeOptions? options = null
     ) =>
         new(
-            options ?? new BridgeOptions { WorkspaceRoot = root },
+            Monitor(options ?? new BridgeOptions { WorkspaceRoot = root }),
             new WorkspacePaths(root),
             launcher,
             NullLogger<RoslynSession>.Instance
         );
 
+    public static SettingsMonitor Monitor(BridgeOptions options) => new(() => options);
+
     public static LspTool CreateTool(
         string root,
         RoslynSession session,
-        BridgeOptions? options = null
+        BridgeOptions? options = null,
+        SettingsMonitor? settings = null
     )
     {
-        options ??= new BridgeOptions { WorkspaceRoot = root };
+        settings ??= Monitor(options ?? new BridgeOptions { WorkspaceRoot = root });
         var paths = new WorkspacePaths(root);
         var queries = new LspQueries(session, paths, new SymbolResolver(session, paths));
         return new LspTool(
-            options,
+            settings,
             paths,
             session,
             queries,

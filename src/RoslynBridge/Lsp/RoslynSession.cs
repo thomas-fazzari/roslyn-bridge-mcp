@@ -9,6 +9,7 @@ using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
 using Microsoft.Extensions.Logging;
+using RoslynBridge.Settings;
 using StreamJsonRpc;
 
 namespace RoslynBridge.Lsp;
@@ -21,7 +22,7 @@ namespace RoslynBridge.Lsp;
 /// </remarks>
 [DebuggerDisplay("running = {IsRunning}, open documents = {_documents.Count}")]
 internal sealed partial class RoslynSession(
-    BridgeOptions options,
+    SettingsMonitor settings,
     WorkspacePaths paths,
     RoslynLauncher launcher,
     ILogger<RoslynSession> logger
@@ -47,6 +48,7 @@ internal sealed partial class RoslynSession(
 
     private bool _disposed;
     private bool _restartRequired;
+    private BridgeOptions _launched = new();
 
     public JsonObject? Capabilities { get; private set; }
 
@@ -108,7 +110,7 @@ internal sealed partial class RoslynSession(
         await StartLoadingAsync();
         try
         {
-            await _startup!.WaitAsync(options.StartupTimeout, cancellationToken);
+            await _startup!.WaitAsync(settings.CurrentValue.StartupTimeout, cancellationToken);
         }
         catch (TimeoutException) when (IsLoading)
         {
@@ -143,7 +145,7 @@ internal sealed partial class RoslynSession(
     {
         var rpc = _rpc ?? throw new InvalidOperationException("The Roslyn session is not started.");
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeout.CancelAfter(options.RequestTimeout);
+        timeout.CancelAfter(settings.CurrentValue.RequestTimeout);
         try
         {
             return await rpc.InvokeWithParameterObjectAsync<JsonNode>(
@@ -270,7 +272,8 @@ internal sealed partial class RoslynSession(
     private void StartServer()
     {
         _restartRequired = false;
-        _server = launcher(options, paths);
+        _launched = settings.CurrentValue;
+        _server = launcher(_launched, paths);
         _processLifetime = new CancellationTokenSource();
 
         lock (_stderrLock)
@@ -327,6 +330,7 @@ internal sealed partial class RoslynSession(
         Capabilities = result?["capabilities"]?.AsObject();
 
         await NotifyAsync(LspMethods.Initialized, new JsonObject(), cancellationToken);
+        await OpenConfiguredProjectsAsync(cancellationToken);
 
         var initializationOrDisconnect = Task.WhenAny(_initialized.Task, rpc.Completion);
 
@@ -343,6 +347,34 @@ internal sealed partial class RoslynSession(
         }
 
         _workspaceFiles = ScanWorkspace(cancellationToken);
+    }
+
+    // Roslyn finds what to load itself unless the settings name a solution or projects
+    private async Task OpenConfiguredProjectsAsync(CancellationToken cancellationToken)
+    {
+        if (_launched.Solution is { } solution)
+        {
+            await NotifyAsync(
+                LspMethods.SolutionOpen,
+                new JsonObject { ["solution"] = new Uri(solution).AbsoluteUri },
+                cancellationToken
+            );
+        }
+        else if (_launched.Projects.Count > 0)
+        {
+            await NotifyAsync(
+                LspMethods.ProjectOpen,
+                new JsonObject
+                {
+                    ["projects"] = new JsonArray([
+                        .. _launched.Projects.Select(project =>
+                            (JsonNode)new Uri(project).AbsoluteUri
+                        ),
+                    ]),
+                },
+                cancellationToken
+            );
+        }
     }
 
     private async Task StopAsync()
