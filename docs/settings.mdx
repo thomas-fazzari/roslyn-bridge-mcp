@@ -22,7 +22,7 @@ The file is `.roslyn-bridge.json`. The bridge looks only in the workspace root. 
 
 | Key                    | Value                                       | Argument            | Default                      |
 | ---------------------- | ------------------------------------------- | ------------------- | ---------------------------- |
-| `exclude`              | Folder names or workspace-relative paths    | `--exclude`         | `[]`, only the built-in list |
+| `exclude`              | Folder names                                | `--exclude`         | `[]`, only the built-in list |
 | `startupTimeout`       | Seconds, 1 to 600                           | `--startup-timeout` | `120`                        |
 | `requestTimeout`       | Seconds, 1 to 600                           | `--request-timeout` | `60`                         |
 | `solution`             | Path of a `.sln`, `.slnx` or `.slnf` file   | None                | Not set, Roslyn finds it     |
@@ -31,9 +31,9 @@ The file is `.roslyn-bridge.json`. The bridge looks only in the workspace root. 
 
 ## Precedence
 
-A setting comes from the first source that gives it, in this order: an argument -> this file -> the default.
+A setting comes from the first source that gives it, in this order: an argument then this file, then the default.
 
-`exclude` is the exception. The folders of the file and of every `--exclude` argument add to the built-in list.
+`exclude` is the exception. The folders of the file and of every `--exclude` argument add to the built-in list. The bridge then ignores these folders when it resolves a file name, watches files, checks edits and scans for diagnostics. Roslyn still loads the projects it finds there, unless `solution` or `projects` limit the load.
 
 A `severity` in a `diagnostics` call always wins.
 
@@ -45,10 +45,14 @@ Without `solution` and `projects`, Roslyn finds what to load itself, which loads
 
 ## Invalid settings
 
-A fault in the file never stops the bridge. It ignores the faulty setting and keeps the rest. A bad `solution` or `projects` falls back to Roslyn's own choice.
+An invalid file stops the bridge at startup. It exits with code 1 and prints each fault on the standard error, so the MCP client shows why the server did not start.
 
-Faults are an unreadable file, an unknown key, a value out of range and a path that does not exist. Each one adds a `settings warning` line to `lsp` with `action=status`. A valid file, or no file, adds nothing.
+Faults are an unreadable or malformed file, an unknown key, a value of the wrong type or out of range, a path that does not exist or leaves the workspace, and `solution` set together with `projects`. An unknown key or a malformed file is reported alone, before the other checks.
 
 ```text
-settings warning: solution src/Missing.slnx does not exist
+.roslyn-bridge.json is invalid:
+- startupTimeout must be from 1 to 600 seconds
+- solution 'src/Missing.slnx' does not exist
 ```
+
+`lsp` with `action=reload` reads the file again. When the file has become invalid, the call returns the error `invalid_settings` with the faults, and the bridge keeps the settings it already had.

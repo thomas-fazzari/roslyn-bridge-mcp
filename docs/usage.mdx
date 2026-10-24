@@ -134,7 +134,7 @@ While Roslyn loads the workspace and reports progress, a `progress:` line follow
 The line has no percentage when Roslyn reports none. The error `loading` repeats the progress in its message.
 
 For diagnostics, omit `file` to scan C# files or use a glob such as `src/**/*.cs`. Braces list alternatives, so `src/{Calculator,Program}.cs` checks two files in one call. Only `.cs` and `.csx` files are analyzed.
-`severity` defaults to `warning`, which reports errors and warnings. Set it to `information` or `hint` to include analyzer suggestions.
+`severity` defaults to `warning`, which reports errors and warnings. A [settings file](settings.mdx) can change that default for the project. Set it to `information` or `hint` to include analyzer suggestions.
 Each file with diagnostics is followed by one indented line per diagnostic, then a totals line:
 
 ```text

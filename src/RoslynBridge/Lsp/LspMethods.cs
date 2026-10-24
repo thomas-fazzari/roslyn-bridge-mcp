@@ -59,6 +59,8 @@ internal static class LspMethods
     public const string WorkspaceWorkspaceFolders = "workspace/workspaceFolders";
     public const string Initialize = "initialize";
     public const string Initialized = "initialized";
+    public const string SolutionOpen = "solution/open";
+    public const string ProjectOpen = "project/open";
     public const string Shutdown = "shutdown";
     public const string Exit = "exit";
     public const string Progress = "$/progress";

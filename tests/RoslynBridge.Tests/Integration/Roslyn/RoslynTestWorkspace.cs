@@ -7,6 +7,7 @@ using System.Text.Json;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
 using RoslynBridge.Requests;
+using RoslynBridge.Settings;
 using RoslynBridge.Tests.Assertions;
 using RoslynBridge.Tools;
 using static RoslynBridge.Tests.Unit.TestHelpers;
@@ -40,7 +41,8 @@ internal sealed class RoslynTestWorkspace : IAsyncDisposable
 
     public static async Task<RoslynTestWorkspace> CreateAsync(
         CancellationToken cancellationToken,
-        int requestTimeoutSeconds = 30
+        int requestTimeoutSeconds = 30,
+        string? settings = null
     )
     {
         var workspace = new RoslynTestWorkspace(
@@ -50,6 +52,11 @@ internal sealed class RoslynTestWorkspace : IAsyncDisposable
         try
         {
             workspace.CopyFixture();
+            if (settings is not null)
+            {
+                await workspace.WriteFileAsync(ProjectSettings.FileName, settings);
+            }
+
             await workspace.RestoreAsync();
             await workspace.ConnectAsync(requestTimeoutSeconds);
             return workspace;
@@ -304,11 +311,11 @@ internal sealed class RoslynTestWorkspace : IAsyncDisposable
                 WorkingDirectory = _directory.FullName,
                 ArgumentList =
                 {
-                    BridgeOptions.WorkspaceArgument,
+                    LaunchArguments.WorkspaceArgument,
                     _directory.FullName,
-                    BridgeOptions.StartupTimeoutArgument,
+                    LaunchArguments.StartupTimeoutArgument,
                     "60",
-                    BridgeOptions.RequestTimeoutArgument,
+                    LaunchArguments.RequestTimeoutArgument,
                     requestTimeoutSeconds.ToString(CultureInfo.InvariantCulture),
                 },
                 RedirectStandardInput = true,
@@ -325,7 +332,7 @@ internal sealed class RoslynTestWorkspace : IAsyncDisposable
         var server = Environment.GetEnvironmentVariable("ROSLYN_BRIDGE_TEST_SERVER");
         if (!string.IsNullOrWhiteSpace(server))
         {
-            _process.StartInfo.ArgumentList.Add(BridgeOptions.ServerArgument);
+            _process.StartInfo.ArgumentList.Add(LaunchArguments.ServerArgument);
             _process.StartInfo.ArgumentList.Add(server);
         }
 

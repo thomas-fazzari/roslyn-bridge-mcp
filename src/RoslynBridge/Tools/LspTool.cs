@@ -14,12 +14,13 @@ using RoslynBridge.Output;
 using RoslynBridge.Queries;
 using RoslynBridge.Requests;
 using RoslynBridge.Results;
+using RoslynBridge.Settings;
 using StreamJsonRpc;
 
 namespace RoslynBridge.Tools;
 
 internal sealed partial class LspTool(
-    BridgeOptions options,
+    SettingsMonitor settings,
     WorkspacePaths paths,
     RoslynSession session,
     LspQueries queries,
@@ -85,8 +86,8 @@ internal sealed partial class LspTool(
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             timeout.CancelAfter(
                 session.IsReady && !MayRestartServer(request)
-                    ? options.RequestTimeout
-                    : options.StartupTimeout + options.RequestTimeout
+                    ? settings.CurrentValue.RequestTimeout
+                    : settings.CurrentValue.StartupTimeout + settings.CurrentValue.RequestTimeout
             );
             var resolved = await ResolveFilesAsync(request, timeout.Token);
             if (resolved.Error is { } fileError)
@@ -242,7 +243,18 @@ internal sealed partial class LspTool(
 
         if (request.Action is LspAction.Reload)
         {
+            BridgeOptions reloaded;
+            try
+            {
+                reloaded = settings.Reload();
+            }
+            catch (InvalidSettingsException exception)
+            {
+                return new ToolError(ErrorCodes.InvalidSettings, exception.Message);
+            }
+
             changes.Clear();
+            paths.Exclude(reloaded.Exclude);
             await session.ReloadAsync(cancellationToken);
             return Status();
         }
@@ -278,8 +290,8 @@ internal sealed partial class LspTool(
         new(
             session.IsRunning,
             session.IsLoading,
-            options.WorkspaceRoot,
-            options.ServerPath,
+            settings.CurrentValue.WorkspaceRoot,
+            settings.CurrentValue.ServerPath,
             session.Progress?.Text
         );
 

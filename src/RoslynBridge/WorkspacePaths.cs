@@ -189,15 +189,26 @@ internal sealed class WorkspacePaths(string root)
         relative.EndsWith(suffix, StringComparison.Ordinal)
         && (relative.Length == suffix.Length || relative[^(suffix.Length + 1)] == '/');
 
-    private static bool IsOutside(string relative) =>
+    internal static bool IsOutside(string relative) =>
         Path.IsPathRooted(relative)
         || string.Equals(relative, "..", StringComparison.Ordinal)
         || relative.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal);
 
-    public static bool IsExcludedDirectory(string name) => ExcludedDirectories.Contains(name);
+    private FrozenSet<string> _excluded = ExcludedDirectories;
+
+    /// <summary>
+    /// Adds folder names to the built-in excluded list, replacing the names of an earlier call.
+    /// </summary>
+    public void Exclude(IEnumerable<string> names) =>
+        Volatile.Write(
+            ref _excluded,
+            names.Concat(ExcludedDirectories).ToFrozenSet(StringComparer.Ordinal)
+        );
+
+    public bool IsExcludedDirectory(string name) => Volatile.Read(ref _excluded).Contains(name);
 
     // Restore changes under obj must still reach Roslyn's file watchers
-    public static bool IsWatchedDirectory(string name) =>
+    public bool IsWatchedDirectory(string name) =>
         string.Equals(name, IntermediateDirectoryName, StringComparison.Ordinal)
         || !IsExcludedDirectory(name);
 
@@ -214,14 +225,14 @@ internal sealed class WorkspacePaths(string root)
 
     /// <summary>Enumerates the files of the workspace, outside excluded directories.</summary>
     public IEnumerable<WorkspaceFile> EnumerateFiles() =>
-        EnumerateFiles(static name => !IsExcludedDirectory(name));
+        EnumerateFiles(name => !IsExcludedDirectory(name));
 
     /// <summary>Returns whether the root or a folder up to two levels below holds a solution or project file.</summary>
     public bool ContainsProject()
     {
         try
         {
-            return Files(static name => !IsExcludedDirectory(name), ProjectSearchDepth)
+            return Files(name => !IsExcludedDirectory(name), ProjectSearchDepth)
                 .Any(file => _projectExtensions.Contains(Path.GetExtension(file.Path)));
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)

@@ -10,6 +10,7 @@ using RoslynBridge.Changes;
 using RoslynBridge.Editing;
 using RoslynBridge.Lsp;
 using RoslynBridge.Queries;
+using RoslynBridge.Settings;
 using RoslynBridge.Symbols;
 using RoslynBridge.Tools;
 
@@ -22,7 +23,7 @@ internal static class Program
         if (args is ["--help"] or ["-h"])
         {
             await Console.Error.WriteLineAsync(
-                "roslyn-bridge-mcp [--workspace DIRECTORY] [--server EXECUTABLE] [--dotnet-root DIRECTORY] [--startup-timeout SECONDS] [--request-timeout SECONDS]\nroslyn-bridge-mcp setup\nroslyn-bridge-mcp licenses"
+                "roslyn-bridge-mcp [--workspace DIRECTORY] [--server EXECUTABLE] [--dotnet-root DIRECTORY] [--startup-timeout SECONDS] [--request-timeout SECONDS] [--exclude FOLDER]...\nroslyn-bridge-mcp setup\nroslyn-bridge-mcp licenses"
             );
             return;
         }
@@ -39,13 +40,34 @@ internal static class Program
             return;
         }
 
-        var options = BridgeOptions.Parse(args);
+        var arguments = LaunchArguments.Parse(args);
+        if (!Directory.Exists(arguments.WorkspaceRoot))
+        {
+            throw new DirectoryNotFoundException(arguments.WorkspaceRoot);
+        }
+
+        SettingsMonitor settings;
+        try
+        {
+            settings = new SettingsMonitor(() =>
+                BridgeOptions.From(arguments, ProjectSettingsReader.Read(arguments.WorkspaceRoot))
+            );
+        }
+        catch (InvalidSettingsException exception)
+        {
+            await Console.Error.WriteLineAsync(exception.Message);
+            Environment.ExitCode = 1;
+            return;
+        }
+
+        var options = settings.CurrentValue;
         var builder = Host.CreateEmptyApplicationBuilder(settings: null);
         builder.Logging.AddConsole(static options =>
             options.LogToStandardErrorThreshold = LogLevel.Trace
         );
-        builder.Services.AddSingleton(options);
+        builder.Services.AddSingleton(settings);
         var paths = new WorkspacePaths(options.WorkspaceRoot);
+        paths.Exclude(options.Exclude);
         builder.Services.AddSingleton(paths);
         builder.Services.AddSingleton<RoslynLauncher>(RoslynProcess.Start);
         builder.Services.AddSingleton<RoslynSession>();

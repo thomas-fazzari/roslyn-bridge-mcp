@@ -53,7 +53,7 @@ internal sealed class FakeRoslynServer : IRoslynServer
     public Task ProjectLoad { get; set; } = Task.CompletedTask;
 
     /// <summary>
-    /// The textDocument/didOpen and textDocument/didChange notifications received, in arrival order.
+    /// The textDocument/didOpen, textDocument/didChange, solution/open and project/open notifications received, in arrival order.
     /// </summary>
     public IReadOnlyCollection<(string Method, JsonNode? Parameters)> Notifications =>
         _notifications;
@@ -145,6 +145,14 @@ internal sealed class FakeRoslynServer : IRoslynServer
             await server.ProjectLoad;
             await server._rpc.NotifyAsync(LspMethods.WorkspaceProjectInitializationComplete);
         }
+
+        [JsonRpcMethod(LspMethods.SolutionOpen, UseSingleObjectParameterDeserialization = true)]
+        public void SolutionOpen(JsonNode? parameters) =>
+            server._notifications.Enqueue((LspMethods.SolutionOpen, parameters));
+
+        [JsonRpcMethod(LspMethods.ProjectOpen, UseSingleObjectParameterDeserialization = true)]
+        public void ProjectOpen(JsonNode? parameters) =>
+            server._notifications.Enqueue((LspMethods.ProjectOpen, parameters));
 
         [JsonRpcMethod(
             LspMethods.TextDocumentDidOpen,

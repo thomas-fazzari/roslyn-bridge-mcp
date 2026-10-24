@@ -17,5 +17,6 @@ namespace RoslynBridge.Tools;
 [JsonSerializable(typeof(EditAction))]
 [JsonSerializable(typeof(ServerAction))]
 [JsonSerializable(typeof(DiagnosticSeverity))]
+[JsonSerializable(typeof(DiagnosticSeverity?))]
 [JsonSerializable(typeof(JsonObject))]
 internal partial class ToolJsonContext : JsonSerializerContext;
