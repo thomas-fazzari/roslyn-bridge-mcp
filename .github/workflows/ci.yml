@@ -4,9 +4,7 @@ on:
   push:
     branches: [master, feature/**, chore/**, fix/**, hotfix/**]
     tags: [v*]
-    paths-ignore: [README.md, AGENTS.md, docs/**, LICENSE]
   pull_request:
-    paths-ignore: [README.md, AGENTS.md, docs/**, LICENSE]
   workflow_dispatch:
 
 permissions:
@@ -21,6 +19,31 @@ env:
   DOTNET_NOLOGO: 1
 
 jobs:
+  # Skipped job -> passed
+  # Skipped workflow -> leaves required checks pending
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
+      - id: filter
+        env:
+          EVENT: ${{ github.event_name }}
+          REF_TYPE: ${{ github.ref_type }}
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          code=true
+          if [[ "$EVENT" == pull_request || ( "$EVENT" == push && "$REF_TYPE" == branch ) ]] \
+            && git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            if ! git diff --name-only "$BASE" "$GITHUB_SHA" | grep -qvE '^(README\.md|AGENTS\.md|docs/|LICENSE$)'; then
+              code=false
+            fi
+          fi
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+
   formatting:
     runs-on: ubuntu-latest
     steps:
@@ -33,6 +56,8 @@ jobs:
 
   native:
     name: Native AOT (${{ matrix.rid }})
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     strategy:
@@ -115,6 +140,18 @@ jobs:
           path: artifacts/nupkg/*
           if-no-files-found: error
           compression-level: 0
+
+  # The only check the master ruleset requires
+  ci-ok:
+    name: ci-ok
+    if: always()
+    needs: [changes, formatting, native]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every job to pass or be skipped
+        env:
+          NEEDS: ${{ toJson(needs) }}
+        run: echo "$NEEDS" | jq -e 'all(.[]; .result == "success" or .result == "skipped")'
 
   release:
     name: Publish GitHub release
