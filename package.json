@@ -4,9 +4,9 @@
   "type": "module",
   "devDependencies": {
     "@astrojs/markdown-satteri": "0.4.5",
-    "@astrojs/starlight": "0.42.6",
+    "@astrojs/starlight": "0.42.7",
     "@fontsource/onest": "5.3.1",
-    "astro": "7.4.0",
+    "astro": "7.4.2",
     "markdownlint": "0.42.0",
     "markdownlint-cli2": "0.24.0",
     "oxfmt": "0.74.0",
