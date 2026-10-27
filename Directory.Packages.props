@@ -6,8 +6,8 @@
   <ItemGroup>
     <PackageVersion Include="DiffPlex" Version="1.9.0" />
     <PackageVersion Include="Fastenshtein" Version="1.0.12" />
-    <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.13" />
-    <PackageVersion Include="Microsoft.Extensions.FileSystemGlobbing" Version="10.0.13" />
+    <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.14" />
+    <PackageVersion Include="Microsoft.Extensions.FileSystemGlobbing" Version="10.0.14" />
     <PackageVersion Include="ModelContextProtocol" Version="2.3.0" />
     <PackageVersion Include="StreamJsonRpc" Version="2.26.150" />
   </ItemGroup>
