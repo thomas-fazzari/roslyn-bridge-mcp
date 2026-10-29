@@ -87,7 +87,7 @@ public sealed class BridgeOptionsTests : IDisposable
         FluentActions
             .Invoking(() => Parse(LaunchArguments.ExcludeArgument, value))
             .Should()
-            .Throw<ArgumentException>();
+            .Throw<InvalidLaunchArgumentsException>();
 
     public void Dispose() => Directory.Delete(_root, recursive: true);
 

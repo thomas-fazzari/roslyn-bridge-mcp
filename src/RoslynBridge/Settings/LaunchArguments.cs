@@ -36,7 +36,7 @@ internal sealed record LaunchArguments
         {
             if (index + 1 >= args.Length)
             {
-                throw new ArgumentException($"Missing value for {args[index]}.", nameof(args));
+                throw new InvalidLaunchArgumentsException($"Missing value for {args[index]}.");
             }
 
             var value = args[index + 1];
@@ -51,7 +51,7 @@ internal sealed record LaunchArguments
                 {
                     Exclude = [.. arguments.Exclude, FolderName(value)],
                 },
-                _ => throw new ArgumentException($"Unknown option: {args[index]}.", nameof(args)),
+                _ => throw new InvalidLaunchArgumentsException($"Unknown option: {args[index]}."),
             };
         }
 
@@ -61,14 +61,13 @@ internal sealed record LaunchArguments
     private static string FolderName(string value) =>
         ProjectSettingsValidator.IsFolderName(value)
             ? value
-            : throw new ArgumentException($"{ExcludeArgument} takes a folder name.", nameof(value));
+            : throw new InvalidLaunchArgumentsException($"{ExcludeArgument} takes a folder name.");
 
     private static TimeSpan ParseTimeout(string value) =>
         int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var seconds)
         && ProjectSettingsValidator.IsTimeout(seconds)
             ? TimeSpan.FromSeconds(seconds)
-            : throw new ArgumentException(
-                $"Timeout must be between {ProjectSettings.MinimumTimeoutSeconds} and {ProjectSettings.MaximumTimeoutSeconds} seconds.",
-                nameof(value)
+            : throw new InvalidLaunchArgumentsException(
+                $"Timeout must be between {ProjectSettings.MinimumTimeoutSeconds} and {ProjectSettings.MaximumTimeoutSeconds} seconds."
             );
 }

@@ -25,7 +25,7 @@ internal sealed class NavigateTool(LspTool lsp)
         "Find the definition, type definition, implementations, references, callers, callees, supertypes or subtypes of a C# symbol, read its hover information or source, list a type's members, gather the impact of changing it, or list the reads or writes of a field, property, local, parameter or event. Name the symbol, or give its one-based position."
     )]
     public Task<CallToolResult> NavigateAsync(
-        [Description("Navigation to perform.")] NavigationAction action,
+        [Description(ToolDescriptions.Navigation)] NavigationAction action,
         [Description(ToolDescriptions.Symbol)] string? symbol = null,
         [Description(ToolDescriptions.File)] string? file = null,
         [Description(ToolDescriptions.Line)] int? line = null,

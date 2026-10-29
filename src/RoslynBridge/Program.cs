@@ -18,13 +18,14 @@ namespace RoslynBridge;
 
 internal static class Program
 {
+    private const string Usage =
+        "roslyn-bridge-mcp [--workspace DIRECTORY] [--server EXECUTABLE] [--dotnet-root DIRECTORY] [--startup-timeout SECONDS] [--request-timeout SECONDS] [--exclude FOLDER]...\nroslyn-bridge-mcp setup\nroslyn-bridge-mcp licenses";
+
     public static async Task Main(string[] args)
     {
         if (args is ["--help"] or ["-h"])
         {
-            await Console.Error.WriteLineAsync(
-                "roslyn-bridge-mcp [--workspace DIRECTORY] [--server EXECUTABLE] [--dotnet-root DIRECTORY] [--startup-timeout SECONDS] [--request-timeout SECONDS] [--exclude FOLDER]...\nroslyn-bridge-mcp setup\nroslyn-bridge-mcp licenses"
-            );
+            await Console.Error.WriteLineAsync(Usage);
             return;
         }
 
@@ -40,10 +41,21 @@ internal static class Program
             return;
         }
 
-        var arguments = LaunchArguments.Parse(args);
+        LaunchArguments arguments;
+        try
+        {
+            arguments = LaunchArguments.Parse(args);
+        }
+        catch (InvalidLaunchArgumentsException exception)
+        {
+            await FailAsync($"{exception.Message}\n{Usage}");
+            return;
+        }
+
         if (!Directory.Exists(arguments.WorkspaceRoot))
         {
-            throw new DirectoryNotFoundException(arguments.WorkspaceRoot);
+            await FailAsync($"The workspace directory does not exist: {arguments.WorkspaceRoot}");
+            return;
         }
 
         SettingsMonitor settings;
@@ -55,8 +67,7 @@ internal static class Program
         }
         catch (InvalidSettingsException exception)
         {
-            await Console.Error.WriteLineAsync(exception.Message);
-            Environment.ExitCode = 1;
+            await FailAsync(exception.Message);
             return;
         }
 
@@ -92,6 +103,12 @@ internal static class Program
         }
 
         await host.RunAsync(CancellationToken.None);
+    }
+
+    private static async Task FailAsync(string message)
+    {
+        await Console.Error.WriteLineAsync(message);
+        Environment.ExitCode = 1;
     }
 
     /// <summary>

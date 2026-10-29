@@ -25,7 +25,8 @@ internal sealed class BulkNavigateTool(LspTool lsp)
         "Run up to 16 independent navigate queries in one call, concurrently. A query cannot use another query's result. Results come back in request order. Sections that do not fit are listed with their size."
     )]
     public Task<CallToolResult> BulkNavigateAsync(
-        BulkQuery[] queries,
+        [Description("Independent navigate queries, each with its own action and target.")]
+            BulkQuery[] queries,
         [Description(ToolDescriptions.Context)] bool context = false,
         [Description(ToolDescriptions.Limit)] int limit = LspRequest.DefaultResultLimit,
         [Description(ToolDescriptions.Offset)] int offset = 0,
@@ -58,14 +59,19 @@ internal sealed class BulkNavigateTool(LspTool lsp)
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 internal sealed record BulkQuery
 {
+    [Description(ToolDescriptions.Navigation)]
     public required NavigationAction Action { get; init; }
 
+    [Description(ToolDescriptions.Symbol)]
     public string? Symbol { get; init; }
 
+    [Description(ToolDescriptions.File)]
     public string? File { get; init; }
 
+    [Description(ToolDescriptions.Line)]
     public int? Line { get; init; }
 
+    [Description(ToolDescriptions.Character)]
     public int? Character { get; init; }
 
     [Description(ToolDescriptions.Inherited)]
