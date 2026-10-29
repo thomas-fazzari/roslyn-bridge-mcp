@@ -64,10 +64,7 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
         {
             var symbol = symbols[0];
             return declarations
-                .Where(declaration =>
-                    string.Equals(declaration.Name, symbol.Name, StringComparison.Ordinal)
-                    && SharesProject(symbol.File, declaration.File, projectsByFile)
-                )
+                .Where(declaration => IsPartOf(declaration, symbol, projectsByFile))
                 .OrderBy(declaration => declaration != symbol)
                 .ToList();
         }
@@ -77,11 +74,7 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
             return await NotFoundAsync(text, requested, name, matches, cancellationToken);
         }
 
-        var sameNames = symbols.DistinctBy(symbol => symbol.Name, StringComparer.Ordinal).Count();
-        var advice =
-            sameNames < symbols.Count
-                ? "Send one candidate symbol with its file."
-                : "Send one candidate symbol instead.";
+        var advice = AmbiguityAdvice(symbols);
         return new ToolError(
             ErrorCodes.AmbiguousSymbol,
             symbols.Count > MaximumCandidates
@@ -89,6 +82,20 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
                 : $"'{text}' matches {symbols.Count} symbols. {advice}",
             Candidates(symbols)
         );
+    }
+
+    private static string AmbiguityAdvice(List<SymbolDeclaration> symbols)
+    {
+        var names = symbols.DistinctBy(symbol => symbol.Name, StringComparer.Ordinal).Count();
+        if (names == symbols.Count)
+        {
+            return "Send one candidate symbol instead.";
+        }
+
+        var namesInFiles = symbols.DistinctBy(symbol => (symbol.Name, symbol.File)).Count();
+        return namesInFiles == symbols.Count
+            ? "Send one candidate symbol with its file."
+            : "Send the file, line and character of one candidate instead.";
     }
 
     /// <summary>
@@ -113,7 +120,7 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
             {
                 if (
                     !representatives.Exists(representative =>
-                        SharesProject(representative.File, declaration.File, projectsByFile)
+                        IsPartOf(declaration, representative, projectsByFile)
                     )
                 )
                 {
@@ -126,6 +133,17 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
 
         return symbols;
     }
+
+    // An explicit interface implementation or a static constructor is private,
+    // unlike the same-named member beside it, so accessibility tells them apart
+    private static bool IsPartOf(
+        SymbolDeclaration declaration,
+        SymbolDeclaration symbol,
+        IReadOnlyDictionary<string, HashSet<string>> projectsByFile
+    ) =>
+        string.Equals(declaration.Name, symbol.Name, StringComparison.Ordinal)
+        && declaration.IsPrivate == symbol.IsPrivate
+        && SharesProject(declaration.File, symbol.File, projectsByFile);
 
     // Without known projects, same-named declarations count as parts of one partial type
     private static bool SharesProject(
@@ -228,7 +246,7 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
         [
             .. (await DeclaredMembersAsync(parts, cancellationToken))
                 .Where(declared =>
-                    !declared.IsPrivate
+                    !declared.Declaration.IsPrivate
                     && !declared.IsConstructor
                     && !declared.Declaration.Signature.StartsWith('~')
                 )
@@ -370,7 +388,6 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
                 yield return new DeclaredSymbol(
                     name,
                     name.IsCtor,
-                    RoslynGlyphs.IsPrivate(symbol["glyph"]?.GetValue<int>()),
                     new SymbolDeclaration(
                         display,
                         rawName.Trim(),
@@ -379,7 +396,8 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
                         start["line"]!.GetValue<int>() + 1,
                         start["character"]!.GetValue<int>() + 1,
                         range["start"]!["line"]!.GetValue<int>() + 1,
-                        range["end"]!["line"]!.GetValue<int>() + 1
+                        range["end"]!["line"]!.GetValue<int>() + 1,
+                        RoslynGlyphs.IsPrivate(symbol["glyph"]?.GetValue<int>())
                     )
                 );
             }
@@ -790,7 +808,6 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
     private readonly record struct DeclaredSymbol(
         SymbolName Name,
         bool IsConstructor,
-        bool IsPrivate,
         SymbolDeclaration Declaration
     );
 }
