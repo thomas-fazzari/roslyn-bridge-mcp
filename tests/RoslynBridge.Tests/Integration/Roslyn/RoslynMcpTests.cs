@@ -489,6 +489,47 @@ public sealed partial class RoslynMcpTests
     }
 
     [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    public async Task NavigatesAHierarchyFromAUsageLikeFromItsDeclarationAsync()
+    {
+        // greeter.Greet("world") in Consumer.cs, and Bump(ref Total) in Counter.cs
+        const int greetLine = 7;
+        const int greetCharacter = 59;
+        const string counterFile = "Application/Counter.cs";
+        const int bumpLine = 14;
+        const int bumpCharacter = 9;
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var workspace = await RoslynTestWorkspace.CreateAsync(cancellationToken);
+        var declaredCallers = await workspace.CallAsync(
+            new LspRequest { Action = LspAction.Callers, Symbol = "IGreeter.Greet" }
+        );
+        var declaredImpact = await workspace.CallAsync(
+            new LspRequest { Action = LspAction.Impact, Symbol = "Counter.Bump" }
+        );
+
+        var callers = await workspace.CallAsync(
+            new LspRequest
+            {
+                Action = LspAction.Callers,
+                File = ConsumerTestFile,
+                Line = greetLine,
+                Character = greetCharacter,
+            }
+        );
+        var impact = await workspace.CallAsync(
+            new LspRequest
+            {
+                Action = LspAction.Impact,
+                File = counterFile,
+                Line = bumpLine,
+                Character = bumpCharacter,
+            }
+        );
+
+        callers.Should().Be(declaredCallers);
+        impact.Should().Be(declaredImpact);
+    }
+
+    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
     public async Task ListsTheReadsAndWritesOfAFieldAndAPropertyAcrossFilesAsync()
     {
         const string counterFile = "Application/Counter.cs";

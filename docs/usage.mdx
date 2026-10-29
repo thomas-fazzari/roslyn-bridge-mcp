@@ -113,8 +113,9 @@ Options of the results:
 
 | Option or case                 | Behavior                                                                                                                                                                                              |
 | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `context`                      | Shows each position on its own line with its trimmed source line. For `callers`, call sites are in the caller's file. For `callees`, they are in the requested file.                                  |
+| `context`                      | Shows each position on its own line with its trimmed source line. For `callers`, call sites are in the caller's file. For `callees`, they are in the file of the requested method.                    |
 | `callees`                      | Lists calls only, and counts the property, field and constant accesses it leaves out.                                                                                                                 |
+| Position on a usage            | `callers`, `callees`, `supertypes`, `subtypes` and `impact` start from the declaration the usage refers to.                                                                                           |
 | `file` and `line` alone        | `source` and `members` use the innermost declaration around that line.                                                                                                                                |
 | `impact` not fitting           | The largest sections are named with their sizes on a final `omitted to fit:` line. Request those alone.                                                                                               |
 | `bulk_navigate`                | Runs up to 16 independent `navigate` queries concurrently. Each takes the `action`, `symbol`, `file`, `line` and `character` of `navigate`, and `context`, `limit` and `offset` apply to every query. |
