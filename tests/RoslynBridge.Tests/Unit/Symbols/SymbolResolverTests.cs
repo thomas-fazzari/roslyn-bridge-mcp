@@ -35,6 +35,12 @@ public sealed class SymbolResolverTests
                 5,
                 24,
                 DocumentSymbol("extension(Box)", 5, 26, DocumentSymbol("Count() : int", 6, 28)),
+                DocumentSymbol(
+                    "extension<T>(Box<T>)",
+                    5,
+                    34,
+                    DocumentSymbol("Twice() : int", 6, 36)
+                ),
                 DocumentSymbol("Run() : void", 6, 30, DocumentSymbol("Step(int) : void", 6, 32))
             )
         )
@@ -51,6 +57,7 @@ public sealed class SymbolResolverTests
     [InlineData("Box.Inner.Run", new[] { "Sample.Application.Box<T>.Inner.Run()" })]
     [InlineData("operator <", new[] { "Sample.Application.Box<T>.operator <(Box<T>, Box<T>)" })]
     [InlineData("Extensions.Count", new[] { "Sample.Application.Extensions.Count()" })]
+    [InlineData("Extensions.Twice", new[] { "Sample.Application.Extensions.Twice()" })]
     [InlineData("Run.Step", new[] { "Sample.Application.Extensions.Run.Step(int)" })]
     [InlineData("Application", new string[0])]
     public void FindsDeclarationsByQualifiedName(string requested, string[] expected) =>

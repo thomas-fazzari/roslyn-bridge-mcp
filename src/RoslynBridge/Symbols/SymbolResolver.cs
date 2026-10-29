@@ -403,7 +403,8 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
     }
 
     private static bool IsExtensionBlock(SymbolName member, int? kind) =>
-        member is { Segments: ["extension"], Parameters: not null }
+        member is { Segments: [var block], Parameters: not null }
+        && SymbolName.BaseName(block) is "extension"
         && kind is not LspSymbolKinds.Method;
 
     private async Task<
