@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Thomas Fazzari
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+using System.Diagnostics;
 using System.Globalization;
 using System.Text.Json.Nodes;
 using RoslynBridge.Changes;
@@ -263,6 +264,24 @@ public sealed partial class RoslynMcpTests
 
         result.Should().NotContain("incomplete:");
         Diagnostics(result).Should().Contain(item => item.Code == "CS0029");
+    }
+
+    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    public async Task WaitsOnlyOnceForANewFileOutsideEveryProjectAsync()
+    {
+        const string looseFile = "Loose.cs";
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var workspace = await RoslynTestWorkspace.CreateAsync(cancellationToken);
+        await StartRoslynAsync(workspace);
+        await workspace.WriteFileAsync(looseFile, "internal static class Loose\n{\n}\n");
+        var request = new LspRequest { Action = LspAction.Diagnostics, File = looseFile };
+        await workspace.CallAsync(request);
+
+        var started = Stopwatch.GetTimestamp();
+        var again = await workspace.CallAsync(request);
+
+        Stopwatch.GetElapsedTime(started).Should().BeLessThan(RoslynSession.ProjectAttachTimeout);
+        again.Should().Contain("incomplete:");
     }
 
     [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
