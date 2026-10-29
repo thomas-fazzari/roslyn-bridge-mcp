@@ -13,21 +13,5 @@
   "mounts": [
     "source=roslyn-bridge-node-modules,target=${containerWorkspaceFolder}/node_modules,type=volume"
   ],
-  "postCreateCommand": "sudo chown vscode:vscode node_modules && mise install && mise run install && dotnet tool install --global roslyn-language-server --prerelease",
-  "customizations": {
-    "vscode": {
-      "extensions": [
-        "DavidAnson.vscode-markdownlint",
-        "csharpier.csharpier-vscode",
-        "EditorConfig.EditorConfig",
-        "redhat.vscode-yaml",
-        "oxc.oxc-vscode",
-        "tamasfe.even-better-toml",
-        "hverlin.mise-vscode",
-        "unifiedjs.vscode-mdx",
-        "ms-dotnettools.csharp",
-        "bscan.perlnavigator"
-      ]
-    }
-  }
+  "postCreateCommand": "sudo chown vscode:vscode node_modules && mise install && mise run install && dotnet tool install --global roslyn-language-server --prerelease"
 }
