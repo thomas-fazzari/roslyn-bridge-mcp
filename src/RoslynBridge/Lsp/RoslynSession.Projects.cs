@@ -9,7 +9,7 @@ namespace RoslynBridge.Lsp;
 
 internal sealed partial class RoslynSession
 {
-    private static readonly TimeSpan _projectAttachTimeout = TimeSpan.FromSeconds(10);
+    internal static readonly TimeSpan ProjectAttachTimeout = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan _projectAttachPollInterval = TimeSpan.FromMilliseconds(200);
 
     /// <summary>
@@ -75,9 +75,15 @@ internal sealed partial class RoslynSession
                 }
             }
 
-            if (pending.Count == 0 || Stopwatch.GetElapsedTime(started) >= _projectAttachTimeout)
+            if (pending.Count == 0 || Stopwatch.GetElapsedTime(started) >= ProjectAttachTimeout)
             {
-                outside.UnionWith(pending.Select(file => file.First));
+                // A created file that no project picks up is waited for only once
+                foreach (var (path, _) in pending)
+                {
+                    _createdFiles.TryRemove(path, out _);
+                    outside.Add(path);
+                }
+
                 return outside;
             }
 
