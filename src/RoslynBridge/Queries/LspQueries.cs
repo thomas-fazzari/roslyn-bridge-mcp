@@ -443,6 +443,7 @@ internal sealed partial class LspQueries(
 
     /// <summary>
     /// Returns the one-based position a request targets, from its symbol name or its explicit position.
+    /// A hierarchy or impact request moves a usage position to its declaration.
     /// </summary>
     private async Task<Result<(string File, SourcePosition Position)>> LocateAsync(
         LspRequest request,
@@ -479,7 +480,36 @@ internal sealed partial class LspQueries(
             );
         }
 
-        return (request.File, new SourcePosition(request.Line.Value, request.Character.Value));
+        var position = new SourcePosition(request.Line.Value, request.Character.Value);
+        return request.Action.IsHierarchy || request.Action is LspAction.Impact
+            ? await DeclarationOfAsync(request.File, position, cancellationToken)
+            : (request.File, position);
+    }
+
+    /// <summary>
+    /// Returns the workspace declaration a usage refers to, or the position itself without a single one.
+    /// </summary>
+    /// <remarks>
+    /// Roslyn prepares no call hierarchy at a member access, such as <c>value.Method()</c>.
+    /// </remarks>
+    private async Task<(string File, SourcePosition Position)> DeclarationOfAsync(
+        string file,
+        SourcePosition position,
+        CancellationToken cancellationToken
+    )
+    {
+        var definitions = (
+            await session.RequestAsync(
+                LspMethods.TextDocumentDefinition,
+                await PositionParametersAsync(file, position, cancellationToken),
+                cancellationToken
+            )
+        ).FindLocations(paths, skipGenerated: false);
+        return
+            definitions.Positions is [var (found, declaration)]
+            && paths.ResultFilePath(found) is { } declared
+            ? (declared, declaration)
+            : (file, position);
     }
 
     private IEnumerable<string> SelectFiles(string? file)
