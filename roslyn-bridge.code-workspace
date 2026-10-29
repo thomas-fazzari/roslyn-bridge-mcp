@@ -1,0 +1,125 @@
+{
+  "folders": [{ "path": "." }],
+  "settings": {
+    "csharp.debug.justMyCode": false,
+    "csharp.suppressBuildAssetsNotification": true,
+    "dotnet.defaultSolution": "RoslynBridge.slnx",
+    "oxc.enable.oxlint": false,
+    "oxc.useExecPath": true,
+    "oxc.path.oxfmt": "node_modules/oxfmt/bin/oxfmt",
+    "editor.formatOnSave": true,
+    "editor.formatOnSaveMode": "file",
+    "files.associations": {
+      "bun.lock": "plaintext",
+      "LICENSE": "plaintext",
+      "NOTICE": "plaintext",
+      "*.globalconfig": "properties",
+      "*.csproj": "xml",
+      "*.props": "xml",
+      "*.slnx": "xml",
+    },
+    "files.exclude": {
+      "**/artifacts": true,
+      "**/bin": true,
+      "**/node_modules": true,
+      "**/obj": true,
+      "**/TestResults": true,
+    },
+    "files.watcherExclude": {
+      "**/.git/**": true,
+      "**/artifacts/**": true,
+      "**/bin/**": true,
+      "**/node_modules/**": true,
+      "**/obj/**": true,
+      "**/TestResults/**": true,
+      "docs/.astro/**": true,
+      "docs/dist/**": true,
+    },
+    "search.exclude": {
+      "**/artifacts/**": true,
+      "**/bin/**": true,
+      "**/node_modules/**": true,
+      "**/obj/**": true,
+      "**/TestResults/**": true,
+      "docs/.astro/**": true,
+      "docs/dist/**": true,
+    },
+    "[typescript]": {
+      "js/ts.validate.enabled": false,
+    },
+    "[csharp][xml]": {
+      "editor.defaultFormatter": "csharpier.csharpier-vscode",
+    },
+    "[javascript][typescript][markdown][mdx][json][jsonc][yaml]": {
+      "editor.defaultFormatter": "oxc.oxc-vscode",
+    },
+    "[markdown][mdx]": {
+      "editor.wordWrap": "on",
+    },
+  },
+  "extensions": {
+    "recommendations": [
+      "ms-dotnettools.csharp",
+      "csharpier.csharpier-vscode",
+      "hverlin.mise-vscode",
+      "DavidAnson.vscode-markdownlint",
+      "EditorConfig.EditorConfig",
+      "redhat.vscode-yaml",
+      "oxc.oxc-vscode",
+      "tamasfe.even-better-toml",
+      "unifiedjs.vscode-mdx",
+      "ms-vscode-remote.remote-containers",
+      "bscan.perlnavigator",
+    ],
+  },
+  "tasks": {
+    "version": "2.0.0",
+    "tasks": [
+      {
+        "label": "check",
+        "type": "process",
+        "command": "mise",
+        "args": ["run", "check"],
+        "options": {
+          "cwd": "${workspaceFolder}",
+        },
+        "group": {
+          "kind": "build",
+          "isDefault": true,
+        },
+        "problemMatcher": "$msCompile",
+      },
+      {
+        "label": "test",
+        "type": "process",
+        "command": "mise",
+        "args": ["run", "test"],
+        "options": {
+          "cwd": "${workspaceFolder}",
+        },
+        "group": "test",
+        "problemMatcher": "$msCompile",
+      },
+      {
+        "label": "fix",
+        "type": "process",
+        "command": "mise",
+        "args": ["run", "fix"],
+        "options": {
+          "cwd": "${workspaceFolder}",
+        },
+        "problemMatcher": [],
+      },
+      {
+        "label": "hooks: install",
+        "type": "process",
+        "command": "mise",
+        "args": ["run", "hooks:install"],
+        "options": {
+          "cwd": "${workspaceFolder}",
+        },
+        "problemMatcher": [],
+      },
+    ],
+  },
+}

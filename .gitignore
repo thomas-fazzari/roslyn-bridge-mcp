@@ -26,6 +26,7 @@
 !/nuget.config
 !/lefthook.yml
 !/.roslyn-bridge.json
+!/roslyn-bridge.code-workspace
 
 !/.devcontainer/
 !/.devcontainer/devcontainer.json
@@ -35,14 +36,9 @@
 !/.github/workflows/
 !/.github/workflows/docs.yml
 !/.github/workflows/ci.yml
-!/.vscode/
-!/.vscode/extensions.json
-!/.vscode/settings.json
-!/.vscode/tasks.json
-!/.claude/
-!/.claude/settings.json
-!/.claude/hooks/
-!/.claude/hooks/format.pl
+!/.pi/
+!/.pi/extensions/
+!/.pi/extensions/format.ts
 
 !/src/
 !/src/**

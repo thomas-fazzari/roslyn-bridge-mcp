@@ -41,10 +41,24 @@ Roslyn Bridge MCP is a native executable that serves C# tools over the Model Con
 | `eng`                       | Analyzer rules and CI tasks                                                       |
 | `docs`                      | Starlight pages and configuration                                                 |
 
+## Tool changes
+
+Tool names, parameters, result lines and error codes are a public contract that agents and their instructions depend on. Change one only when the gain justifies breaking them. A tool change reaches these places:
+
+- The tool class in `src/RoslynBridge/Tools` and its registration in `Program.cs`. A new argument type also needs an entry in `ToolJsonContext`, because Native AOT cannot serialize it by reflection.
+- `ToolDescriptions`, which holds the parameter descriptions and the server instructions that clients pass to the model.
+- [Usage](../usage.mdx), which documents parameters, results and errors.
+- `docs/public/llms.txt`, the plain-text reference for agents.
+- The agent guidance in `README.md`, [Getting started](../getting-started.mdx) and `AGENTS.md`, when it names the tool or action.
+- A unit test for the contract, and an integration test when the behavior depends on Roslyn.
+
+Then run `mise run test-integration` and `mise run docs:check`.
+
 ## Common changes
 
 | Change                             | Start with                                     |
 | ---------------------------------- | ---------------------------------------------- |
+| Add or change a tool               | [Tool changes](#tool-changes)                  |
 | Change an analyzer or style rule   | [Analyzers](conventions/csharp.mdx#analyzers)  |
 | Report a new kind of failure       | [Errors](conventions/csharp.mdx#errors)        |
 | Add or change a test               | [Testing conventions](conventions/testing.mdx) |
