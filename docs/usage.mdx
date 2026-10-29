@@ -42,6 +42,7 @@ Generic arguments are optional unless a generic and a non-generic type share the
 
 A constructor needs its parameter list. An ambiguous name returns the error `ambiguous_symbol` with up to 20 candidates, one per line.
 Send any candidate symbol back unchanged. When candidates share a name, send the symbol with the candidate's file.
+When they also share the file, as an explicit interface implementation and the public member of the same name, send the candidate's file, line and character.
 An unknown name returns the error `symbol_not_found`. When symbols with a similar name exist, it lists up to 10 of them as candidates, which you can also send back unchanged.
 
 | Unknown name                                                  | Error                                                                                                                  |
