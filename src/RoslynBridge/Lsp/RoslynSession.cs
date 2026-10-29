@@ -38,8 +38,6 @@ internal sealed partial class RoslynSession(
     private static readonly TimeSpan _shutdownTimeout = TimeSpan.FromSeconds(3);
     private IRoslynServer? _server;
     private JsonRpc? _rpc;
-    private SystemTextJsonFormatter? _formatter;
-    private HeaderDelimitedMessageHandler? _messageHandler;
     private Task? _stderrTask;
     private CancellationTokenSource? _processLifetime;
     private CancellationTokenSource? _startupCancellation;
@@ -286,13 +284,16 @@ internal sealed partial class RoslynSession(
         StartWatching();
     }
 
+    [SuppressMessage(
+        "Reliability",
+        "CA2000:Dispose objects before losing scope",
+        Justification = "JsonRpc owns and disposes the message handler, which disposes its formatter."
+    )]
     private void StartRpc(IRoslynServer server)
     {
         var reader = new BoundedPipeReader(PipeReader.Create(server.Output), MaximumProtocolBytes);
-        _formatter = CreateFormatter();
         var writer = PipeWriter.Create(server.Input);
-        _messageHandler = new HeaderDelimitedMessageHandler(writer, reader, _formatter);
-        _rpc = new JsonRpc(_messageHandler);
+        _rpc = new JsonRpc(new HeaderDelimitedMessageHandler(writer, reader, CreateFormatter()));
         var callbackMetadata = RpcTargetMetadata.FromShape<ClientCallbacks>();
         var callbacks = new ClientCallbacks(this, paths, logger, _initialized);
         _rpc.AddLocalRpcTarget(callbackMetadata, callbacks, options: null);
@@ -439,14 +440,12 @@ internal sealed partial class RoslynSession(
         rpc?.Dispose();
         ClearProgress();
         ClearDiagnosticReports();
-        if (_messageHandler is not null)
+        if (rpc is not null)
         {
-            await _messageHandler.DisposeAsync();
+            // JsonRpc disposes its message handler in the background, then completes
+            await rpc.Completion.ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
         }
 
-        _messageHandler = null;
-        _formatter?.Dispose();
-        _formatter = null;
         if (_processLifetime is not null)
         {
             await _processLifetime.CancelAsync();
