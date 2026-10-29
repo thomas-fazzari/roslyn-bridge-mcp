@@ -1,0 +1,14 @@
+using System;
+
+namespace Sample.Application;
+
+public sealed partial class Bag : IDisposable
+{
+    public void Dispose() { }
+
+    void IDisposable.Dispose() { }
+
+    partial void Hook();
+
+    partial void Hook() { }
+}

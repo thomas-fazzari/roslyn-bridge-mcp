@@ -224,7 +224,7 @@ public sealed partial class RoslynMcpTests
         var limited = await workspace.CallAsync(request with { Limit = 1 });
         var fullSummary = Summary(full);
 
-        fullSummary.FilesChecked.Should().Be(7);
+        fullSummary.FilesChecked.Should().Be(8);
         full.Should().NotContain("truncated:");
         fullSummary.FilesWithDiagnostics.Should().Be(Lines(full).Count(IsFileLine));
         Summary(limited).Should().Be(fullSummary);
@@ -748,6 +748,28 @@ public sealed partial class RoslynMcpTests
             }
         );
         resolved.Should().HaveSingleLocation(ContractsProgramTestFile);
+    }
+
+    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    public async Task ListsAnExplicitImplementationBesideItsSameNamedMemberAsCandidatesAsync()
+    {
+        const string bagFile = "Application/Bag.cs";
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var workspace = await RoslynTestWorkspace.CreateAsync(cancellationToken);
+
+        var dispose = await workspace.CallRawAsync(
+            new LspRequest { Action = LspAction.Definition, Symbol = "Bag.Dispose" }
+        );
+        var hook = await workspace.CallRawAsync(
+            new LspRequest { Action = LspAction.Definition, Symbol = "Bag.Hook" }
+        );
+
+        dispose.Should().BeError(ErrorCodes.AmbiguousSymbol);
+        Candidates(dispose)
+            .Select(line => line.Split(' ')[0])
+            .Should()
+            .Equal($"{bagFile}:7:17", $"{bagFile}:9:22");
+        hook.Should().BeSuccessful();
     }
 
     [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
