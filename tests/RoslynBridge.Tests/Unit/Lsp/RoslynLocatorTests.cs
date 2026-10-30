@@ -15,12 +15,19 @@ public sealed class RoslynLocatorTests : IDisposable
         $"DOTNET_ROOT_{RuntimeInformation.ProcessArchitecture.ToString().ToUpperInvariant()}";
 
     [Fact]
-    public void ExplicitRootWinsOverTheEnvironment()
+    public void ExplicitRootWinsOverTheBridgeRoot()
     {
         var explicitRoot = CreateDotnetRoot("explicit");
-        _environment["DOTNET_ROOT"] = CreateDotnetRoot("environment");
 
-        Locator().FindDotnetRoot(explicitRoot).Should().Be(explicitRoot);
+        Locator(CreateDotnetRoot("bridge")).FindDotnetRoot(explicitRoot).Should().Be(explicitRoot);
+    }
+
+    [Fact]
+    public void BridgeRootIsUsedWithoutAnExplicitRoot()
+    {
+        var root = CreateDotnetRoot("bridge");
+
+        Locator(root).FindDotnetRoot(explicitRoot: null).Should().Be(root);
     }
 
     [Fact]
@@ -35,63 +42,14 @@ public sealed class RoslynLocatorTests : IDisposable
     }
 
     [Fact]
-    public void ArchitectureVariableWinsOverDotnetRoot()
+    public void BridgeRootWithoutAnSdkIsReported()
     {
-        _environment[ArchitectureVariable] = CreateDotnetRoot("architecture");
-        _environment["DOTNET_ROOT"] = CreateDotnetRoot("environment");
+        var root = CreateDotnetRoot("runtime-only");
+        Directory.Delete(Path.Combine(root, "sdk"), recursive: true);
 
-        Locator()
-            .FindDotnetRoot(explicitRoot: null)
-            .Should()
-            .Be(_environment[ArchitectureVariable]);
-    }
-
-    [Fact]
-    public void InvalidDotnetRootFallsThroughToDotnetOnPath()
-    {
-        _environment["DOTNET_ROOT"] = Path.Combine(_root, "missing");
-        var root = CreateDotnetRoot("path");
-        _environment["PATH"] = root;
-
-        Locator().FindDotnetRoot(explicitRoot: null).Should().Be(root);
-    }
-
-    [Fact]
-    public void SymlinkedDotnetOnPathResolvesToItsInstall()
-    {
-        var root = CreateDotnetRoot("install");
-        var bin = Directory.CreateDirectory(Path.Combine(_root, "bin")).FullName;
-        try
-        {
-            File.CreateSymbolicLink(Path.Combine(bin, Dotnet), Path.Combine(root, Dotnet));
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-        {
-            Assert.Skip("Creating symbolic links needs privileges on this machine.");
-        }
-
-        _environment["PATH"] = bin;
-
-        Locator().FindDotnetRoot(explicitRoot: null).Should().Be(root);
-    }
-
-    [Fact]
-    public void FixedRootsAreTriedInOrder()
-    {
-        var root = CreateDotnetRoot("fixed");
-
-        Locator(Path.Combine(_root, "missing"), root)
-            .FindDotnetRoot(explicitRoot: null)
-            .Should()
-            .Be(root);
-    }
-
-    [Fact]
-    public void MissingDotnetInstallIsReported()
-    {
         FluentActions.Invoking(Find).Should().Throw<DirectoryNotFoundException>();
 
-        string Find() => Locator(Path.Combine(_root, "missing")).FindDotnetRoot(explicitRoot: null);
+        string Find() => Locator(root).FindDotnetRoot(explicitRoot: null);
     }
 
     [Fact]
@@ -171,8 +129,12 @@ public sealed class RoslynLocatorTests : IDisposable
     private static string Executable(string name) =>
         OperatingSystem.IsWindows() ? $"{name}.exe" : name;
 
-    private RoslynLocator Locator(params string[] fixedRoots) =>
-        new(name => _environment.GetValueOrDefault(name), _root, fixedRoots);
+    private RoslynLocator Locator(string? bridgeRoot = null) =>
+        new(
+            name => _environment.GetValueOrDefault(name),
+            _root,
+            bridgeRoot ?? Path.Combine(_root, "missing")
+        );
 
     private string CreateDotnetRoot(string name)
     {

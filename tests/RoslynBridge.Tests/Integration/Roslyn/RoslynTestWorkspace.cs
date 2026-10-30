@@ -18,8 +18,6 @@ namespace RoslynBridge.Tests.Integration.Roslyn;
 /// Runs the built MCP host against an isolated copy of a real C# solution.
 /// </summary>
 /// <remarks>
-/// Set ROSLYN_BRIDGE_TEST_EXECUTABLE to an absolute executable path to test a published bridge.
-/// Otherwise, the fixture launches the built assembly with dotnet.
 /// Set ROSLYN_BRIDGE_TEST_SERVER to select an installed Roslyn server by its executable path.
 /// </remarks>
 internal sealed class RoslynTestWorkspace : IAsyncDisposable
@@ -305,14 +303,14 @@ internal sealed class RoslynTestWorkspace : IAsyncDisposable
 
     private async Task ConnectAsync(int requestTimeoutSeconds)
     {
-        var executable = Environment.GetEnvironmentVariable("ROSLYN_BRIDGE_TEST_EXECUTABLE");
         _process = new Process
         {
-            StartInfo = new ProcessStartInfo(executable ?? "dotnet")
+            StartInfo = new ProcessStartInfo("dotnet")
             {
                 WorkingDirectory = _directory.FullName,
                 ArgumentList =
                 {
+                    typeof(LspTool).Assembly.Location,
                     LaunchArguments.WorkspaceArgument,
                     _directory.FullName,
                     LaunchArguments.StartupTimeoutArgument,
@@ -326,11 +324,6 @@ internal sealed class RoslynTestWorkspace : IAsyncDisposable
                 UseShellExecute = false,
             },
         };
-        if (executable is null)
-        {
-            _process.StartInfo.ArgumentList.Insert(0, typeof(LspTool).Assembly.Location);
-        }
-
         var server = Environment.GetEnvironmentVariable("ROSLYN_BRIDGE_TEST_SERVER");
         if (!string.IsNullOrWhiteSpace(server))
         {

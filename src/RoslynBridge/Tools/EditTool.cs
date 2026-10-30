@@ -78,7 +78,7 @@ internal sealed class EditTool(LspTool lsp)
         );
 }
 
-[JsonConverter(typeof(JsonStringEnumConverter<EditAction>))]
+[JsonConverter(typeof(JsonStringEnumConverter))]
 internal enum EditAction
 {
     [JsonStringEnumMemberName("rename")]

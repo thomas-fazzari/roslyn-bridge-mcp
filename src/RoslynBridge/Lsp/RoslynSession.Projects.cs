@@ -15,7 +15,7 @@ internal sealed partial class RoslynSession
     /// <summary>
     /// Returns the project contexts of an open document, or none when the server lacks the extension.
     /// </summary>
-    public async Task<JsonArray> ProjectContextsAsync(
+    public async Task<ProjectContext[]> ProjectContextsAsync(
         string uri,
         CancellationToken cancellationToken
     )
@@ -34,7 +34,7 @@ internal sealed partial class RoslynSession
             return [];
         }
 
-        return result?["_vs_projectContexts"] as JsonArray ?? [];
+        return result is null ? [] : result.Read<ProjectContexts>().Contexts ?? [];
     }
 
     /// <summary>
@@ -95,7 +95,6 @@ internal sealed partial class RoslynSession
     {
         // Servers without the extension cannot report the state, so the file is not held back
         var contexts = await ProjectContextsAsync(uri, cancellationToken);
-        return contexts.Count > 0
-            && contexts.All(context => context?["_vs_is_miscellaneous"]?.GetValue<bool>() is true);
+        return contexts.Length > 0 && contexts.All(context => context.IsMiscellaneous);
     }
 }

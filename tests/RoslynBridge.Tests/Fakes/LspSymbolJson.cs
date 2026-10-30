@@ -26,14 +26,7 @@ internal static class LspSymbolJson
         {
             ["name"] = name,
             ["kind"] = kind,
-            ["location"] = new JsonObject
-            {
-                ["uri"] = new Uri(path).AbsoluteUri,
-                ["range"] = new JsonObject
-                {
-                    ["start"] = new JsonObject { ["line"] = line, ["character"] = character },
-                },
-            },
+            ["location"] = LspLocationJson.Location(path, line, character),
         };
 
     public static JsonObject DocumentSymbol(string name, params JsonObject[] children) =>

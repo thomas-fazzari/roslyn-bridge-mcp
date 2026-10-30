@@ -6,8 +6,6 @@ using System.Diagnostics.CodeAnalysis;
 using System.IO.Pipelines;
 using System.Text;
 using System.Text.Json.Nodes;
-using System.Text.Json.Serialization;
-using System.Text.Json.Serialization.Metadata;
 using Microsoft.Extensions.Logging;
 using RoslynBridge.Settings;
 using StreamJsonRpc;
@@ -61,18 +59,18 @@ internal sealed partial class RoslynSession(
 
     public void RequireReload() => _restartRequired = true;
 
-    public Func<JsonObject, CancellationToken, Task<JsonObject>>? ApplyWorkspaceEditAsync
-    {
-        get;
-        private set;
-    }
+    public Func<
+        JsonObject,
+        CancellationToken,
+        Task<ApplyWorkspaceEditResult>
+    >? ApplyWorkspaceEditAsync { get; private set; }
 
     /// <summary>
     /// Sends Roslyn's workspace/applyEdit requests to <paramref name="handler"/> until the result is disposed.
     /// Without a handler, the bridge refuses them.
     /// </summary>
     public IDisposable HandleWorkspaceEdits(
-        Func<JsonObject, CancellationToken, Task<JsonObject>> handler
+        Func<JsonObject, CancellationToken, Task<ApplyWorkspaceEditResult>> handler
     )
     {
         ApplyWorkspaceEditAsync = handler;
@@ -130,11 +128,6 @@ internal sealed partial class RoslynSession(
         }
     }
 
-    [UnconditionalSuppressMessage(
-        "Trimming",
-        "IL2026",
-        Justification = "Parameters are JsonNode values serialized through the generated JSON context, not reflected CLR objects."
-    )]
     public async Task<JsonNode?> RequestAsync(
         string method,
         JsonNode? parameters,
@@ -195,11 +188,6 @@ internal sealed partial class RoslynSession(
         return tail.Length == 0 ? message : $"{message} Roslyn stderr: {tail}";
     }
 
-    [UnconditionalSuppressMessage(
-        "Trimming",
-        "IL2026",
-        Justification = "Parameters are JsonNode values serialized through the generated JSON context, not reflected CLR objects."
-    )]
     public async Task NotifyAsync(
         string method,
         JsonNode? parameters,
@@ -240,30 +228,6 @@ internal sealed partial class RoslynSession(
         _documentLock.Dispose();
     }
 
-    [UnconditionalSuppressMessage(
-        "Trimming",
-        "IL2026",
-        Justification = "The formatter uses generated JSON metadata. No RPC-marshaled objects are exchanged."
-    )]
-    [UnconditionalSuppressMessage(
-        "AOT",
-        "IL3050",
-        Justification = "The formatter uses generated JSON metadata. No RPC-marshaled objects are exchanged."
-    )]
-    internal static SystemTextJsonFormatter CreateFormatter()
-    {
-        var formatter = new SystemTextJsonFormatter();
-        var serializerOptions = formatter.JsonSerializerOptions;
-        var requestIdConverter = serializerOptions
-            .Converters.OfType<JsonConverter<RequestId>>()
-            .Single();
-        serializerOptions.TypeInfoResolver = JsonTypeInfoResolver.Combine(
-            new RequestIdResolver(requestIdConverter),
-            LspJsonContext.Default
-        );
-        return formatter;
-    }
-
     private static TaskCompletionSource NewCompletionSource() =>
         new(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -293,18 +257,12 @@ internal sealed partial class RoslynSession(
     {
         var reader = new BoundedPipeReader(PipeReader.Create(server.Output), MaximumProtocolBytes);
         var writer = PipeWriter.Create(server.Input);
-        _rpc = new JsonRpc(new HeaderDelimitedMessageHandler(writer, reader, CreateFormatter()));
-        var callbackMetadata = RpcTargetMetadata.FromShape<ClientCallbacks>();
-        var callbacks = new ClientCallbacks(this, paths, logger, _initialized);
-        _rpc.AddLocalRpcTarget(callbackMetadata, callbacks, options: null);
+        var formatter = new SystemTextJsonFormatter { JsonSerializerOptions = LspJson.Options };
+        _rpc = new JsonRpc(new HeaderDelimitedMessageHandler(writer, reader, formatter));
+        _rpc.AddLocalRpcTarget(new ClientCallbacks(this, paths, logger, _initialized));
         _rpc.StartListening();
     }
 
-    [UnconditionalSuppressMessage(
-        "Trimming",
-        "IL2026",
-        Justification = "The initialization payload is a JsonObject serialized through the generated JSON context."
-    )]
     private async Task InitializeAsync(CancellationToken cancellationToken)
     {
         var rpc =

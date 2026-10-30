@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 using System.Text;
-using System.Text.Json.Nodes;
+using RoslynBridge.Lsp;
 
 namespace RoslynBridge.Editing;
 
@@ -10,9 +10,9 @@ internal static class TextEdits
 {
     internal const int MaximumTextEditCount = 10_000;
 
-    public static string Apply(string source, JsonArray edits)
+    public static string Apply(string source, TextEdit?[] edits)
     {
-        if (edits.Count > MaximumTextEditCount)
+        if (edits.Length > MaximumTextEditCount)
         {
             throw new ToolErrorException(
                 ToolError.InvalidRequest($"The edit exceeds {MaximumTextEditCount} text changes.")
@@ -50,23 +50,24 @@ internal static class TextEdits
         return result.ToString();
     }
 
-    private static Change Parse(JsonNode? node, int index, List<LineSpan> lines)
+    private static Change Parse(TextEdit? edit, int index, List<LineSpan> lines)
     {
-        var range =
-            node?["range"]
-            ?? throw new ToolErrorException(ToolError.InvalidLspData("A text edit needs a range."));
-        var start = GetOffset(range["start"], lines);
-        var end = GetOffset(range["end"], lines);
-        var text =
-            node["newText"]?.GetValue<string>()
-            ?? throw new ToolErrorException(ToolError.InvalidLspData("A text edit needs newText."));
-        return new Change(start, end, text, index);
+        if (edit is null)
+        {
+            throw new ToolErrorException(ToolError.InvalidLspData("Missing text edit."));
+        }
+
+        return new Change(
+            GetOffset(edit.Range.Start, lines),
+            GetOffset(edit.Range.End, lines),
+            edit.NewText,
+            index
+        );
     }
 
-    private static int GetOffset(JsonNode? position, List<LineSpan> lines)
+    private static int GetOffset(LspPosition position, List<LineSpan> lines)
     {
-        var line = position?["line"]?.GetValue<int>() ?? -1;
-        var character = position?["character"]?.GetValue<int>() ?? -1;
+        var (line, character) = (position.Line, position.Character);
         if (line < 0 || line >= lines.Count || character < 0 || character > lines[line].Length)
         {
             throw new ToolErrorException(

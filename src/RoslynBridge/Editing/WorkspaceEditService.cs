@@ -3,6 +3,7 @@
 
 using System.Runtime.ExceptionServices;
 using System.Text.Json.Nodes;
+using RoslynBridge.Lsp;
 using RoslynBridge.Results;
 
 namespace RoslynBridge.Editing;
@@ -248,7 +249,8 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
     )
     {
         var documents = new Dictionary<string, EditedDocument>(StringComparer.Ordinal);
-        if (edit["changes"] is not null && edit["documentChanges"] is not null)
+        var workspaceEdit = edit.Read<WorkspaceEdit>();
+        if (workspaceEdit is { Changes: not null, DocumentChanges: not null })
         {
             throw new ToolErrorException(
                 ToolError.InvalidLspData(
@@ -257,36 +259,27 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
             );
         }
 
-        if (edit["changes"] is { } changesNode)
+        foreach (var (uri, edits) in workspaceEdit.Changes ?? [])
         {
-            var changes = changesNode.AsObject();
-            foreach (var (uri, value) in changes)
-            {
-                var document = await GetDocumentAsync(uri, documents, snapshot, cancellationToken);
-                document.Apply(
-                    value?.AsArray()
-                        ?? throw new ToolErrorException(
-                            ToolError.InvalidLspData("Missing text edits.")
-                        )
-                );
-            }
+            var document = await GetDocumentAsync(uri, documents, snapshot, cancellationToken);
+            document.Apply(
+                edits
+                    ?? throw new ToolErrorException(ToolError.InvalidLspData("Missing text edits."))
+            );
         }
 
-        if (edit["documentChanges"] is { } operationsNode)
+        foreach (var operation in workspaceEdit.DocumentChanges ?? [])
         {
-            foreach (var operation in operationsNode.AsArray())
-            {
-                await PlanOperationAsync(
-                    operation?.AsObject()
-                        ?? throw new ToolErrorException(
-                            ToolError.InvalidLspData("Missing document operation.")
-                        ),
-                    documents,
-                    snapshot,
-                    cancellationToken
-                );
-                CheckSize(documents.Values);
-            }
+            await PlanOperationAsync(
+                operation
+                    ?? throw new ToolErrorException(
+                        ToolError.InvalidLspData("Missing document operation.")
+                    ),
+                documents,
+                snapshot,
+                cancellationToken
+            );
+            CheckSize(documents.Values);
         }
 
         CheckSize(documents.Values);
@@ -320,13 +313,13 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
     }
 
     private async Task PlanOperationAsync(
-        JsonObject operation,
+        DocumentChange operation,
         Dictionary<string, EditedDocument> documents,
         WorkspaceSnapshot snapshot,
         CancellationToken cancellationToken
     )
     {
-        switch (operation["kind"]?.GetValue<string>())
+        switch (operation.Kind)
         {
             case null:
                 await PlanTextEditAsync(operation, documents, snapshot, cancellationToken);
@@ -342,36 +335,34 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
                 break;
             default:
                 throw new ToolErrorException(
-                    ToolError.InvalidLspData(
-                        $"Unsupported workspace operation: {operation["kind"]}"
-                    )
+                    ToolError.InvalidLspData($"Unsupported workspace operation: {operation.Kind}")
                 );
         }
     }
 
     private async Task PlanTextEditAsync(
-        JsonObject operation,
+        DocumentChange operation,
         Dictionary<string, EditedDocument> documents,
         WorkspaceSnapshot snapshot,
         CancellationToken cancellationToken
     )
     {
         var identifier =
-            operation["textDocument"]
+            operation.TextDocument
             ?? throw new ToolErrorException(
                 ToolError.InvalidLspData("A document edit needs textDocument.")
             );
         var document = await GetDocumentAsync(
-            RequiredString(identifier, "uri"),
+            identifier.Uri,
             documents,
             snapshot,
             cancellationToken
         );
-        if (identifier["version"] is JsonValue version)
+        if (identifier.Version is { } version)
         {
             if (
                 !snapshot.DocumentVersions.TryGetValue(document.OriginalPath, out var expected)
-                || version.GetValue<int>() != expected
+                || version != expected
             )
             {
                 throw new ToolErrorException(
@@ -383,27 +374,27 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
         }
 
         document.Apply(
-            operation["edits"]?.AsArray()
+            operation.Edits
                 ?? throw new ToolErrorException(ToolError.InvalidLspData("Missing text edits."))
         );
     }
 
     private async Task PlanCreateAsync(
-        JsonObject operation,
+        DocumentChange operation,
         Dictionary<string, EditedDocument> documents,
         WorkspaceSnapshot snapshot,
         CancellationToken cancellationToken
     )
     {
         var document = await GetDocumentAsync(
-            RequiredString(operation, "uri"),
+            Required(operation.Uri, "uri"),
             documents,
             snapshot,
             cancellationToken
         );
-        if (document.Content is not null && !Option(operation, "overwrite"))
+        if (document.Content is not null && operation.Options is not { Overwrite: true })
         {
-            if (Option(operation, "ignoreIfExists"))
+            if (operation.Options is { IgnoreIfExists: true })
             {
                 return;
             }
@@ -417,14 +408,14 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
     }
 
     private async Task PlanRenameAsync(
-        JsonObject operation,
+        DocumentChange operation,
         Dictionary<string, EditedDocument> documents,
         WorkspaceSnapshot snapshot,
         CancellationToken cancellationToken
     )
     {
         var source = await GetDocumentAsync(
-            RequiredString(operation, "oldUri"),
+            Required(operation.OldUri, "oldUri"),
             documents,
             snapshot,
             cancellationToken
@@ -436,7 +427,7 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
             );
         }
 
-        var newUri = RequiredString(operation, "newUri");
+        var newUri = Required(operation.NewUri, "newUri");
         var destinationPath = ResolveEditPath(newUri);
         if (IsCaseOnlyAlias(source, destinationPath, snapshot))
         {
@@ -450,9 +441,9 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
             return;
         }
 
-        if (destination.Content is not null && !Option(operation, "overwrite"))
+        if (destination.Content is not null && operation.Options is not { Overwrite: true })
         {
-            if (Option(operation, "ignoreIfExists"))
+            if (operation.Options is { IgnoreIfExists: true })
             {
                 return;
             }
@@ -484,13 +475,13 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
         );
 
     private async Task PlanDeleteAsync(
-        JsonObject operation,
+        DocumentChange operation,
         Dictionary<string, EditedDocument> documents,
         WorkspaceSnapshot snapshot,
         CancellationToken cancellationToken
     )
     {
-        if (Option(operation, "recursive"))
+        if (operation.Options is { Recursive: true })
         {
             throw new ToolErrorException(
                 ToolError.InvalidRequest("Recursive delete operations are not supported.")
@@ -498,12 +489,12 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
         }
 
         var document = await GetDocumentAsync(
-            RequiredString(operation, "uri"),
+            Required(operation.Uri, "uri"),
             documents,
             snapshot,
             cancellationToken
         );
-        if (document.Content is null && !Option(operation, "ignoreIfNotExists"))
+        if (document.Content is null && operation.Options is not { IgnoreIfNotExists: true })
         {
             throw new ToolErrorException(
                 ToolError.InvalidRequest($"The file to delete does not exist: {document.Path}")
@@ -555,12 +546,8 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
 
     private sealed record ApplyFailure(Exception Exception, PendingMutation? Mutation);
 
-    private static string RequiredString(JsonNode node, string property) =>
-        node[property]?.GetValue<string>()
-        ?? throw new ToolErrorException(ToolError.InvalidLspData($"Missing {property}."));
-
-    private static bool Option(JsonObject operation, string option) =>
-        operation["options"]?[option]?.GetValue<bool>() ?? false;
+    private static string Required(string? value, string property) =>
+        value ?? throw new ToolErrorException(ToolError.InvalidLspData($"Missing {property}."));
 
     private static void CheckSize(Dictionary<string, EditedDocument>.ValueCollection documents)
     {

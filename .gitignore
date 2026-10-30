@@ -21,8 +21,6 @@
 !/RoslynBridge.slnx
 !/global.json
 !/package.json
-!/install.sh
-!/install.ps1
 !/bun.lock
 !/bunfig.toml
 !/nuget.config

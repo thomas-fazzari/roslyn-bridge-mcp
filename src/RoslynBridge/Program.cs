@@ -1,11 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Thomas Fazzari
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-using System.Text.Json;
+using System.Reflection;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using ModelContextProtocol;
 using RoslynBridge.Changes;
 using RoslynBridge.Editing;
 using RoslynBridge.Lsp;
@@ -19,7 +18,12 @@ namespace RoslynBridge;
 internal static class Program
 {
     private const string Usage =
-        "roslyn-bridge-mcp [--workspace DIRECTORY] [--server EXECUTABLE] [--dotnet-root DIRECTORY] [--startup-timeout SECONDS] [--request-timeout SECONDS] [--exclude FOLDER]...\nroslyn-bridge-mcp setup\nroslyn-bridge-mcp licenses";
+        "roslyn-bridge-mcp [--workspace DIRECTORY] [--server EXECUTABLE] [--dotnet-root DIRECTORY] [--startup-timeout SECONDS] [--request-timeout SECONDS] [--exclude FOLDER]...\nroslyn-bridge-mcp setup";
+
+    // The SDK appends "+commit" to the informational version
+    internal static readonly string Version = typeof(Program)
+        .Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()!
+        .InformationalVersion.Split('+')[0];
 
     public static async Task Main(string[] args)
     {
@@ -32,12 +36,6 @@ internal static class Program
         if (args is [Setup.Command])
         {
             Environment.ExitCode = Setup.Run(Console.Out);
-            return;
-        }
-
-        if (args is [Licenses.Command])
-        {
-            Licenses.Print(Console.Out);
             return;
         }
 
@@ -111,20 +109,8 @@ internal static class Program
         Environment.ExitCode = 1;
     }
 
-    /// <summary>
-    /// Registers MCP tools with the generated JSON metadata required by Native AOT, and the check of their arguments.
-    /// </summary>
-    internal static IMcpServerBuilder WithRoslynTools(this IMcpServerBuilder builder)
-    {
-        var jsonOptions = new JsonSerializerOptions(McpJsonUtilities.DefaultOptions);
-        jsonOptions.TypeInfoResolverChain.Insert(0, ToolJsonContext.Default);
-        return builder
+    internal static IMcpServerBuilder WithRoslynTools(this IMcpServerBuilder builder) =>
+        builder
             .WithRequestFilters(static filters => filters.AddCallToolFilter(ToolArguments.Validate))
-            .WithTools<DiagnosticsTool>(serializerOptions: jsonOptions)
-            .WithTools<NavigateTool>(serializerOptions: jsonOptions)
-            .WithTools<BulkNavigateTool>(serializerOptions: jsonOptions)
-            .WithTools<SymbolsTool>(serializerOptions: jsonOptions)
-            .WithTools<EditTool>(serializerOptions: jsonOptions)
-            .WithTools<ServerTool>(serializerOptions: jsonOptions);
-    }
+            .WithToolsFromAssembly(typeof(Program).Assembly);
 }

@@ -2,52 +2,50 @@
 title: "Get started"
 ---
 
+import { Aside } from "@astrojs/starlight/components";
+
 ## Install
 
 Prerequisites: the .NET 10 SDK and a Model Context Protocol (MCP) client such as Claude Code, Codex, GitHub Copilot CLI, pi or Antigravity.
 
-macOS and Linux:
+The bridge is a .NET tool on [NuGet](https://www.nuget.org/packages/ThomasFazzari.RoslynBridge).
 
-```sh
-curl -fsSL https://raw.githubusercontent.com/thomas-fazzari/roslyn-bridge-mcp/master/install.sh | bash
-```
-
-Windows x64, in PowerShell:
-
-```powershell
-irm https://raw.githubusercontent.com/thomas-fazzari/roslyn-bridge-mcp/master/install.ps1 | iex
-```
-
-The script downloads the latest release for your platform and verifies its SHA-256 checksum. It installs `roslyn-bridge-mcp` in `~/.local/bin`, or `%LOCALAPPDATA%\Programs\roslyn-bridge-mcp` on Windows, and runs `roslyn-bridge-mcp setup`. Set `ROSLYN_BRIDGE_INSTALL_DIR` to choose another directory.
-
-Setup installs the official Roslyn language server as a global .NET tool when it is missing. It then prints the command that registers the bridge in each agent it detects, for example:
-
-```sh
-claude mcp add --scope user roslyn -- ~/.local/bin/roslyn-bridge-mcp
-```
-
-Run the printed command once per agent. To update, run the install command again. It replaces the binary in place, so the registrations keep working.
-
-Releases target macOS x64 and ARM64, Linux x64 and ARM64 with glibc, and Windows x64. Your C# project can target a different .NET version. Keep its required SDK and workloads installed, including any SDK pinned in its `global.json`.
-
-### .NET tool
-
-The bridge is also a .NET tool on [NuGet](https://www.nuget.org/packages/ThomasFazzari.RoslynBridge), built for the same platforms.
+<Aside type="caution" title="Install script before 2.0">
+  If you installed the bridge with the former install script, delete `roslyn-bridge-mcp` from
+  `~/.local/bin` or `%LOCALAPPDATA%\Programs\roslyn-bridge-mcp`, then install the .NET tool and
+  register it again.
+</Aside>
 
 ```sh
 dotnet tool install --global ThomasFazzari.RoslynBridge
 roslyn-bridge-mcp setup
 ```
 
-`setup` works as described above. To update, run `dotnet tool update --global ThomasFazzari.RoslynBridge`.
+Setup installs the official Roslyn language server as a global .NET tool when it is missing. It then prints the command that registers the bridge in each agent it detects, for example:
 
-To run the tool without installing it, let the client start it with `dnx`, pinned to a release:
+```sh
+claude mcp add --scope user roslyn -- ~/.dotnet/tools/roslyn-bridge-mcp
+```
+
+Run the printed command once per agent. To update, run `dotnet tool update --global ThomasFazzari.RoslynBridge`. The command path stays the same, so the registrations keep working.
+
+Your C# project can target a different .NET version. Keep its required SDK and workloads installed, including any SDK pinned in its `global.json`.
+
+### Without installing
+
+To run the tool without installing it, let the client start it with `dnx`, pinned to a release. Run `setup` once in a terminal:
+
+```sh
+dnx ThomasFazzari.RoslynBridge@VERSION --yes -- setup
+```
+
+The first run downloads the package and writes a line to standard output that would break a client. `setup` then installs the Roslyn language server and prints registration commands that start the bridge with `dnx`, for example:
 
 ```sh
 claude mcp add --scope user roslyn -- dnx ThomasFazzari.RoslynBridge@VERSION --yes
 ```
 
-First run `dnx ThomasFazzari.RoslynBridge@VERSION --yes -- setup` in a terminal. It installs the Roslyn language server and downloads the package, whose first download writes a line to standard output that can break a client. To update, do the same with the new version.
+To update, do the same with the new version.
 
 ## Use it
 
@@ -90,7 +88,7 @@ In Claude Code, set the `MCP_TOOL_TIMEOUT` environment variable in milliseconds,
 | ------------------- | ------------------------------------------------------------- |
 | `--workspace`       | Current working directory                                     |
 | `--server`          | `roslyn-language-server` on `PATH`, then in `~/.dotnet/tools` |
-| `--dotnet-root`     | The .NET install found as described below                     |
+| `--dotnet-root`     | The .NET install that runs the bridge                         |
 | `--startup-timeout` | 120 seconds                                                   |
 | `--request-timeout` | 60 seconds                                                    |
 | `--exclude`         | None. Repeat it to add folders to the built-in list           |
@@ -99,8 +97,10 @@ A project can also set these in [`.roslyn-bridge.json`](settings.mdx) (the argum
 
 Timeout arguments accept 1 to 600 seconds. When you raise these limits, keep the client's tool timeout above the sum of the startup and request timeouts.
 
-MCP clients often start the bridge without your shell environment, so it looks for a .NET 10 install itself, in `DOTNET_ROOT`, the `dotnet` on `PATH`, the installer's registered location, the default location, then `~/.dotnet`. Pass `--dotnet-root` when yours is elsewhere.
+Roslyn runs on the .NET install that runs the bridge, which needs a .NET 10 runtime and an SDK. Pass `--dotnet-root` to use another install.
+
+MCP clients often start the bridge without your shell environment. On macOS and Linux, when .NET is outside its default or registered location, `setup` prints a command that sets `DOTNET_ROOT`.
 
 ## Remove
 
-Remove the `roslyn` entry from each agent with its `mcp remove` command, for example `claude mcp remove roslyn --scope user`. Then delete `roslyn-bridge-mcp` from the installation directory, or run `dotnet tool uninstall --global ThomasFazzari.RoslynBridge` when you installed the tool.
+Remove the `roslyn` entry from each agent with its `mcp remove` command, for example `claude mcp remove roslyn --scope user`. Then run `dotnet tool uninstall --global ThomasFazzari.RoslynBridge`.

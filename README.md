@@ -15,28 +15,14 @@ The bridge reads saved files and works independently of your editor.
 
 ## Install
 
-macOS and Linux:
-
-```sh
-curl -fsSL https://raw.githubusercontent.com/thomas-fazzari/roslyn-bridge-mcp/master/install.sh | bash
-```
-
-Windows x64, in PowerShell:
-
-```powershell
-irm https://raw.githubusercontent.com/thomas-fazzari/roslyn-bridge-mcp/master/install.ps1 | iex
-```
-
-The installer prints the command that registers the bridge in each agent it finds. See [Get started](https://thomas-fazzari.github.io/roslyn-bridge-mcp/getting-started/) for details.
-
-### .NET tool
-
-With the .NET 10 SDK, you can install the bridge as a .NET tool instead. `setup` installs the Roslyn language server and prints the registration commands:
+With the .NET 10 SDK, install the bridge as a .NET tool. `setup` installs the Roslyn language server and prints the command that registers the bridge in each agent it finds:
 
 ```sh
 dotnet tool install --global ThomasFazzari.RoslynBridge
 roslyn-bridge-mcp setup
 ```
+
+See [Get started](https://thomas-fazzari.github.io/roslyn-bridge-mcp/getting-started/) for details.
 
 ## Agent instructions (recommended)
 
@@ -56,7 +42,7 @@ The snippet is all the agent needs. Do not describe the tools, their parameters 
 
 Licensed under the GNU Affero General Public License, version 3 or later, with additional terms under section 7. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
 
-Third-party notices are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). The executable prints them, with the .NET runtime notices, using `roslyn-bridge-mcp licenses`.
+Third-party notices are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md), which the NuGet package also contains.
 
 ## Contributors
 

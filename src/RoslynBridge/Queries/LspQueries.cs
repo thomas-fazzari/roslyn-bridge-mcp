@@ -134,7 +134,7 @@ internal sealed partial class LspQueries(
                 // Outgoing calls also list property, field and constant accesses, which hide the calls
                 if (
                     request.Action is LspAction.Callees
-                    && !LspSymbolKinds.IsInvocable(entry!["to"]?["kind"]?.GetValue<int>())
+                    && !LspSymbolKinds.IsInvocable(entry.Read<LspCall>().To?.Kind)
                 )
                 {
                     accesses++;
@@ -233,23 +233,12 @@ internal sealed partial class LspQueries(
                 cancellationToken
             );
             // Roslyn returns fuzzy matches in file order, so exact and prefix matches come first
-            JsonNode ranked = new JsonArray([
-                .. (symbols as JsonArray ?? [])
-                    .OrderBy(symbol =>
-                        MatchRank(symbol?["name"]?.GetValue<string>() ?? string.Empty, query)
-                    )
-                    .ThenBy(
-                        symbol => symbol?["location"]?["uri"]?.GetValue<string>(),
-                        StringComparer.Ordinal
-                    )
-                    .ThenBy(symbol =>
-                        symbol?["location"]?["range"]?["start"]?["line"]?.GetValue<int>()
-                    )
-                    .ThenBy(symbol =>
-                        symbol?["location"]?["range"]?["start"]?["character"]?.GetValue<int>()
-                    )
-                    .Select(symbol => symbol?.DeepClone()),
-            ]);
+            var ranked = LspJson
+                .ReadArray<LspSymbol>(symbols)
+                .OrderBy(symbol => MatchRank(symbol.Name, query))
+                .ThenBy(symbol => symbol.Location?.Uri, StringComparer.Ordinal)
+                .ThenBy(symbol => symbol.Location?.Range?.Start)
+                .ToArray();
             return ranked.ToSymbolList(paths, request.Limit, request.Offset);
         }
 
@@ -310,11 +299,7 @@ internal sealed partial class LspQueries(
         );
         return batch.Select(
             (file, index) =>
-                new ScannedFile(
-                    file,
-                    reports[index]["items"] as JsonArray ?? [],
-                    miscellaneous.Contains(file)
-                )
+                new ScannedFile(file, reports[index].Items ?? [], miscellaneous.Contains(file))
         );
     }
 
@@ -329,11 +314,11 @@ internal sealed partial class LspQueries(
         {
             var matching = file
                 .Reported.Where(diagnostic =>
-                    ids is null || (diagnostic!.Code() is { } code && ids.Contains(code))
+                    ids is null || (diagnostic.CodeText() is { } code && ids.Contains(code))
                 )
                 .ToList();
             var selected = matching
-                .Where(diagnostic => diagnostic!.Severity() <= request.Severity)
+                .Where(diagnostic => diagnostic.ToSeverity() <= request.Severity)
                 .ToList();
             belowSeverity += matching.Count - selected.Count;
             if (selected.Count == 0)
@@ -344,7 +329,7 @@ internal sealed partial class LspQueries(
             var relative = paths.RelativePath(file.Path);
             found.AddRange(
                 selected
-                    .Select(diagnostic => diagnostic!.ToDiagnostic())
+                    .Select(diagnostic => diagnostic.ToDiagnostic())
                     .OrderBy(diagnostic => diagnostic.Start.Line)
                     .ThenBy(diagnostic => diagnostic.Start.Character)
                     .ThenBy(diagnostic => diagnostic.Code, StringComparer.Ordinal)
@@ -569,5 +554,5 @@ internal sealed partial class LspQueries(
         return [pattern];
     }
 
-    private sealed record ScannedFile(string Path, JsonArray Reported, bool Miscellaneous);
+    private sealed record ScannedFile(string Path, LspDiagnostic[] Reported, bool Miscellaneous);
 }

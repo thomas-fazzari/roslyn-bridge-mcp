@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 using System.Globalization;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using RoslynBridge.Lsp;
 using RoslynBridge.Requests;
@@ -158,16 +159,15 @@ internal sealed partial class LspChanges
 
         var uri = await session.OpenDocumentAsync(request.File, cancellationToken);
         var report = await session.DiagnosticReportAsync(uri, cancellationToken);
-        var diagnostic = (report["items"] as JsonArray ?? [])
-            .OfType<JsonObject>()
+        var diagnostic = (report.Items ?? [])
             .Where(item =>
                 string.Equals(
-                    item["code"]?.ToString(),
+                    item.CodeText(),
                     request.Diagnostic,
                     StringComparison.OrdinalIgnoreCase
-                ) && (request.Line is not { } line || Start(item).Line == line - 1)
+                ) && (request.Line is not { } line || item.Range.Start.Line == line - 1)
             )
-            .MinBy(Start);
+            .MinBy(item => item.Range.Start);
         if (diagnostic is null)
         {
             var place = request.Line is { } target
@@ -179,14 +179,8 @@ internal sealed partial class LspChanges
         }
 
         var parameters = LspParameters.Document(uri);
-        parameters["range"] = diagnostic["range"]!.DeepClone();
+        parameters["range"] = JsonSerializer.SerializeToNode(diagnostic.Range, LspJson.Options);
         return parameters;
-    }
-
-    private static (int Line, int Character) Start(JsonObject diagnostic)
-    {
-        var start = diagnostic["range"]!["start"]!;
-        return (start["line"]!.GetValue<int>(), start["character"]!.GetValue<int>());
     }
 
     // Nested actions become one entry per child, and fix-all actions one entry per scope

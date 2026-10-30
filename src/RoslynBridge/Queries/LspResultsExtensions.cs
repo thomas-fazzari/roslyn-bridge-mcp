@@ -28,18 +28,8 @@ internal static class LspResultsExtensions
         /// The offset and limit apply to nested symbols too, in document order.
         /// A skipped symbol leaves its listed members at its level.
         /// </summary>
-        public SymbolList ToSymbolList(WorkspacePaths paths, int limit, int offset = 0)
-        {
-            var symbols = result as JsonArray ?? [];
-            var skipped = offset;
-            var remaining = limit;
-            var total = CountSymbols(symbols);
-            return new SymbolList(
-                PageSymbols(symbols, paths, ref skipped, ref remaining),
-                total,
-                LspRequest.NextOffset(offset, limit, total)
-            );
-        }
+        public SymbolList ToSymbolList(WorkspacePaths paths, int limit, int offset = 0) =>
+            result.ReadArray<LspSymbol>().ToSymbolList(paths, limit, offset);
 
         /// <summary>
         /// Converts call or type hierarchy results, in file and position order. Call results also list their call sites.
@@ -48,14 +38,7 @@ internal static class LspResultsExtensions
         {
             var related = result as JsonArray ?? [];
             var items = related
-                .Select(entry =>
-                    Symbol(entry!["from"] ?? entry["to"] ?? entry, paths) with
-                    {
-                        Calls = entry["fromRanges"] is JsonArray ranges
-                            ? [.. ranges.Select(range => OneBased(range!["start"]!))]
-                            : [],
-                    }
-                )
+                .Select(entry => RelatedSymbol(entry, paths))
                 .OrderBy(item => item.File, StringComparer.Ordinal)
                 .ThenBy(item => item.Position?.Line)
                 .ThenBy(item => item.Position?.Character)
@@ -88,8 +71,8 @@ internal static class LspResultsExtensions
             var locations = result switch
             {
                 null => [],
-                JsonArray array => array,
-                JsonObject location => new JsonArray(location.DeepClone()),
+                JsonArray => result.Read<LspLocation[]>(),
+                JsonObject => [result.Read<LspLocation>()],
                 _ => throw new ToolErrorException(
                     ToolError.InvalidLspData("Roslyn returned an invalid location result.")
                 ),
@@ -99,12 +82,12 @@ internal static class LspResultsExtensions
             foreach (var location in locations)
             {
                 var uri =
-                    (location?["uri"] ?? location?["targetUri"])?.GetValue<string>()
+                    location.ResolvedUri
                     ?? throw new ToolErrorException(
                         ToolError.InvalidLspData("Roslyn returned a location without a URI.")
                     );
-                var start =
-                    (location?["range"] ?? location?["targetSelectionRange"])?["start"]
+                var range =
+                    location.ResolvedRange
                     ?? throw new ToolErrorException(
                         ToolError.InvalidLspData("Roslyn returned a location without a position.")
                     );
@@ -116,7 +99,7 @@ internal static class LspResultsExtensions
                     continue;
                 }
 
-                found.Add((LocationFile(uri, paths), OneBased(start)));
+                found.Add((LocationFile(uri, paths), range.Start.OneBased));
             }
 
             return new FoundLocations(
@@ -135,19 +118,26 @@ internal static class LspResultsExtensions
         /// </summary>
         public List<SourcePosition> ToHighlightStarts(int kind) =>
             [
-                .. (result as JsonArray ?? [])
-                    .Where(highlight => highlight?["kind"]?.GetValue<int>() == kind)
-                    .Select(highlight =>
-                        OneBased(
-                            highlight?["range"]?["start"]
-                                ?? throw new ToolErrorException(
-                                    ToolError.InvalidLspData(
-                                        "Roslyn returned a highlight without a position."
-                                    )
-                                )
-                        )
-                    ),
+                .. LspJson
+                    .ReadArray<LspHighlight>(result)
+                    .Where(highlight => highlight.Kind == kind)
+                    .Select(highlight => highlight.Range.Start.OneBased),
             ];
+    }
+
+    extension(LspSymbol[] symbols)
+    {
+        public SymbolList ToSymbolList(WorkspacePaths paths, int limit, int offset = 0)
+        {
+            var skipped = offset;
+            var remaining = limit;
+            var total = CountSymbols(symbols);
+            return new SymbolList(
+                PageSymbols(symbols, paths, ref skipped, ref remaining),
+                total,
+                LspRequest.NextOffset(offset, limit, total)
+            );
+        }
     }
 
     extension(FoundLocations found)
@@ -175,62 +165,63 @@ internal static class LspResultsExtensions
         }
     }
 
-    extension(JsonNode diagnostic)
+    extension(LspDiagnostic diagnostic)
     {
         // LSP leaves a missing severity to the client. Reporting it as an error keeps it visible
-        public DiagnosticSeverity Severity() =>
-            diagnostic["severity"]?.GetValue<int>() is { } severity
-            && Enum.IsDefined((DiagnosticSeverity)severity)
+        public DiagnosticSeverity ToSeverity() =>
+            diagnostic.Severity is { } severity && Enum.IsDefined((DiagnosticSeverity)severity)
                 ? (DiagnosticSeverity)severity
                 : DiagnosticSeverity.Error;
 
-        public Diagnostic ToDiagnostic()
-        {
-            var start =
-                diagnostic["range"]?["start"]
-                ?? throw new ToolErrorException(
-                    ToolError.InvalidLspData("Roslyn returned a diagnostic without a range.")
-                );
-            return new Diagnostic(
-                OneBased(start),
-                diagnostic.Severity(),
-                diagnostic.Code(),
-                diagnostic["message"]?.GetValue<string>() ?? string.Empty
+        public Diagnostic ToDiagnostic() =>
+            new(
+                diagnostic.Range.Start.OneBased,
+                diagnostic.ToSeverity(),
+                diagnostic.CodeText(),
+                diagnostic.Message
             );
+    }
+
+    private static SymbolItem RelatedSymbol(JsonNode? entry, WorkspacePaths paths)
+    {
+        var call = entry.Read<LspCall>();
+        var symbol = call.From ?? call.To;
+        if (symbol is null)
+        {
+            return Symbol(entry.Read<LspSymbol>(), paths);
         }
 
-        public string? Code() => diagnostic["code"] is JsonValue code ? code.ToString() : null;
+        return Symbol(symbol, paths) with
+        {
+            Calls = [.. (call.FromRanges ?? []).Select(range => range.Start.OneBased)],
+        };
     }
 
     /// <param name="parent">The name of the document symbol that contains this one, if any.</param>
-    private static SymbolItem Symbol(JsonNode symbol, WorkspacePaths paths, string? parent = null)
+    private static SymbolItem Symbol(LspSymbol symbol, WorkspacePaths paths, string? parent = null)
     {
-        var name = symbol["name"]?.GetValue<string>() ?? string.Empty;
-        var range = symbol["selectionRange"] ?? symbol["location"]?["range"] ?? symbol["range"];
-        var uri = (symbol["location"]?["uri"] ?? symbol["uri"])?.GetValue<string>();
-        var reported = symbol["kind"]?.GetValue<int>();
+        var range = symbol.SelectionRange ?? symbol.Location?.Range ?? symbol.Range;
+        var uri = symbol.Location?.Uri ?? symbol.Uri;
         var kind =
-            Qualified(name, parent ?? ContainingType(symbol["containerName"]))
-                ?.CorrectedKind(reported)
-            ?? reported;
+            Qualified(symbol.Name, parent ?? ContainingType(symbol.ContainerName))
+                ?.CorrectedKind(symbol.Kind)
+            ?? symbol.Kind;
 
         return new SymbolItem(
-            name,
-            kind is { } value && LspSymbolKinds.TryGetName(value, out var kindName)
-                ? kindName
-                : null
+            symbol.Name,
+            LspSymbolKinds.TryGetName(kind, out var kindName) ? kindName : null
         )
         {
             // Roslyn often repeats the name as the detail
-            Detail = Distinct(symbol["detail"], name),
-            Container = ContainerName(Distinct(symbol["containerName"], name)),
+            Detail = Distinct(symbol.Detail, symbol.Name),
+            Container = ContainerName(Distinct(symbol.ContainerName, symbol.Name)),
             File = uri is null ? null : LocationFile(uri, paths),
-            Position = range?["start"] is { } start ? OneBased(start) : null,
+            Position = range?.Start.OneBased,
         };
     }
 
     private static List<SymbolItem> PageSymbols(
-        JsonArray symbols,
+        LspSymbol[] symbols,
         WorkspacePaths paths,
         ref int skipped,
         ref int remaining,
@@ -238,20 +229,21 @@ internal static class LspResultsExtensions
     )
     {
         var items = new List<SymbolItem>();
-        foreach (var symbol in symbols.OfType<JsonObject>())
+        foreach (var symbol in symbols)
         {
             if (remaining == 0)
             {
                 break;
             }
 
-            var name = symbol["name"]?.GetValue<string>();
             if (skipped > 0)
             {
                 skipped--;
-                if (symbol["children"] is JsonArray listed)
+                if (symbol.Children is { } listed)
                 {
-                    items.AddRange(PageSymbols(listed, paths, ref skipped, ref remaining, name));
+                    items.AddRange(
+                        PageSymbols(listed, paths, ref skipped, ref remaining, symbol.Name)
+                    );
                 }
 
                 continue;
@@ -260,16 +252,22 @@ internal static class LspResultsExtensions
             remaining--;
             var item = Symbol(symbol, paths, parent);
             // A document symbol range covers the whole declaration, while selectionRange is its name
-            if (symbol["selectionRange"] is not null && symbol["range"]?["end"] is { } end)
+            if (symbol is { SelectionRange: not null, Range: { } range })
             {
-                item = item with { End = OneBased(end) };
+                item = item with { End = range.End.OneBased };
             }
 
-            if (symbol["children"] is JsonArray { Count: > 0 } children)
+            if (symbol.Children is { Length: > 0 } children)
             {
                 item = item with
                 {
-                    Children = PageSymbols(children, paths, ref skipped, ref remaining, name),
+                    Children = PageSymbols(
+                        children,
+                        paths,
+                        ref skipped,
+                        ref remaining,
+                        symbol.Name
+                    ),
                 };
             }
 
@@ -279,14 +277,11 @@ internal static class LspResultsExtensions
         return items;
     }
 
-    private static int CountSymbols(JsonArray symbols) =>
-        symbols.Sum(symbol =>
-            1 + (symbol?["children"] is JsonArray children ? CountSymbols(children) : 0)
-        );
+    private static int CountSymbols(LspSymbol[] symbols) =>
+        symbols.Sum(symbol => 1 + CountSymbols(symbol.Children ?? []));
 
-    private static string? Distinct(JsonNode? value, string name) =>
-        value?.GetValue<string>() is { Length: > 0 } text
-        && !string.Equals(text, name, StringComparison.Ordinal)
+    private static string? Distinct(string? value, string name) =>
+        value is { Length: > 0 } text && !string.Equals(text, name, StringComparison.Ordinal)
             ? text
             : null;
 
@@ -307,20 +302,16 @@ internal static class LspResultsExtensions
     }
 
     // A workspace symbol names its type as "in Type (project Name)" in the en locale
-    private static string? ContainingType(JsonNode? container)
+    private static string? ContainingType(string? container)
     {
-        var text = container?.GetValue<string>();
-        if (text?.StartsWith("in ", StringComparison.Ordinal) is not true)
+        if (container?.StartsWith("in ", StringComparison.Ordinal) is not true)
         {
             return null;
         }
 
-        var project = text.IndexOf(" (project ", StringComparison.Ordinal);
-        return project < 0 ? text[3..] : text[3..project];
+        var project = container.IndexOf(" (project ", StringComparison.Ordinal);
+        return project < 0 ? container[3..] : container[3..project];
     }
-
-    private static SourcePosition OneBased(JsonNode position) =>
-        new(position["line"]!.GetValue<int>() + 1, position["character"]!.GetValue<int>() + 1);
 
     private static string HoverText(JsonNode? contents) =>
         contents switch

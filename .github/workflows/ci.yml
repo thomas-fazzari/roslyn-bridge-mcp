@@ -54,8 +54,8 @@ jobs:
       - run: mise run install
       - run: "mise run hooks:check ::: fmt:check ::: docs:build ::: notices:check ::: build"
 
-  native:
-    name: Native AOT (${{ matrix.rid }})
+  test:
+    name: Test (${{ matrix.os }})
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: ${{ matrix.os }}
@@ -63,32 +63,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          # Unit tests run on the managed runtime, so one runner per operating system is enough
-          - os: ubuntu-latest
-            rid: linux-x64
-            executable: RoslynBridge
-            unit-tests: true
-          - os: ubuntu-24.04-arm
-            rid: linux-arm64
-            executable: RoslynBridge
-          - os: macos-26-intel
-            rid: osx-x64
-            executable: RoslynBridge
-          - os: macos-latest
-            rid: osx-arm64
-            executable: RoslynBridge
-            unit-tests: true
-          - os: windows-latest
-            rid: win-x64
-            executable: RoslynBridge.exe
-            unit-tests: true
+        os: [ubuntu-latest, macos-latest, windows-latest]
     defaults:
       run:
         shell: bash
     env:
-      RUNTIME_ID: ${{ matrix.rid }}
-      EXECUTABLE: ${{ matrix.executable }}
       CONFIGURATION: Release
       # Tasks are written for Bash. Git Bash is preinstalled on Windows runners.
       MISE_WINDOWS_DEFAULT_INLINE_SHELL_ARGS: bash -c
@@ -99,44 +78,40 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           install_args: dotnet
-      - name: Install native build tools
-        run: mise run ci:setup
-      - name: Set binary version
-        run: mise run ci:version
-      - name: Run unit tests
-        if: matrix.unit-tests
-        run: mise run test
-      - name: Publish native executable
-        run: mise run publish
+      - run: mise run test
       - name: Install Roslyn for integration tests
         run: mise run ci:roslyn
-      - name: Test native executable against Roslyn
-        env:
-          ROSLYN_BRIDGE_TEST_EXECUTABLE: ${{ github.workspace }}/artifacts/native/${{ matrix.executable }}
-        run: mise run test-integration
+      - run: mise run test-integration
       - name: Upload hang dumps
         if: failure()
         uses: actions/upload-artifact@v7.0.2
         with:
-          name: hang-dumps-${{ matrix.rid }}
+          name: hang-dumps-${{ matrix.os }}
           path: TestResults/*.dmp
           if-no-files-found: ignore
-      - name: Package native executable
-        run: mise run ci:package
-      # Only the tag jobs download them
+
+  package:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: jdx/mise-action@v5.2.2
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          install_args: dotnet
+      - name: Set package version
+        run: mise run ci:version
+      - run: mise run pack
+      - name: Start the packed tool
+        run: |
+          dotnet tool install ThomasFazzari.RoslynBridge --tool-path "$RUNNER_TEMP/tool" --add-source artifacts/nupkg --version "$APP_VERSION"
+          "$RUNNER_TEMP/tool/roslyn-bridge-mcp" --help
+      # Only the tag jobs download it
       - uses: actions/upload-artifact@v7.0.2
         if: github.ref_type == 'tag'
         with:
-          name: native-${{ matrix.rid }}
-          path: artifacts/release/*
-          if-no-files-found: error
-          compression-level: 0
-      - name: Pack .NET tool package
-        run: mise run pack
-      - uses: actions/upload-artifact@v7.0.2
-        if: github.ref_type == 'tag'
-        with:
-          name: nupkg-${{ matrix.rid }}
+          name: nupkg
           path: artifacts/nupkg/*
           if-no-files-found: error
           compression-level: 0
@@ -145,7 +120,7 @@ jobs:
   ci-ok:
     name: ci-ok
     if: always()
-    needs: [changes, formatting, native]
+    needs: [changes, formatting, test, package]
     runs-on: ubuntu-latest
     steps:
       - name: Require every job to pass or be skipped
@@ -156,7 +131,7 @@ jobs:
   release:
     name: Publish GitHub release
     if: github.ref_type == 'tag'
-    needs: [formatting, native]
+    needs: [formatting, test, package]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -168,10 +143,9 @@ jobs:
           install: false
       - uses: actions/download-artifact@v8.0.2
         with:
-          pattern: native-*
-          path: artifacts
-          merge-multiple: true
-      - name: Publish tested executables and notices
+          name: nupkg
+          path: artifacts/nupkg
+      - name: Publish the release with the tool package
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -179,9 +153,9 @@ jobs:
         run: mise run ci:release
 
   nuget:
-    name: Publish NuGet packages
+    name: Publish NuGet package
     if: github.ref_type == 'tag'
-    needs: [formatting, native]
+    needs: [formatting, test, package]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -194,19 +168,14 @@ jobs:
           install_args: dotnet
       - uses: actions/download-artifact@v8.0.2
         with:
-          pattern: nupkg-*
+          name: nupkg
           path: artifacts/nupkg
-          merge-multiple: true
-      - name: Set package version
-        run: mise run ci:version
-      - name: Pack .NET tool package
-        run: mise run pack
       - name: Get NuGet API key
         id: login
         uses: NuGet/login@v1.2.0
         with:
           user: ${{ secrets.NUGET_USER }}
-      - name: Push packages to nuget.org
+      - name: Push the package to nuget.org
         env:
           NUGET_API_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}
         run: mise run ci:nuget

@@ -1,10 +1,6 @@
 # Third-party notices
 
-The release executables are Native AOT builds. They contain the components below, which stay under their own licenses. Build tools and code analyzers are not part of the executables, so they are not listed. The full license texts follow the lists.
-
-## .NET
-
-- [.NET runtime and libraries](https://github.com/dotnet/runtime): copyright .NET Foundation and Contributors, MIT license. The runtime also includes code from other projects. Their full notices are in `DOTNET_RUNTIME_NOTICES.txt`. The executable prints that file with `roslyn-bridge-mcp licenses`, and each release contains it.
+The .NET tool package contains the components below, which stay under their own licenses. It does not contain the .NET runtime, which is installed separately, nor build tools and code analyzers. The full license texts follow the lists.
 
 ## NuGet packages
 

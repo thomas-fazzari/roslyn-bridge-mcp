@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 using System.Collections.Immutable;
-using System.Text.Json.Nodes;
 
 namespace RoslynBridge.Lsp;
 
@@ -24,7 +23,7 @@ internal sealed partial class RoslynSession
     /// <summary>
     /// Applies a <c>$/progress</c> value to the progress that carries the token.
     /// </summary>
-    internal void ReportProgress(string token, JsonObject value) =>
+    internal void ReportProgress(string token, WorkDoneProgress value) =>
         ImmutableInterlocked.Update(ref _progress, tracked => WithProgress(tracked, token, value));
 
     private void ClearProgress() => Volatile.Write(ref _progress, []);
@@ -33,14 +32,14 @@ internal sealed partial class RoslynSession
     private static ImmutableList<TrackedProgress> WithProgress(
         ImmutableList<TrackedProgress> tracked,
         string token,
-        JsonObject value
+        WorkDoneProgress value
     )
     {
         var index = tracked.FindIndex(entry =>
             string.Equals(entry.Token, token, StringComparison.Ordinal)
         );
-        var percentage = value["percentage"]?.GetValue<int>();
-        switch (value["kind"]?.GetValue<string>())
+        var percentage = value.Percentage;
+        switch (value.Kind)
         {
             case ProgressBegin:
                 var begun = new TrackedProgress(token, new LoadProgress(Title(value), percentage));
@@ -68,8 +67,8 @@ internal sealed partial class RoslynSession
     }
 
     /// <returns>The title without the trailing dots that Roslyn adds, as in Loading Workspace.slnx...</returns>
-    private static string Title(JsonObject value) =>
-        value["title"]?.GetValue<string>().TrimEnd('.', '\u2026') ?? string.Empty;
+    private static string Title(WorkDoneProgress value) =>
+        value.Title?.TrimEnd('.', '\u2026') ?? string.Empty;
 
     private sealed record TrackedProgress(string Token, LoadProgress Progress);
 }

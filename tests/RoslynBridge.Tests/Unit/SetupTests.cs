@@ -3,28 +3,35 @@
 
 namespace RoslynBridge.Tests.Unit;
 
-public sealed class SetupTests : IDisposable
+public sealed class SetupTests
 {
-    private readonly string _root = Directory.CreateTempSubdirectory("roslyn-setup-").FullName;
+    private const string Launcher = "/home/me/.dotnet/tools/roslyn-bridge-mcp";
+    private const string Root = "/opt/dotnet";
 
     [Fact]
-    public void ToolInstallRegistersTheToolLinkInsteadOfTheVersionedStoreFolder()
+    public void DnxRunRegistersDnxBesideTheDotnetHost()
     {
-        var link = Path.Combine(_root, Setup.ToolCommandName);
-        File.WriteAllText(link, string.Empty);
-        var executable = Path.Combine(_root, ".store", "tool", "1.0.0", "tools", "RoslynBridge");
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "Windows registers dnx from PATH.");
 
-        Setup.StableBridgePath(executable).Should().Be(link);
+        var command = Setup.BridgeCommand($"{Root}/dotnet", Root, [Root]);
+
+        command.Should().StartWith($"{Root}/dnx {Setup.PackageId}@").And.EndWith(" --yes");
+        command.Should().NotContain("+");
     }
 
     [Fact]
-    public void BridgePathStaysTheProcessPathWithoutAToolLink()
+    public void LauncherGetsDotnetRootWhenItsInstallIsNotAHostRoot()
     {
-        var installed = Path.Combine(_root, "bin", Setup.ToolCommandName);
-        var store = Path.Combine(_root, ".store", "tool", "1.0.0", "tools", "RoslynBridge");
+        Assert.SkipWhen(
+            OperatingSystem.IsWindows(),
+            "Windows launchers find .NET from the registry."
+        );
 
-        Setup.StableBridgePath(installed).Should().Be(installed);
-        Setup.StableBridgePath(store).Should().Be(store);
+        Setup
+            .BridgeCommand(Launcher, Root, ["/usr/share/dotnet"])
+            .Should()
+            .Be($"/usr/bin/env DOTNET_ROOT={Root} {Launcher}");
+        Setup.BridgeCommand(Launcher, Root, [$"{Root}/"]).Should().Be(Launcher);
     }
 
     [Theory]
@@ -42,8 +49,9 @@ public sealed class SetupTests : IDisposable
             string.Equals(agent.Executable, executable, StringComparison.Ordinal)
         );
 
-        agent.Registration("/opt/my tools/roslyn-bridge-mcp").Should().Be(expected);
+        agent
+            .Registration(Setup.BridgeCommand("/opt/my tools/roslyn-bridge-mcp", Root, [Root]))
+            .Should()
+            .Be(expected);
     }
-
-    public void Dispose() => Directory.Delete(_root, recursive: true);
 }

@@ -2,11 +2,20 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace RoslynBridge.Settings;
 
 internal static class ProjectSettingsReader
 {
+    private static readonly JsonSerializerOptions _options = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        ReadCommentHandling = JsonCommentHandling.Skip,
+        AllowTrailingCommas = true,
+        UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
+    };
+
     /// <summary>
     /// Reads the settings file of the workspace root.
     /// </summary>
@@ -25,7 +34,7 @@ internal static class ProjectSettingsReader
         {
             using var file = File.OpenRead(path);
             settings =
-                JsonSerializer.Deserialize(file, SettingsJsonContext.Default.ProjectSettings)
+                JsonSerializer.Deserialize<ProjectSettings>(file, _options)
                 ?? new ProjectSettings();
         }
         catch (Exception exception)
