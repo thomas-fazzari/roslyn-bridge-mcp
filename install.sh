@@ -11,7 +11,10 @@ case "$(uname -s)/$(uname -m)" in
   Darwin/x86_64) runtime=osx-x64 ;;
   Linux/x86_64) runtime=linux-x64 ;;
   Linux/aarch64 | Linux/arm64) runtime=linux-arm64 ;;
-  *) printf 'Unsupported platform: %s/%s. On Windows, use install.ps1.\n' "$(uname -s)" "$(uname -m)" >&2; exit 1 ;;
+  *)
+    printf 'Unsupported platform: %s/%s. On Windows, use install.ps1.\n' "$(uname -s)" "$(uname -m)" >&2
+    exit 1
+    ;;
 esac
 
 asset="roslyn-bridge-mcp-$runtime"

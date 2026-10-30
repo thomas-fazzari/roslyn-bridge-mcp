@@ -33,6 +33,6 @@ A tool name, a parameter, a result line, an error code, a command-line option or
 
 ## Checks
 
-The `commit-msg` Git hook in `lefthook.yml` runs `eng/tasks/commit-msg.pl`, which rejects a first line without a type and any text after it. Merge, revert, `fixup!` and `squash!` messages pass. Run `mise run hooks:install` once to enable it.
+The `commit-msg` Git hook in `hk.pkl` runs `eng/tasks/commit-msg.pl`, which rejects a first line without a type and any text after it. Merge, revert, `fixup!` and `squash!` messages pass. Run `mise run hooks:install` once to enable it.
 
 The hook cannot see the title of a pull request, so check it yourself before the squash merge.

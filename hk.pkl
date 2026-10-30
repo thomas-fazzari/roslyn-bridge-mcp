@@ -1,0 +1,51 @@
+amends "package://github.com/jdx/hk/releases/download/v2.10.0/hk@2.10.0#/Config.pkl"
+import "package://github.com/jdx/hk/releases/download/v2.10.0/hk@2.10.0#/Builtins.pkl"
+
+local dotnet = "**/*.{cs,csx,csproj,props,targets,slnx,xml,config,resx}"
+
+// Steps of `hk check`, `hk fix` and the pre-commit hook. `mise run fix` runs them on every file.
+local linters = new Mapping<String, Step> {
+  ["csharpier"] {
+    glob = dotnet
+    check = "csharpier check {{files}}"
+    fix = "csharpier format {{files}}"
+  }
+  ["oxfmt"] {
+    glob = "**/*.{md,mdx,json,jsonc,yml,yaml,toml,js,mjs,ts}"
+    check = "bunx --bun oxfmt --check --no-error-on-unmatched-pattern {{files}}"
+    fix = "bunx --bun oxfmt --write --no-error-on-unmatched-pattern {{files}}"
+  }
+  // --no-globs drops the globs of .markdownlint-cli2.yaml, so this glob repeats them
+  ["markdownlint"] {
+    glob = List("README.md", "AGENTS.md", "CONTRIBUTING.md", "docs/**/*.mdx")
+    depends = "oxfmt"
+    check = "bunx --bun markdownlint-cli2 --no-globs {{files}}"
+    fix = "bunx --bun markdownlint-cli2 --no-globs --fix {{files}}"
+  }
+  ["shellcheck"] = Builtins.shellcheck
+  ["shfmt"] = Builtins.shfmt
+}
+
+steps = linters
+
+hooks {
+  ["commit-msg"] {
+    steps {
+      ["commit-type"] {
+        check = "perl eng/tasks/commit-msg.pl {{commit_msg_file}}"
+      }
+    }
+  }
+  ["pre-push"] {
+    steps = (linters) {
+      ["build"] {
+        glob = List(dotnet, "global.json", "**/.editorconfig", "eng/Analyzers.globalconfig")
+        check = "mise run build"
+      }
+      ["docs-build"] {
+        glob = List("README.md", "AGENTS.md", "CONTRIBUTING.md", "docs/**")
+        check = "mise run docs:build"
+      }
+    }
+  }
+}
