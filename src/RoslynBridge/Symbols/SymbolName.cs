@@ -2,8 +2,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 using System.Buffers;
-using System.Collections.Immutable;
-using System.Globalization;
 using RoslynBridge.Lsp;
 
 namespace RoslynBridge.Symbols;

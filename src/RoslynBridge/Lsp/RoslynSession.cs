@@ -1,11 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Thomas Fazzari
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-using System.Diagnostics;
-using System.Diagnostics.CodeAnalysis;
 using System.IO.Pipelines;
-using System.Text;
-using System.Text.Json.Nodes;
 using Microsoft.Extensions.Logging;
 using RoslynBridge.Settings;
 using StreamJsonRpc;

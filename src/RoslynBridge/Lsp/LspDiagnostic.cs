@@ -1,8 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Thomas Fazzari
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-using System.Text.Json;
-
 namespace RoslynBridge.Lsp;
 
 /// <param name="Code">A string or a number.</param>
