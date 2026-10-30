@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 using System.Runtime.ExceptionServices;
-using System.Text.Json.Nodes;
 using RoslynBridge.Lsp;
 using RoslynBridge.Results;
 
