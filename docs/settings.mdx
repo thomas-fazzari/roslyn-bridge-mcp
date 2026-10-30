@@ -56,3 +56,23 @@ Faults are an unreadable or malformed file, an unknown key, a value of the wrong
 ```
 
 `lsp` with `action=reload` reads the file again. When the file has become invalid, the call returns the error `invalid_settings` with the faults, and the bridge keeps the settings it already had.
+
+## Telemetry
+
+The bridge can send traces, metrics and logs over the OpenTelemetry Protocol (OTLP). It sends nothing unless `ROSLYN_BRIDGE_TELEMETRY` is `1` or `true` in the environment that the MCP client gives it. An OpenTelemetry endpoint inherited from the client is not enough. `OTEL_SDK_DISABLED=true` turns the export off.
+
+Telemetry depends on the machine, so `.roslyn-bridge.json` cannot turn it on. Set the variables in the `env` entry of the server in the client configuration:
+
+```json
+{
+  "env": {
+    "ROSLYN_BRIDGE_TELEMETRY": "1",
+    "OTEL_EXPORTER_OTLP_ENDPOINT": "http://localhost:4318",
+    "OTEL_EXPORTER_OTLP_PROTOCOL": "http/protobuf"
+  }
+}
+```
+
+The standard `OTEL_` variables configure the export: endpoint, protocol, headers and resource attributes. Without them, the bridge sends to `http://localhost:4317` over gRPC. A collector that listens on port 4318 needs `OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf`. The service name is `roslyn-bridge-mcp` unless `OTEL_SERVICE_NAME` sets another.
+
+The data names each tool, action, Roslyn request and error code, with durations, result sizes and wait times. Apart from `action`, it contains no tool arguments, and it contains no source text. Logs start at the information level, and warnings can name a file. The names of metrics, spans and attributes are experimental and may change in any release.

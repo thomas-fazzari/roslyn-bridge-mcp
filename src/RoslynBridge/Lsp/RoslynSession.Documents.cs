@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Thomas Fazzari
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+using RoslynBridge.Telemetry;
+
 namespace RoslynBridge.Lsp;
 
 internal sealed partial class RoslynSession
@@ -125,7 +127,14 @@ internal sealed partial class RoslynSession
         return uris;
     }
 
-    public async Task SynchronizeAsync(CancellationToken cancellationToken)
+    public Task SynchronizeAsync(CancellationToken cancellationToken) =>
+        BridgeTelemetry.TraceAsync(
+            "roslyn_bridge.workspace.sync",
+            BridgeTelemetry.SyncDuration,
+            () => SynchronizeAllAsync(cancellationToken)
+        );
+
+    private async Task SynchronizeAllAsync(CancellationToken cancellationToken)
     {
         using var held = await LockDocumentsAsync(cancellationToken);
         foreach (var path in _documents.Keys.ToArray())

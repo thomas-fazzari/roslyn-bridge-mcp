@@ -4,6 +4,7 @@
 using System.IO.Pipelines;
 using Microsoft.Extensions.Logging;
 using RoslynBridge.Settings;
+using RoslynBridge.Telemetry;
 using StreamJsonRpc;
 
 namespace RoslynBridge.Lsp;
@@ -88,7 +89,15 @@ internal sealed partial class RoslynSession(
         _startupCancellation?.Dispose();
         _startupCancellation = new CancellationTokenSource();
         var cancellationToken = _startupCancellation.Token;
-        _startup = Task.Run(() => StartAsync(cancellationToken), cancellationToken);
+        _startup = Task.Run(
+            () =>
+                BridgeTelemetry.TraceAsync(
+                    "roslyn_bridge.workspace.load",
+                    BridgeTelemetry.LoadDuration,
+                    () => StartAsync(cancellationToken)
+                ),
+            cancellationToken
+        );
     }
 
     /// <summary>
@@ -124,7 +133,17 @@ internal sealed partial class RoslynSession(
         }
     }
 
-    public async Task<JsonNode?> RequestAsync(
+    public Task<JsonNode?> RequestAsync(
+        string method,
+        JsonNode? parameters,
+        CancellationToken cancellationToken
+    ) =>
+        BridgeTelemetry.TraceLspAsync(
+            method,
+            () => InvokeAsync(method, parameters, cancellationToken)
+        );
+
+    private async Task<JsonNode?> InvokeAsync(
         string method,
         JsonNode? parameters,
         CancellationToken cancellationToken
@@ -239,9 +258,19 @@ internal sealed partial class RoslynSession(
             _stderrTail.Clear();
         }
 
-        _stderrTask = ReadStderrAsync(_server.Error, _processLifetime.Token);
-        StartRpc(_server);
-        StartWatching();
+        // Roslyn's callbacks belong to no tool call, so the listeners must not capture the load activity
+        var activity = Activity.Current;
+        Activity.Current = null;
+        try
+        {
+            _stderrTask = ReadStderrAsync(_server.Error, _processLifetime.Token);
+            StartRpc(_server);
+            StartWatching();
+        }
+        finally
+        {
+            Activity.Current = activity;
+        }
     }
 
     [SuppressMessage(
@@ -268,10 +297,14 @@ internal sealed partial class RoslynSession(
         JsonObject? result;
         try
         {
-            result = await rpc.InvokeWithParameterObjectAsync<JsonObject>(
+            result = await BridgeTelemetry.TraceLspAsync(
                 LspMethods.Initialize,
-                initialize,
-                cancellationToken
+                () =>
+                    rpc.InvokeWithParameterObjectAsync<JsonObject>(
+                        LspMethods.Initialize,
+                        initialize,
+                        cancellationToken
+                    )
             );
         }
         catch (Exception exception) when (exception is ConnectionLostException or IOException)
@@ -302,6 +335,7 @@ internal sealed partial class RoslynSession(
         }
 
         _workspaceFiles = ScanWorkspace(cancellationToken);
+        LogWorkspaceLoaded(logger, _workspaceFiles.Count);
     }
 
     // Roslyn finds what to load itself unless the settings name a solution or projects
@@ -498,6 +532,12 @@ internal sealed partial class RoslynSession(
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "Roslyn stderr: {Message}")]
     private static partial void LogStderr(ILogger logger, string message);
+
+    [LoggerMessage(
+        Level = LogLevel.Information,
+        Message = "Roslyn loaded the workspace, with {FileCount} watched files."
+    )]
+    private static partial void LogWorkspaceLoaded(ILogger logger, int fileCount);
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "Roslyn stderr stream closed.")]
     private static partial void LogStderrClosed(ILogger logger);
