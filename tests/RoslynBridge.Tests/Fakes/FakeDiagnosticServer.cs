@@ -40,6 +40,9 @@ internal static class FakeDiagnosticServer
                 },
             };
 
+    public static JsonObject FullReport(JsonArray items) =>
+        new() { ["kind"] = "full", ["items"] = items };
+
     private static JsonObject Report(string code) =>
         new()
         {
@@ -48,10 +51,7 @@ internal static class FakeDiagnosticServer
             ["items"] = new JsonArray(
                 new JsonObject
                 {
-                    ["range"] = new JsonObject
-                    {
-                        ["start"] = new JsonObject { ["line"] = 0, ["character"] = 0 },
-                    },
+                    ["range"] = LspLocationJson.Range(0, 0),
                     ["severity"] = (int)DiagnosticSeverity.Warning,
                     ["code"] = code,
                     ["message"] = $"Message {code}",

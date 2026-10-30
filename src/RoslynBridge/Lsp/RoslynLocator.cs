@@ -1,29 +1,24 @@
 // SPDX-FileCopyrightText: 2026 Thomas Fazzari
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-using System.Diagnostics;
 using System.Runtime.InteropServices;
-using System.Runtime.Versioning;
-using Microsoft.Win32;
 
 namespace RoslynBridge.Lsp;
 
 /// <summary>
-/// Finds the Roslyn server and the .NET install it runs on, because MCP clients often launch the
-/// bridge without the user's DOTNET_ROOT or shell PATH.
+/// Finds the Roslyn server and the .NET install it runs on.
 /// </summary>
-/// <param name="fixedRoots">.NET install locations to try after the environment and PATH, in order.</param>
+/// <param name="bridgeRoot">The .NET install that runs the bridge, used unless --dotnet-root names another.</param>
 internal sealed class RoslynLocator(
     Func<string, string?> environment,
     string home,
-    IReadOnlyList<string> fixedRoots
+    string bridgeRoot
 )
 {
     internal const string ServerName = "roslyn-language-server";
     internal const string ServerBinaryName = "Microsoft.CodeAnalysis.LanguageServer";
 
     private const string RuntimeMajorVersion = "10.";
-    private static readonly TimeSpan _listSdksTimeout = TimeSpan.FromSeconds(10);
 
     private static readonly string[] _architectureVariables =
     [
@@ -37,14 +32,15 @@ internal sealed class RoslynLocator(
         new(
             Environment.GetEnvironmentVariable,
             Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            SystemRoots()
+            BridgeRoot()
         );
 
     private static string Executable(string name) =>
         OperatingSystem.IsWindows() ? $"{name}.exe" : name;
 
-    private static string ArchitectureName =>
-        RuntimeInformation.ProcessArchitecture.ToString().ToUpperInvariant();
+    // The runtime directory is ROOT/shared/Microsoft.NETCore.App/VERSION
+    internal static string BridgeRoot() =>
+        Path.GetFullPath(Path.Combine(RuntimeEnvironment.GetRuntimeDirectory(), "..", "..", ".."));
 
     public string FindServer(string? explicitPath)
     {
@@ -65,41 +61,11 @@ internal sealed class RoslynLocator(
 
     public string FindDotnetRoot(string? explicitRoot)
     {
-        if (explicitRoot is not null)
-        {
-            return IsValidRoot(explicitRoot)
-                ? explicitRoot
-                : throw new DirectoryNotFoundException(
-                    $"--dotnet-root {explicitRoot} does not contain a .NET 10 runtime and an SDK."
-                );
-        }
-
-        var candidates = new List<string>();
-        foreach (var variable in (string[])[$"DOTNET_ROOT_{ArchitectureName}", "DOTNET_ROOT"])
-        {
-            if (environment(variable) is { Length: > 0 } root)
-            {
-                candidates.Add(root);
-            }
-        }
-
-        if (FindOnPath("dotnet") is { } dotnet)
-        {
-            candidates.Add(Path.GetDirectoryName(RealPath(dotnet))!);
-        }
-
-        foreach (var root in candidates.Concat(fixedRoots))
-        {
-            if (IsValidRoot(root))
-            {
-                return root;
-            }
-        }
-
-        // A shim on PATH, such as a version manager's, resolves the install only when it runs
-        return RootFromListedSdks()
-            ?? throw new DirectoryNotFoundException(
-                $"No .NET install with a 10.0 runtime and an SDK was found in {string.Join(", ", candidates.Concat(fixedRoots).Distinct(StringComparer.Ordinal))}. Pass --dotnet-root."
+        var root = explicitRoot ?? bridgeRoot;
+        return IsValidRoot(root)
+            ? root
+            : throw new DirectoryNotFoundException(
+                $"The .NET install {root} does not contain a .NET 10 runtime and an SDK. Pass --dotnet-root."
             );
     }
 
@@ -157,90 +123,4 @@ internal sealed class RoslynLocator(
 
     private static string RealPath(string path) =>
         File.ResolveLinkTarget(path, returnFinalTarget: true)?.FullName ?? path;
-
-    // `dotnet --list-sdks` prints one "10.0.100 [/path/to/dotnet/sdk]" line per SDK
-    private string? RootFromListedSdks()
-    {
-        if (FindOnPath("dotnet") is not { } dotnet)
-        {
-            return null;
-        }
-
-        var startInfo = new ProcessStartInfo(dotnet, "--list-sdks")
-        {
-            RedirectStandardOutput = true,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-        };
-        using var process = Process.Start(startInfo);
-        if (process is null)
-        {
-            return null;
-        }
-
-        using var timeout = new CancellationTokenSource(_listSdksTimeout);
-        var output = process.StandardOutput.ReadToEndAsync(timeout.Token);
-        if (!process.WaitForExit(_listSdksTimeout))
-        {
-            process.Kill(entireProcessTree: true);
-            return null;
-        }
-
-        return output
-            .Result.Split('\n', StringSplitOptions.RemoveEmptyEntries)
-            .Select(static line => line.Trim())
-            .Where(static line => line.EndsWith(']'))
-            .Select(static line => line[(line.IndexOf('[', StringComparison.Ordinal) + 1)..^1])
-            .Select(Path.GetDirectoryName)
-            .FirstOrDefault(static root => root is not null && IsValidRoot(root));
-    }
-
-    private static string[] SystemRoots()
-    {
-        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        var roots = new List<string>();
-        if (OperatingSystem.IsWindows())
-        {
-            roots.AddRange(RegisteredWindowsRoot());
-            roots.Add(
-                Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
-                    "dotnet"
-                )
-            );
-        }
-        else
-        {
-            var architecture = ArchitectureName.ToLowerInvariant();
-            foreach (
-                var file in (string[])
-                    [$"/etc/dotnet/install_location_{architecture}", "/etc/dotnet/install_location"]
-            )
-            {
-                if (File.Exists(file))
-                {
-                    roots.Add(File.ReadAllText(file).Trim());
-                }
-            }
-
-            roots.Add(OperatingSystem.IsMacOS() ? "/usr/local/share/dotnet" : "/usr/share/dotnet");
-        }
-
-        // The official dotnet-install script installs here by default
-        roots.Add(Path.Combine(home, ".dotnet"));
-        return [.. roots];
-    }
-
-    [SupportedOSPlatform("windows")]
-    private static IEnumerable<string> RegisteredWindowsRoot()
-    {
-        using var machine = RegistryKey.OpenBaseKey(
-            RegistryHive.LocalMachine,
-            RegistryView.Registry32
-        );
-        using var key = machine.OpenSubKey(
-            $@"SOFTWARE\dotnet\Setup\InstalledVersions\{ArchitectureName.ToLowerInvariant()}"
-        );
-        return key?.GetValue("InstallLocation") is string location ? [location] : [];
-    }
 }

@@ -2,6 +2,8 @@ config:
   extends: ./node_modules/markdownlint/style/prettier.json
   MD024:
     siblings_only: true
+  MD033:
+    allowed_elements: [Aside]
 globs:
   - README.md
   - AGENTS.md

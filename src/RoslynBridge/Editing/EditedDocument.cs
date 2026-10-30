@@ -3,7 +3,6 @@
 
 using System.Diagnostics;
 using System.Text;
-using System.Text.Json.Nodes;
 using RoslynBridge.Results;
 
 namespace RoslynBridge.Editing;
@@ -50,7 +49,7 @@ internal sealed class EditedDocument(string path, byte[]? original)
 
     public bool Changed => CaseOnlyRename || !SameBytes(Original, Content);
 
-    public void Apply(JsonArray edits)
+    public void Apply(TextEdit?[] edits)
     {
         var content =
             Content

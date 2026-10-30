@@ -51,7 +51,7 @@ internal sealed class ServerTool(LspTool lsp)
         );
 }
 
-[JsonConverter(typeof(JsonStringEnumConverter<ServerAction>))]
+[JsonConverter(typeof(JsonStringEnumConverter))]
 internal enum ServerAction
 {
     [JsonStringEnumMemberName("status")]

@@ -53,7 +53,7 @@ internal sealed class NavigateTool(LspTool lsp)
         );
 }
 
-[JsonConverter(typeof(JsonStringEnumConverter<NavigationAction>))]
+[JsonConverter(typeof(JsonStringEnumConverter))]
 internal enum NavigationAction
 {
     [JsonStringEnumMemberName("definition")]

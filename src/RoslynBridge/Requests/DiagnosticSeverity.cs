@@ -8,7 +8,7 @@ namespace RoslynBridge.Requests;
 /// <summary>
 /// LSP diagnostic severities, from most to least severe.
 /// </summary>
-[JsonConverter(typeof(JsonStringEnumConverter<DiagnosticSeverity>))]
+[JsonConverter(typeof(JsonStringEnumConverter))]
 internal enum DiagnosticSeverity
 {
     [JsonStringEnumMemberName("error")]

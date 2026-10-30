@@ -24,7 +24,7 @@ In VS Code, open `roslyn-bridge.code-workspace`, on the host or in the dev conta
 
 ## Dev container
 
-`.devcontainer` describes an Ubuntu container with mise, clang and zlib for Native AOT builds. On creation, it installs the tools from `mise.toml`, restores the dependencies and installs the Roslyn language server for the integration tests.
+`.devcontainer` describes an Ubuntu container with mise. On creation, it installs the tools from `mise.toml`, restores the dependencies and installs the Roslyn language server for the integration tests.
 The container keeps `node_modules` in a Docker volume, because Bun installs platform-specific binaries that would break the host checkout. Build output in `bin` and `obj` is shared with the host, so the first build on the other side restores again.
 
 ## Local settings

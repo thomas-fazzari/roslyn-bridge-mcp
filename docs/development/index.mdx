@@ -2,7 +2,7 @@
 title: "Developer guide"
 ---
 
-Roslyn Bridge MCP is a native executable that serves C# tools over the Model Context Protocol (MCP). It starts the official Roslyn language server, keeps it in sync with the workspace files and turns tool calls into Language Server Protocol (LSP) requests.
+Roslyn Bridge MCP is a .NET tool that serves C# tools over the Model Context Protocol (MCP). It starts the official Roslyn language server, keeps it in sync with the workspace files and turns tool calls into Language Server Protocol (LSP) requests.
 
 ## Design rules
 
@@ -18,7 +18,7 @@ Roslyn Bridge MCP is a native executable that serves C# tools over the Model Con
 - [Setup](setup.mdx) covers the tools to install and local settings.
 - [Validation](validation.mdx) lists the checks to run and how to run a subset of tests.
 - [Branches and commits](contributing.mdx) covers branch names, commit types and pull requests.
-- [Releases](releases.mdx) covers native builds and publishing.
+- [Releases](releases.mdx) covers packaging and publishing.
 - [C# conventions](conventions/csharp.mdx) and [testing conventions](conventions/testing.mdx) state the rules for code and tests.
 - [Documentation](documentation.mdx) defines what these pages cover and how to write them.
 
@@ -45,7 +45,7 @@ Roslyn Bridge MCP is a native executable that serves C# tools over the Model Con
 
 Tool names, parameters, result lines and error codes are a public contract that agents and their instructions depend on. Change one only when the gain justifies breaking them. A tool change reaches these places:
 
-- The tool class in `src/RoslynBridge/Tools` and its registration in `Program.cs`. A new argument type also needs an entry in `ToolJsonContext`, because Native AOT cannot serialize it by reflection.
+- The tool class in `src/RoslynBridge/Tools`, marked `[McpServerToolType]`. `Program.cs` registers every such class in the assembly.
 - `ToolDescriptions`, which holds the parameter descriptions and the server instructions that clients pass to the model.
 - [Usage](../usage.mdx), which documents parameters, results and errors.
 - `docs/public/llms.txt`, the plain-text reference for agents.

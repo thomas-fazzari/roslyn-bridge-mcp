@@ -38,7 +38,7 @@ public sealed class CommandEditsTests : IDisposable
             TestCt
         );
 
-        acknowledgement["applied"]!.GetValue<bool>().Should().BeTrue();
+        acknowledgement.Applied.Should().BeTrue();
         captureCalls.Should().Be(1);
         commandEdits.Failure.Should().BeOfType<EditApplicationException>();
         ((EditApplicationException)commandEdits.Failure!)
@@ -53,7 +53,7 @@ public sealed class CommandEditsTests : IDisposable
             TestCt
         );
 
-        rejected["applied"]!.GetValue<bool>().Should().BeFalse();
+        rejected.Applied.Should().BeFalse();
         await AssertFileTextAsync(path, "class B {}");
         commandEdits.Result.Operations.Count.Should().Be(1);
     }
@@ -83,8 +83,8 @@ public sealed class CommandEditsTests : IDisposable
             TestCt
         );
 
-        first["applied"]!.GetValue<bool>().Should().BeTrue();
-        second["applied"]!.GetValue<bool>().Should().BeFalse();
+        first.Applied.Should().BeTrue();
+        second.Applied.Should().BeFalse();
         commandEdits.Failure.Should().NotBeNull();
         commandEdits.Result.FileCount.Should().Be(1);
         commandEdits.Result.Operations.Count.Should().Be(1);
@@ -139,8 +139,8 @@ public sealed class CommandEditsTests : IDisposable
         second.IsCompleted.Should().BeFalse();
         releaseFirstCapture.TrySetResult();
 
-        (await first)["applied"]!.GetValue<bool>().Should().BeTrue();
-        (await second)["applied"]!.GetValue<bool>().Should().BeTrue();
+        (await first).Applied.Should().BeTrue();
+        (await second).Applied.Should().BeTrue();
         captureCalls.Should().Be(2);
         commandEdits.Result.Operations.Count.Should().Be(2);
         await AssertFileTextAsync(firstPath, "class Changed {}");
@@ -187,12 +187,12 @@ public sealed class CommandEditsTests : IDisposable
             .BeAssignableTo<OperationCanceledException>();
         commandEdits.Result.Applied.Should().BeTrue();
         commandEdits.Result.FileCount.Should().Be(1);
-        (await pending)["applied"]!.GetValue<bool>().Should().BeTrue();
+        (await pending).Applied.Should().BeTrue();
         var rejected = await commandEdits.ApplyAsync(
             WorkspaceChanges(path, TextEdit(0, 6, 0, 7, "C")),
             cancellationToken
         );
-        rejected["applied"]!.GetValue<bool>().Should().BeFalse();
+        rejected.Applied.Should().BeFalse();
         await AssertFileTextAsync(path, "class B {}");
     }
 

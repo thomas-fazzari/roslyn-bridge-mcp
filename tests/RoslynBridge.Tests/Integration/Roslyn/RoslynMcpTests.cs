@@ -25,10 +25,6 @@ namespace RoslynBridge.Tests.Integration.Roslyn;
 /// </code>
 /// The command builds the project. The tests restore their fixtures, launch Roslyn,
 /// and delete their temporary workspaces when finished.
-/// To test a published native bridge, set its absolute executable path:
-/// <code>
-/// ROSLYN_BRIDGE_TEST_EXECUTABLE=/absolute/path/RoslynBridge mise run test-integration
-/// </code>
 /// </remarks>
 public sealed partial class RoslynMcpTests
 {

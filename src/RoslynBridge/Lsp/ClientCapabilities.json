@@ -1,0 +1,45 @@
+{
+  "workspace": {
+    "configuration": true,
+    "workspaceFolders": true,
+    "applyEdit": true,
+    "didChangeWatchedFiles": { "dynamicRegistration": true },
+    "fileOperations": { "willRename": true },
+    "workspaceEdit": {
+      "documentChanges": true,
+      "resourceOperations": ["create", "rename", "delete"],
+      "failureHandling": "abort"
+    }
+  },
+  "window": { "workDoneProgress": true },
+  "textDocument": {
+    "diagnostic": { "relatedDocumentSupport": false },
+    "publishDiagnostics": { "relatedInformation": true, "versionSupport": true },
+    "hover": { "contentFormat": ["plaintext"] },
+    "definition": { "linkSupport": true },
+    "implementation": { "linkSupport": true },
+    "typeDefinition": { "linkSupport": true },
+    "documentSymbol": { "hierarchicalDocumentSymbolSupport": true },
+    "rename": { "prepareSupport": true },
+    "codeAction": {
+      "dataSupport": true,
+      "disabledSupport": true,
+      "resolveSupport": { "properties": ["edit", "command"] },
+      "codeActionLiteralSupport": {
+        "codeActionKind": {
+          "valueSet": [
+            "quickfix",
+            "refactor",
+            "refactor.extract",
+            "refactor.inline",
+            "refactor.rewrite",
+            "source",
+            "source.organizeImports",
+            "source.fixAll"
+          ]
+        }
+      }
+    }
+  },
+  "general": { "positionEncodings": ["utf-16"] }
+}

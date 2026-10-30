@@ -3,6 +3,7 @@
 
 using System.Globalization;
 using System.Text.Json.Nodes;
+using RoslynBridge.Lsp;
 using RoslynBridge.Queries;
 using RoslynBridge.Requests;
 using RoslynBridge.Results;
@@ -163,7 +164,7 @@ public sealed class LspResultsExtensionsTests
             ["tags"] = new JsonArray(1),
         };
 
-        var result = diagnostic.ToDiagnostic();
+        var result = diagnostic.Read<LspDiagnostic>().ToDiagnostic();
 
         result
             .Should()

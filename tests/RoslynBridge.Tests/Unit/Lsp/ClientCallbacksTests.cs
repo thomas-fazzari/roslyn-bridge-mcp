@@ -27,17 +27,17 @@ public sealed class ClientCallbacksTests : IDisposable
             async (edit, token) =>
             {
                 await editor.ApplyAsync(edit, snapshot, token);
-                return new JsonObject { ["applied"] = true };
+                return new ApplyWorkspaceEditResult(Applied: true);
             }
         );
         var callbacks = CreateCallbacks(session, paths);
 
         var response = await callbacks.ApplyEditAsync(
-            new JsonObject { ["label"] = "Rename class", ["edit"] = RenameClassEdit(source) },
+            new ApplyWorkspaceEditParams(RenameClassEdit(source)),
             TestCt
         );
 
-        response["applied"]!.GetValue<bool>().Should().BeTrue();
+        response.Applied.Should().BeTrue();
         await AssertFileTextAsync(source, "class After {}");
     }
 
@@ -50,11 +50,11 @@ public sealed class ClientCallbacksTests : IDisposable
         var callbacks = CreateCallbacks(session, paths);
 
         var response = await callbacks.ApplyEditAsync(
-            new JsonObject { ["edit"] = RenameClassEdit(source) },
+            new ApplyWorkspaceEditParams(RenameClassEdit(source)),
             TestCt
         );
 
-        response["applied"]!.GetValue<bool>().Should().BeFalse();
+        response.Applied.Should().BeFalse();
         await AssertFileTextAsync(source, "class Before {}");
     }
 

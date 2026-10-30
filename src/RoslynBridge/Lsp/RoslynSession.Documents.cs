@@ -199,42 +199,28 @@ internal sealed partial class RoslynSession
         return [.. _workspaceFiles.Keys];
     }
 
-    internal void RegisterCapabilities(JsonObject parameters)
+    internal void RegisterCapabilities(RegistrationParams parameters)
     {
-        if (parameters["registrations"] is not JsonArray registrations)
-        {
-            return;
-        }
-
-        foreach (var registration in registrations.OfType<JsonObject>())
+        foreach (var registration in parameters.Registrations)
         {
             if (
                 string.Equals(
-                    registration["method"]?.GetValue<string>(),
+                    registration.Method,
                     LspMethods.WorkspaceDidChangeWatchedFiles,
                     StringComparison.Ordinal
-                ) && registration["id"]?.GetValue<string>() is { } id
+                )
             )
             {
-                _watchRegistrations[id] = 0;
+                _watchRegistrations[registration.Id] = 0;
             }
         }
     }
 
-    internal void UnregisterCapabilities(JsonObject parameters)
+    internal void UnregisterCapabilities(UnregistrationParams parameters)
     {
-        // The misspelling is part of the LSP 3.17 protocol
-        if (parameters["unregisterations"] is not JsonArray registrations)
+        foreach (var registration in parameters.Unregisterations)
         {
-            return;
-        }
-
-        foreach (var registration in registrations.OfType<JsonObject>())
-        {
-            if (registration["id"]?.GetValue<string>() is { } id)
-            {
-                _watchRegistrations.TryRemove(id, out _);
-            }
+            _watchRegistrations.TryRemove(registration.Id, out _);
         }
     }
 

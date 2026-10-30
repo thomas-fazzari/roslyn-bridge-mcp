@@ -3,7 +3,6 @@
 
 using System.Text.Json.Nodes;
 using Microsoft.Extensions.Logging;
-using PolyType;
 using StreamJsonRpc;
 
 namespace RoslynBridge.Lsp;
@@ -11,7 +10,6 @@ namespace RoslynBridge.Lsp;
 /// <summary>
 /// Answers Roslyn requests and consumes its notifications while tool calls are pending.
 /// </summary>
-[GenerateShape(IncludeMethods = MethodShapeFlags.AllPublic)]
 internal sealed partial class ClientCallbacks(
     RoslynSession session,
     WorkspacePaths paths,
@@ -25,42 +23,28 @@ internal sealed partial class ClientCallbacks(
         LspMethods.WorkspaceConfiguration,
         UseSingleObjectParameterDeserialization = true
     )]
-    public static JsonArray Configuration(JsonObject parameters)
-    {
-        var result = new JsonArray();
-        if (parameters["items"] is not JsonArray items)
-        {
-            return result;
-        }
-
-        for (var index = 0; index < items.Count; index++)
-        {
-            result.Add(null);
-        }
-
-        return result;
-    }
+    public static object?[] Configuration(ConfigurationParams parameters) =>
+        new object?[parameters.Items.Length];
 
     [JsonRpcMethod(LspMethods.WorkspaceWorkspaceFolders)]
     public JsonArray WorkspaceFolders() => ClientCapabilities.WorkspaceFolders(paths);
 
     [JsonRpcMethod(LspMethods.WorkspaceApplyEdit, UseSingleObjectParameterDeserialization = true)]
-    public Task<JsonObject> ApplyEditAsync(
-        JsonObject parameters,
+    public Task<ApplyWorkspaceEditResult> ApplyEditAsync(
+        ApplyWorkspaceEditParams parameters,
         CancellationToken cancellationToken
     )
     {
-        if (session.ApplyWorkspaceEditAsync is { } apply && parameters["edit"] is JsonObject edit)
+        if (session.ApplyWorkspaceEditAsync is { } apply)
         {
-            return apply(edit, cancellationToken);
+            return apply(parameters.Edit, cancellationToken);
         }
 
         return Task.FromResult(
-            new JsonObject
-            {
-                ["applied"] = false,
-                ["failureReason"] = "No workspace edit is being applied by the current tool call.",
-            }
+            new ApplyWorkspaceEditResult(
+                Applied: false,
+                "No workspace edit is being applied by the current tool call."
+            )
         );
     }
 
@@ -68,14 +52,14 @@ internal sealed partial class ClientCallbacks(
         LspMethods.ClientRegisterCapability,
         UseSingleObjectParameterDeserialization = true
     )]
-    public void RegisterCapability(JsonObject parameters) =>
+    public void RegisterCapability(RegistrationParams parameters) =>
         session.RegisterCapabilities(parameters);
 
     [JsonRpcMethod(
         LspMethods.ClientUnregisterCapability,
         UseSingleObjectParameterDeserialization = true
     )]
-    public void UnregisterCapability(JsonObject parameters) =>
+    public void UnregisterCapability(UnregistrationParams parameters) =>
         session.UnregisterCapabilities(parameters);
 
     [JsonRpcMethod(LspMethods.WorkspaceProjectInitializationComplete)]
@@ -89,23 +73,18 @@ internal sealed partial class ClientCallbacks(
     public static void CreateProgress(JsonObject _) { }
 
     [JsonRpcMethod(LspMethods.Progress, UseSingleObjectParameterDeserialization = true)]
-    public void ReportProgress(JsonObject parameters)
-    {
-        if (parameters["token"]?.ToString() is { } token && parameters["value"] is JsonObject value)
-        {
-            session.ReportProgress(token, value);
-        }
-    }
+    public void ReportProgress(ProgressParams parameters) =>
+        session.ReportProgress(parameters.Token.ToString(), parameters.Value);
 
     [JsonRpcMethod(LspMethods.WindowLogMessage, UseSingleObjectParameterDeserialization = true)]
-    public void LogMessage(JsonObject parameters)
+    public void LogMessage(MessageParams parameters)
     {
         if (!logger.IsEnabled(LogLevel.Debug))
         {
             return;
         }
 
-        var message = parameters["message"]?.GetValue<string>() ?? string.Empty;
+        var message = parameters.Message;
         var boundedMessage = message
             .AsSpan(0, Math.Min(message.Length, MaximumLogMessageCharacters))
             .ToString();
@@ -113,7 +92,7 @@ internal sealed partial class ClientCallbacks(
     }
 
     [JsonRpcMethod(LspMethods.WindowShowMessage, UseSingleObjectParameterDeserialization = true)]
-    public void ShowMessage(JsonObject parameters) => LogMessage(parameters);
+    public void ShowMessage(MessageParams parameters) => LogMessage(parameters);
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "Roslyn: {Message}")]
     private static partial void LogRoslynMessage(ILogger logger, string message);

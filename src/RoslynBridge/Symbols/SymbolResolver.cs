@@ -182,7 +182,7 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
             var uri = await session.OpenDocumentAsync(file, cancellationToken);
             var contexts = await session.ProjectContextsAsync(uri, cancellationToken);
             projectsByFile[file] = contexts
-                .Select(context => context?["_vs_id"]?.GetValue<string>())
+                .Select(context => context.Id)
                 .OfType<string>()
                 .ToHashSet(StringComparer.Ordinal);
         }
@@ -289,7 +289,7 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
     /// A constructor is selected only when the request includes its parameter list.
     /// </summary>
     internal static IEnumerable<SymbolDeclaration> FindDeclarations(
-        IEnumerable<(string File, JsonArray Symbols)> documents,
+        IEnumerable<(string File, LspSymbol[] Symbols)> documents,
         SymbolName requested
     )
     {
@@ -316,12 +316,12 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
     }
 
     // Opening a document changes the session, so only the symbol requests run concurrently
-    private async Task<List<(string File, JsonArray Symbols)>> DocumentSymbolsAsync(
+    private async Task<List<(string File, LspSymbol[] Symbols)>> DocumentSymbolsAsync(
         IEnumerable<string> files,
         CancellationToken cancellationToken
     )
     {
-        var documents = new List<(string File, JsonArray Symbols)>();
+        var documents = new List<(string File, LspSymbol[] Symbols)>();
         // Batches stay within the open documents the session keeps
         foreach (var batch in files.Chunk(RoslynSession.MaximumOpenDocuments))
         {
@@ -336,7 +336,7 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
                 )
             );
             documents.AddRange(
-                batch.Zip(symbols, (file, result) => (file, result as JsonArray ?? []))
+                batch.Zip(symbols, (file, result) => (file, result.ReadArray<LspSymbol>()))
             );
         }
 
@@ -345,15 +345,15 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
 
     // Namespaces only qualify their members, so they are not declarations here
     private static IEnumerable<DeclaredSymbol> Declarations(
-        JsonArray symbols,
+        LspSymbol[] symbols,
         string file,
         SymbolName? container,
         string? containerDisplay
     )
     {
-        foreach (var symbol in symbols.OfType<JsonObject>())
+        foreach (var symbol in symbols)
         {
-            if (symbol["name"]?.GetValue<string>() is not { Length: > 0 } rawName)
+            if (symbol.Name is not { Length: > 0 } rawName)
             {
                 continue;
             }
@@ -363,8 +363,8 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
                 continue;
             }
 
-            var kind = symbol["kind"]?.GetValue<int>();
-            var children = symbol["children"] as JsonArray ?? [];
+            var kind = symbol.Kind;
+            var children = symbol.Children ?? [];
             // Members of an extension block are named as members of its enclosing class
             if (IsExtensionBlock(member, kind))
             {
@@ -381,10 +381,10 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
             display = containerDisplay is null ? display : $"{containerDisplay}.{display}";
             if (
                 kind is not LspSymbolKinds.Namespace
-                && symbol["selectionRange"]?["start"] is { } start
-                && symbol["range"] is { } range
+                && symbol is { SelectionRange: { } selection, Range: { } range }
             )
             {
+                var start = selection.Start.OneBased;
                 yield return new DeclaredSymbol(
                     name,
                     name.IsCtor,
@@ -393,11 +393,11 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
                         rawName.Trim(),
                         name.CorrectedKind(kind),
                         file,
-                        start["line"]!.GetValue<int>() + 1,
-                        start["character"]!.GetValue<int>() + 1,
-                        range["start"]!["line"]!.GetValue<int>() + 1,
-                        range["end"]!["line"]!.GetValue<int>() + 1,
-                        RoslynGlyphs.IsPrivate(symbol["glyph"]?.GetValue<int>())
+                        start.Line,
+                        start.Character,
+                        range.Start.OneBased.Line,
+                        range.End.OneBased.Line,
+                        RoslynGlyphs.IsPrivate(symbol.Glyph)
                     )
                 );
             }
@@ -482,24 +482,20 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
             cancellationToken
         );
         var matches = new List<WorkspaceMatch>();
-        foreach (var result in results as JsonArray ?? [])
+        foreach (var result in results.ReadArray<LspSymbol>())
         {
             if (
-                SymbolName.Parse(result?["name"]?.GetValue<string>() ?? string.Empty) is { } found
-                && result?["location"]?["uri"]?.GetValue<string>() is { } uri
+                SymbolName.Parse(result.Name) is { } found
+                && result.Location is { Uri: { } uri, Range: { } range }
                 && paths.TryGetWorkspaceFile(uri) is { } file
-                && result["location"]?["range"]?["start"] is { } start
             )
             {
                 matches.Add(
                     new WorkspaceMatch(
                         SymbolName.BaseName(found.Segments[^1]),
                         file,
-                        new SourcePosition(
-                            start["line"]!.GetValue<int>() + 1,
-                            start["character"]!.GetValue<int>() + 1
-                        ),
-                        result["kind"]?.GetValue<int>()
+                        range.Start.OneBased,
+                        result.Kind
                     )
                 );
             }

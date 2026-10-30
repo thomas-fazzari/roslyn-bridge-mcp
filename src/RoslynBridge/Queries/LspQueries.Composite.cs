@@ -153,9 +153,7 @@ internal sealed partial class LspQueries
             cancellationToken
         );
         return (supertypes as JsonArray ?? [])
-            .FirstOrDefault(supertype =>
-                supertype?["kind"]?.GetValue<int>() is LspSymbolKinds.Class
-            )
+            .FirstOrDefault(supertype => supertype.Read<LspSymbol>().Kind is LspSymbolKinds.Class)
             ?.DeepClone();
     }
 
@@ -165,11 +163,12 @@ internal sealed partial class LspQueries
         CancellationToken cancellationToken
     )
     {
+        var item = baseClass.Read<LspSymbol>();
         if (
-            baseClass["uri"]?.GetValue<string>() is not { } uri
+            item.Uri is not { } uri
             || paths.TryGetWorkspaceFile(uri) is not { } file
-            || baseClass["selectionRange"]?["start"]?["line"]?.GetValue<int>() is not { } line
-            || await resolver.DeclarationAtAsync(file, line + 1, cancellationToken)
+            || item.SelectionRange?.Start.OneBased.Line is not { } line
+            || await resolver.DeclarationAtAsync(file, line, cancellationToken)
                 is not { } declaration
         )
         {
@@ -274,22 +273,13 @@ internal sealed partial class LspQueries
             ) as JsonArray
             ?? [];
         var uri = parameters["textDocument"]!["uri"]!.GetValue<string>();
-        var position = parameters["position"]!;
-        return items.Any(item =>
-            string.Equals(item?["uri"]?.GetValue<string>(), uri, StringComparison.Ordinal)
-            && item?["selectionRange"] is { } range
-            && IsAtOrBefore(range["start"]!, position)
-            && IsAtOrBefore(position, range["end"]!)
-        );
-    }
-
-    private static bool IsAtOrBefore(JsonNode first, JsonNode second)
-    {
-        var (line, otherLine) = (first["line"]!.GetValue<int>(), second["line"]!.GetValue<int>());
-        return line < otherLine
-            || (
-                line == otherLine
-                && first["character"]!.GetValue<int>() <= second["character"]!.GetValue<int>()
+        var position = parameters["position"].Read<LspPosition>();
+        return items
+            .Select(static item => item.Read<LspSymbol>())
+            .Any(item =>
+                string.Equals(item.Uri, uri, StringComparison.Ordinal)
+                && item.SelectionRange is { } range
+                && range.Contains(position)
             );
     }
 

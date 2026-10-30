@@ -3,6 +3,7 @@
 
 using System.Text.Json.Nodes;
 using RoslynBridge.Editing;
+using RoslynBridge.Lsp;
 using RoslynBridge.Results;
 
 namespace RoslynBridge.Changes;
@@ -43,7 +44,10 @@ internal sealed class CommandEdits(
         }
     }
 
-    public async Task<JsonObject> ApplyAsync(JsonObject edit, CancellationToken callbackToken)
+    public async Task<ApplyWorkspaceEditResult> ApplyAsync(
+        JsonObject edit,
+        CancellationToken callbackToken
+    )
     {
         ArgumentNullException.ThrowIfNull(edit);
         if (!TryBeginCallback())
@@ -85,7 +89,10 @@ internal sealed class CommandEdits(
         }
     }
 
-    private async Task<JsonObject> ApplyAndCaptureAsync(JsonObject edit, CancellationToken token)
+    private async Task<ApplyWorkspaceEditResult> ApplyAndCaptureAsync(
+        JsonObject edit,
+        CancellationToken token
+    )
     {
         EditReceipt receipt;
         try
@@ -106,7 +113,7 @@ internal sealed class CommandEdits(
         try
         {
             _snapshot = await capture(token);
-            return new JsonObject { ["applied"] = true };
+            return new ApplyWorkspaceEditResult(Applied: true);
         }
         catch (Exception exception)
         {
@@ -182,7 +189,11 @@ internal sealed class CommandEdits(
         }
     }
 
-    private JsonObject FailCallback(Exception exception, EditApplicationPhase phase, bool applied)
+    private ApplyWorkspaceEditResult FailCallback(
+        Exception exception,
+        EditApplicationPhase phase,
+        bool applied
+    )
     {
         lock (_admission)
         {
@@ -199,21 +210,16 @@ internal sealed class CommandEdits(
                     : exception;
 
             _accepting = false;
-            return new JsonObject
-            {
-                ["applied"] = applied,
-                ["failureReason"] = _failure.InnerException?.Message ?? _failure.Message,
-            };
+            return new ApplyWorkspaceEditResult(
+                applied,
+                _failure.InnerException?.Message ?? _failure.Message
+            );
         }
     }
 
     private EditReceipt BuildResult() =>
         new(_applied, [.. _receipts.SelectMany(receipt => receipt.Operations)]);
 
-    private static JsonObject RejectedResponse() =>
-        new()
-        {
-            ["applied"] = false,
-            ["failureReason"] = "The workspace edit callback is no longer accepting edits.",
-        };
+    private static ApplyWorkspaceEditResult RejectedResponse() =>
+        new(Applied: false, "The workspace edit callback is no longer accepting edits.");
 }

@@ -268,9 +268,7 @@ public sealed class LspToolTests : IDisposable
                 {
                     if (method is not LspMethods.TextDocumentGetProjectContexts)
                     {
-                        return Task.FromResult<JsonNode?>(
-                            new JsonObject { ["items"] = new JsonArray() }
-                        );
+                        return Task.FromResult<JsonNode?>(FakeDiagnosticServer.FullReport([]));
                     }
 
                     contextRequests++;
@@ -298,6 +296,29 @@ public sealed class LspToolTests : IDisposable
         contextRequests.Should().Be(1);
     }
 
+    [Fact]
+    public async Task DiagnosticWithoutARangeIsReportedAsInvalidLspDataAsync()
+    {
+        await WriteFileAsync(_root, "A.cs", "class A {}");
+        await using var session = CreateSession(
+            _root,
+            FakeServer(server =>
+                server.Handle = (_, _) =>
+                    Task.FromResult<JsonNode?>(
+                        FakeDiagnosticServer.FullReport([new JsonObject { ["message"] = "Broken" }])
+                    )
+            )
+        );
+        using var tool = CreateTool(session);
+
+        var response = await tool.ExecuteAsync(
+            new LspRequest { Action = LspAction.Diagnostics, File = "A.cs" },
+            TestCt
+        );
+
+        response.Should().BeError(ErrorCodes.Lsp);
+    }
+
     [Theory]
     [InlineData("{A,B}.cs")]
     [InlineData("{A.cs,Sub/*.cs}")]
@@ -311,7 +332,7 @@ public sealed class LspToolTests : IDisposable
             _root,
             FakeServer(server =>
                 server.Handle = (_, _) =>
-                    Task.FromResult<JsonNode?>(new JsonObject { ["items"] = new JsonArray() })
+                    Task.FromResult<JsonNode?>(FakeDiagnosticServer.FullReport([]))
             )
         );
         using var tool = CreateTool(session);
@@ -1392,14 +1413,7 @@ public sealed class LspToolTests : IDisposable
                         items.Add(
                             new JsonObject
                             {
-                                ["range"] = new JsonObject
-                                {
-                                    ["start"] = new JsonObject
-                                    {
-                                        ["line"] = diagnostic.Line,
-                                        ["character"] = diagnostic.Character,
-                                    },
-                                },
+                                ["range"] = Range(diagnostic.Line, diagnostic.Character),
                                 ["severity"] = diagnostic.Severity,
                                 ["code"] = diagnostic.Code,
                                 ["message"] = $"Message {diagnostic.Code}",
@@ -1408,7 +1422,7 @@ public sealed class LspToolTests : IDisposable
                     }
                 }
 
-                return Task.FromResult<JsonNode?>(new JsonObject { ["items"] = items });
+                return Task.FromResult<JsonNode?>(FakeDiagnosticServer.FullReport(items));
             }
         );
 
@@ -1477,10 +1491,7 @@ public sealed class LspToolTests : IDisposable
                 ["name"] = name,
                 ["kind"] = LspSymbolKinds.Method,
                 ["uri"] = new Uri(path).AbsoluteUri,
-                ["selectionRange"] = new JsonObject
-                {
-                    ["start"] = new JsonObject { ["line"] = line, ["character"] = character },
-                },
+                ["selectionRange"] = Range(line, character),
             },
             ["fromRanges"] = new JsonArray(),
         };

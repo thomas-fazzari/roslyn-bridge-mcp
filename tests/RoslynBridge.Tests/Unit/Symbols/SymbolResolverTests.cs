@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 using System.Text.Json.Nodes;
+using RoslynBridge.Lsp;
 using RoslynBridge.Symbols;
 using static RoslynBridge.Tests.Fakes.LspSymbolJson;
 
@@ -124,5 +125,8 @@ public sealed class SymbolResolverTests
     }
 
     private static IEnumerable<SymbolDeclaration> Find(string requested) =>
-        SymbolResolver.FindDeclarations([(File, _documentSymbols)], SymbolName.Parse(requested)!);
+        SymbolResolver.FindDeclarations(
+            [(File, _documentSymbols.ReadArray<LspSymbol>())],
+            SymbolName.Parse(requested)!
+        );
 }
