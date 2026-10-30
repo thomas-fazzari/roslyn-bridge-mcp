@@ -10,4 +10,4 @@ if [[ "$GITHUB_REF_TYPE" == tag ]]; then
   fi
   version="${GITHUB_REF_NAME#v}"
 fi
-printf 'APP_VERSION=%s\n' "$version" >> "$GITHUB_ENV"
+printf 'APP_VERSION=%s\n' "$version" >>"$GITHUB_ENV"

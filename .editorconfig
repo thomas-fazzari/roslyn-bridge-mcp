@@ -15,3 +15,7 @@ indent_size = 4
 
 [*.md]
 trim_trailing_whitespace = false
+
+[*.sh]
+# Read by shfmt
+switch_case_indent = true

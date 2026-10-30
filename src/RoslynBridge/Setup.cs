@@ -15,7 +15,7 @@ internal static class Setup
     internal const string McpServerName = "roslyn";
     internal const string ToolCommandName = "roslyn-bridge-mcp";
 
-    // The Roslyn version the CI tests the bridge against, in eng/tasks/ci/roslyn
+    // The Roslyn version the CI tests the bridge against, in eng/tasks/ci/roslyn.sh
     internal const string ServerVersion = "5.12.0-1.26426.8";
     private static readonly TimeSpan _versionTimeout = TimeSpan.FromSeconds(5);
 

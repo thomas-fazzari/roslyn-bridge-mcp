@@ -10,7 +10,13 @@ Run the checks for the areas you changed before reporting work as done. Tasks ar
 | Roslyn session, tools or workspace edits       | `mise run test-integration` |
 | Documentation, `README.md` or `AGENTS.md` only | `mise run docs:check`       |
 
-`mise run check` runs every formatting, analyzer, documentation, license notice and unit test check. `mise run fix` fixes C#, MSBuild, Markdown, JSON, YAML and TOML formatting.
+`mise run check` runs every formatting, lint, analyzer, documentation, license notice and unit test check. `mise run fix` runs the steps of `hk.pkl` on every file: it formats C#, MSBuild, Markdown, JSON, YAML, TOML and shell files, fixes Markdown lint and checks shell scripts with ShellCheck. `mise run fmt:check` only reports the files that differ. A formatter or linter added as a step in `hk.pkl` runs in the hooks, `fix` and `fmt:check`.
+
+## Dependency updates
+
+[Renovate](https://docs.renovatebot.com), configured in `.github/renovate.json`, opens one pull request each week for minor and patch updates, and one per major update. It covers the NuGet packages, the .NET SDK of `global.json`, the Bun packages, the GitHub Actions and the tools of `mise.toml`. It waits 3 days after each release and skips Meziantou.Analyzer, which releases several times a week.
+
+`mise.lock` pins the checksum of each tool for every platform. Run `mise lock` after changing a tool in `mise.toml`, including on a Renovate branch that updates one.
 
 ## Running a subset of tests
 

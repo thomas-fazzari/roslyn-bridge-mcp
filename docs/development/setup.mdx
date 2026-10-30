@@ -2,7 +2,7 @@
 title: "Setup"
 ---
 
-Prerequisites: Git, Bash and [mise](https://mise.jdx.dev). mise installs the .NET SDK, Bun, CSharpier and lefthook at the versions pinned in `mise.toml`. On Windows, use Git Bash. Run commands from the repository root.
+Prerequisites: Git, Bash and [mise](https://mise.jdx.dev). mise installs the .NET SDK, Bun, CSharpier, hk, ShellCheck and shfmt at the versions pinned in `mise.toml` and `mise.lock`. On Windows, use Git Bash. Run commands from the repository root.
 
 ```sh
 mise install
@@ -10,7 +10,13 @@ mise run install
 mise run hooks:install
 ```
 
-The pre-commit hook formats staged files. The pre-push hook validates the hook configuration, checks formatting and builds the solution. It also runs `mise run docs:check` when the push changes the documentation, `README.md` or `AGENTS.md`. `lefthook.yml` defines both hooks.
+`hk.pkl` defines the Git hooks for [hk](https://hk.jdx.dev).
+
+| Hook       | Runs                                                                                                                                                                           |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| pre-commit | The formatters and linters of `hk.pkl` on staged files, then stages their fixes                                                                                                |
+| commit-msg | `eng/tasks/commit-msg.pl`, which checks the [commit message](contributing.mdx#checks)                                                                                          |
+| pre-push   | The same steps in check mode on pushed files, `build` when C# or build files change, `docs:build` when the documentation, `README.md`, `AGENTS.md` or `CONTRIBUTING.md` change |
 
 ## Editor
 

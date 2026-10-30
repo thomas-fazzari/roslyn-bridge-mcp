@@ -7,6 +7,6 @@ cp LICENSE NOTICE THIRD_PARTY_NOTICES.md artifacts/
 notices=(LICENSE NOTICE THIRD_PARTY_NOTICES.md DOTNET_RUNTIME_NOTICES.txt)
 
 cd artifacts
-sha256sum roslyn-bridge-mcp-* "${notices[@]}" > SHA256SUMS
+sha256sum roslyn-bridge-mcp-* "${notices[@]}" >SHA256SUMS
 
 gh release create "$RELEASE_TAG" roslyn-bridge-mcp-* "${notices[@]}" SHA256SUMS --verify-tag --generate-notes
