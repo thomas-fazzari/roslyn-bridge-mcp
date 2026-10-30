@@ -24,22 +24,23 @@ Roslyn Bridge MCP is a .NET tool that serves C# tools over the Model Context Pro
 
 ## Layout
 
-| Path                        | Contents                                                                          |
-| --------------------------- | --------------------------------------------------------------------------------- |
-| `src/RoslynBridge/Tools`    | MCP tools and the dispatcher they share                                           |
-| `src/RoslynBridge/Requests` | What a tool call asks for                                                         |
-| `src/RoslynBridge/Results`  | What a tool call returns, as records                                              |
-| `src/RoslynBridge/Output`   | Text rendering of results                                                         |
-| `src/RoslynBridge/Queries`  | Read-only Roslyn queries                                                          |
-| `src/RoslynBridge/Changes`  | Rename and code action proposals and their application                            |
-| `src/RoslynBridge/Symbols`  | Symbol name resolution                                                            |
-| `src/RoslynBridge/Editing`  | Workspace file edits, snapshots and preview diffs                                 |
-| `src/RoslynBridge/Lsp`      | Roslyn process, protocol and document synchronization                             |
-| `src/RoslynBridge/Settings` | Command-line options, the project settings file and the options they produce      |
-| `src/RoslynBridge`          | Entry point, commands, and the errors and workspace paths that every layer shares |
-| `tests/RoslynBridge.Tests`  | Unit tests, integration tests and fixtures                                        |
-| `eng`                       | Analyzer rules and CI tasks                                                       |
-| `docs`                      | Starlight pages and configuration                                                 |
+| Path                         | Contents                                                                          |
+| ---------------------------- | --------------------------------------------------------------------------------- |
+| `src/RoslynBridge/Tools`     | MCP tools and the dispatcher they share                                           |
+| `src/RoslynBridge/Requests`  | What a tool call asks for                                                         |
+| `src/RoslynBridge/Results`   | What a tool call returns, as records                                              |
+| `src/RoslynBridge/Output`    | Text rendering of results                                                         |
+| `src/RoslynBridge/Queries`   | Read-only Roslyn queries                                                          |
+| `src/RoslynBridge/Changes`   | Rename and code action proposals and their application                            |
+| `src/RoslynBridge/Symbols`   | Symbol name resolution                                                            |
+| `src/RoslynBridge/Editing`   | Workspace file edits, snapshots and preview diffs                                 |
+| `src/RoslynBridge/Lsp`       | Roslyn process, protocol and document synchronization                             |
+| `src/RoslynBridge/Settings`  | Command-line options, the project settings file and the options they produce      |
+| `src/RoslynBridge/Telemetry` | OpenTelemetry traces, metrics and logs                                            |
+| `src/RoslynBridge`           | Entry point, commands, and the errors and workspace paths that every layer shares |
+| `tests/RoslynBridge.Tests`   | Unit tests, integration tests and fixtures                                        |
+| `eng`                        | Analyzer rules and CI tasks                                                       |
+| `docs`                       | Starlight pages and configuration                                                 |
 
 ## Tool changes
 

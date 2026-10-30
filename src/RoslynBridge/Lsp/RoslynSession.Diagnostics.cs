@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Thomas Fazzari
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+using RoslynBridge.Telemetry;
+
 namespace RoslynBridge.Lsp;
 
 internal sealed partial class RoslynSession
@@ -38,9 +40,11 @@ internal sealed partial class RoslynSession
         var report = result.Read<LspDiagnosticReport>();
         if (previous is not null && report.Kind is UnchangedReport)
         {
+            BridgeTelemetry.CountDiagnosticReport(reused: true);
             return previous;
         }
 
+        BridgeTelemetry.CountDiagnosticReport(reused: false);
         _diagnosticReports[uri] = report;
         return report;
     }

@@ -16,6 +16,7 @@ internal static partial class ResultText
 {
     internal const int MaximumResponseCharacters = 32_000;
     internal const string ResolvedFilePrefix = "resolved file: ";
+    internal const string ErrorPrefix = "error ";
 
     private const string Indent = "  ";
 
@@ -79,7 +80,7 @@ internal static partial class ResultText
 
     public static string Error(ToolError error, int? rpcCode)
     {
-        var text = new StringBuilder("error ").Append(error.Code);
+        var text = new StringBuilder(ErrorPrefix).Append(error.Code);
         if (rpcCode is { } code)
         {
             text.Append(CultureInfo.InvariantCulture, $" (LSP {code})");
@@ -92,6 +93,19 @@ internal static partial class ResultText
         }
 
         return Finish(text);
+    }
+
+    /// <returns>The code that <see cref="Error"/> wrote at the start of <paramref name="text"/>, or null for a text that is not an error.</returns>
+    public static string? ErrorCode(string text)
+    {
+        if (!text.StartsWith(ErrorPrefix, StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        var code = text.AsSpan(ErrorPrefix.Length);
+        var end = code.IndexOfAny(' ', ':');
+        return (end < 0 ? code : code[..end]).ToString();
     }
 
     public static string Json(JsonNode? node)
