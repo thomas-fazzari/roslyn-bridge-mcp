@@ -1,9 +1,8 @@
 # Roslyn Bridge MCP
 
 [![CI](https://img.shields.io/github/actions/workflow/status/thomas-fazzari/roslyn-bridge-mcp/ci.yml?branch=master&label=CI)](https://github.com/thomas-fazzari/roslyn-bridge-mcp/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/github/v/release/thomas-fazzari/roslyn-bridge-mcp)](https://github.com/thomas-fazzari/roslyn-bridge-mcp/releases/latest)
 [![NuGet](https://img.shields.io/nuget/v/ThomasFazzari.RoslynBridge?logo=nuget&logoColor=white)](https://www.nuget.org/packages/ThomasFazzari.RoslynBridge)
-[![Documentation](https://img.shields.io/badge/docs-Starlight-BC52EE?logo=astro&logoColor=white)](https://thomas-fazzari.github.io/roslyn-bridge-mcp/)
+[![Documentation](https://img.shields.io/badge/docs-BC52EE?logo=astro&logoColor=white&labelColor=555)](https://thomas-fazzari.github.io/roslyn-bridge-mcp/)
 [![License](https://img.shields.io/github/license/thomas-fazzari/roslyn-bridge-mcp)](LICENSE)
 
 C# diagnostics, navigation and refactoring for coding agents, backed by the official Roslyn language server through the Model Context Protocol (MCP).
