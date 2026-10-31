@@ -4,6 +4,7 @@
 using System.Runtime.ExceptionServices;
 using RoslynBridge.Lsp;
 using RoslynBridge.Results;
+using RoslynBridge.Telemetry;
 
 namespace RoslynBridge.Editing;
 
@@ -40,23 +41,36 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
     public async Task<EditReceipt> ApplyAsync(
         JsonObject edit,
         WorkspaceSnapshot snapshot,
-        CancellationToken cancellationToken
+        CancellationToken cancellationToken,
+        ActivityContext parent = default
     )
     {
-        var documents = await PlanAsync(edit, snapshot, cancellationToken);
-        var temporaryFiles = new Dictionary<string, string>(StringComparer.Ordinal);
-
-        var completedOperations = new List<FileOperation>();
-
-        var failure = await ApplyMutationsAsync(
-            documents,
-            snapshot,
-            temporaryFiles,
-            completedOperations,
-            cancellationToken
+        using var activity = BridgeTelemetry.Source.StartActivity(
+            "roslyn_bridge.edit.apply",
+            ActivityKind.Internal,
+            parent
         );
-        var cleanupFailure = CleanupTemporaryFiles(temporaryFiles);
-        return CompleteApply(completedOperations, failure, cleanupFailure);
+        try
+        {
+            var documents = await PlanAsync(edit, snapshot, cancellationToken);
+            var temporaryFiles = new Dictionary<string, string>(StringComparer.Ordinal);
+            var completedOperations = new List<FileOperation>();
+            var failure = await ApplyMutationsAsync(
+                documents,
+                snapshot,
+                temporaryFiles,
+                completedOperations,
+                cancellationToken
+            );
+            var cleanupFailure = CleanupTemporaryFiles(temporaryFiles);
+            BridgeTelemetry.EditOperations.Record(completedOperations.Count);
+            return CompleteApply(completedOperations, failure, cleanupFailure);
+        }
+        catch (Exception exception)
+        {
+            BridgeTelemetry.MarkFailed(activity, exception);
+            throw;
+        }
     }
 
     private static EditReceipt CompleteApply(

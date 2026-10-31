@@ -3,14 +3,9 @@
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
-using RoslynBridge.Changes;
-using RoslynBridge.Editing;
 using RoslynBridge.Lsp;
-using RoslynBridge.Queries;
 using RoslynBridge.Settings;
-using RoslynBridge.Symbols;
-using RoslynBridge.Tools;
+using RoslynBridge.Telemetry;
 
 namespace RoslynBridge;
 
@@ -68,33 +63,14 @@ internal static class Program
             return;
         }
 
-        var options = settings.CurrentValue;
         var builder = Host.CreateEmptyApplicationBuilder(settings: null);
-        builder.Logging.AddConsole(static options =>
-            options.LogToStandardErrorThreshold = LogLevel.Trace
-        );
-        builder.Services.AddSingleton(settings);
-        var paths = new WorkspacePaths(options.WorkspaceRoot);
-        paths.Exclude(options.Exclude);
-        builder.Services.AddSingleton(paths);
-        builder.Services.AddSingleton<RoslynLauncher>(RoslynProcess.Start);
-        builder.Services.AddSingleton<RoslynSession>();
-        builder.Services.AddSingleton<WorkspaceEditService>();
-        builder.Services.AddSingleton<SymbolResolver>();
-        builder.Services.AddSingleton<LspQueries>();
-        builder.Services.AddSingleton<LspChanges>();
-        builder.Services.AddSingleton<LspTool>();
+        builder.Logging.AddStandardErrorConsole();
+        builder.AddTelemetry();
+        builder.Services.AddRoslynBridge(settings).AddRoslynMcpServer().WithStdioServerTransport();
 
-        builder
-            .Services.AddMcpServer(static options =>
-                options.ServerInstructions = ToolDescriptions.ServerInstructions
-            )
-            .WithStdioServerTransport()
-            .WithRoslynTools();
-
-        var host = builder.Build();
+        var host = builder.Build().StartTelemetry();
         // stdio transport delivers no tool call before RunAsync, so this cannot race one
-        if (paths.ContainsProject())
+        if (host.Services.GetRequiredService<WorkspacePaths>().ContainsProject())
         {
             await host.Services.GetRequiredService<RoslynSession>().StartLoadingAsync();
         }
@@ -107,9 +83,4 @@ internal static class Program
         await Console.Error.WriteLineAsync(message);
         Environment.ExitCode = 1;
     }
-
-    internal static IMcpServerBuilder WithRoslynTools(this IMcpServerBuilder builder) =>
-        builder
-            .WithRequestFilters(static filters => filters.AddCallToolFilter(ToolArguments.Validate))
-            .WithToolsFromAssembly(typeof(Program).Assembly);
 }

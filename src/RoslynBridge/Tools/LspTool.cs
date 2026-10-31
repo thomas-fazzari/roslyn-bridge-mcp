@@ -11,6 +11,7 @@ using RoslynBridge.Queries;
 using RoslynBridge.Requests;
 using RoslynBridge.Results;
 using RoslynBridge.Settings;
+using RoslynBridge.Telemetry;
 using StreamJsonRpc;
 
 namespace RoslynBridge.Tools;
@@ -76,8 +77,12 @@ internal sealed partial class LspTool(
             return Response(Status());
         }
 
+        var queued = Stopwatch.GetTimestamp();
         await _gate.WaitAsync(cancellationToken);
         var started = Stopwatch.GetTimestamp();
+        BridgeTelemetry.QueueDuration.Record(
+            Stopwatch.GetElapsedTime(queued, started).TotalSeconds
+        );
         try
         {
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);

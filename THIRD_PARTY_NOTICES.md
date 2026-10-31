@@ -45,6 +45,11 @@ The .NET tool package contains the components below, which stay under their own 
 - `Nerdbank.MessagePack`: copyright Andrew Arnott, MIT license. It includes code from MessagePack and PolyType.
 - `Nerdbank.Streams`: copyright Andrew Arnott, MIT license. It includes code from the .NET runtime.
 - `Newtonsoft.Json`: copyright James Newton-King, MIT license.
+- `OpenTelemetry`: copyright The OpenTelemetry Authors, Apache-2.0 license.
+- `OpenTelemetry.Api`: copyright The OpenTelemetry Authors, Apache-2.0 license.
+- `OpenTelemetry.Api.ProviderBuilderExtensions`: copyright The OpenTelemetry Authors, Apache-2.0 license.
+- `OpenTelemetry.Exporter.OpenTelemetryProtocol`: copyright The OpenTelemetry Authors, Apache-2.0 license.
+- `OpenTelemetry.Extensions.Hosting`: copyright The OpenTelemetry Authors, Apache-2.0 license.
 - `PolyType`: copyright Eirik Tsarpalis, MIT license.
 - `StreamJsonRpc`: copyright Microsoft Corporation, MIT license.
 - `System.Diagnostics.EventLog`: copyright Microsoft Corporation, MIT license.

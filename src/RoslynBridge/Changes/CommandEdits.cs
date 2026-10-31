@@ -21,6 +21,9 @@ internal sealed class CommandEdits(
     private readonly List<EditReceipt> _receipts = [];
     private readonly HashSet<string> _paths = new(StringComparer.Ordinal);
 
+    // Roslyn's edit callbacks arrive outside the tool call, so their traces join the call that ran the command
+    private readonly ActivityContext _call = Activity.Current?.Context ?? default;
+
     private WorkspaceSnapshot _snapshot = snapshot;
     private TaskCompletionSource? _callbacksDrained;
     private Exception? _failure;
@@ -96,7 +99,7 @@ internal sealed class CommandEdits(
         EditReceipt receipt;
         try
         {
-            receipt = await edits.ApplyAsync(edit, _snapshot, token);
+            receipt = await edits.ApplyAsync(edit, _snapshot, token, parent: _call);
         }
         catch (EditApplicationException exception)
         {
