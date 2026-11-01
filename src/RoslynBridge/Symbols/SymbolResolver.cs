@@ -16,6 +16,9 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
     private const int MaximumSuggestions = 10;
     private const int MaximumTypoDistance = 3;
 
+    // One shared word, such as Get, matches too many members
+    private const int MinimumSharedWords = 2;
+
     /// <summary>
     /// A partial type has one declaration per part, and the first is where navigation starts.
     /// An ambiguous or unknown name returns an error that lists candidates.
@@ -531,16 +534,18 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
         matches ??= await WorkspaceMatchesAsync(name, cancellationToken);
         var container = await ContainerAsync(requested, name, matches, cancellationToken);
         var typeExists = container is { SimilarTypes: null };
+        // From other types, only a member with the exact name suggests the caller named the wrong type
         var suggestions = await SuggestionsAsync(
             name,
             container?.Members ?? [],
-            typeExists ? [] : matches,
+            typeExists ? [.. matches.Where(match => IsNamed(match, name))] : matches,
             cancellationToken
         );
         if (container is not null)
         {
             var display = string.Join('.', container.Name.Segments.Select(SymbolName.BaseName));
-            if (typeExists)
+            // When only the parameters differ, the type has the member
+            if (typeExists && !container.Members.Exists(member => IsNamed(member, name)))
             {
                 return new ToolError(
                     ErrorCodes.SymbolNotFound,
@@ -584,7 +589,7 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
         CancellationToken cancellationToken
     )
     {
-        if (requested.Segments.Length == 1 || matches.Exists(match => IsNamed(match, name)))
+        if (requested.Segments.Length == 1)
         {
             return null;
         }
@@ -612,6 +617,12 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
             }
         }
         catch (Exception exception) when (IsUnreadable(exception))
+        {
+            return null;
+        }
+
+        // The container may be a namespace, which declares no members of its own
+        if (matches.Exists(match => IsNamed(match, name)))
         {
             return null;
         }
@@ -659,8 +670,10 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
         CancellationToken cancellationToken
     )
     {
-        var nearest = Nearest(preferred, name)
-            .Concat(Nearest(matches, name))
+        var close = Nearest(preferred, name, byWords: false).ToList();
+        // Shared words help only when no member is close in spelling
+        var nearest = (close.Count > 0 ? close : Nearest(preferred, name, byWords: true))
+            .Concat(Nearest(matches, name, byWords: false))
             .Distinct()
             .Take(MaximumSuggestions)
             .ToList();
@@ -685,11 +698,12 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
 
     private static IEnumerable<(string File, SourcePosition Position)> Nearest(
         IEnumerable<WorkspaceMatch> matches,
-        string name
+        string name,
+        bool byWords
     ) =>
         matches
             .DistinctBy(match => match.Location)
-            .Select(match => match.Resembling(name))
+            .Select(match => match.Resembling(name, byWords))
             .OfType<Suggestion>()
             .Order(Suggestion.Nearest)
             .Select(suggestion => suggestion.Match.Location);
@@ -708,6 +722,7 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
         SameName = 0,
         ContainsName = 1,
         Typo = 2,
+        SharedWords = 3,
     }
 
     private readonly record struct WorkspaceMatch(
@@ -727,7 +742,10 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
                 declaration.Kind
             );
 
-        public Suggestion? Resembling(string requested)
+        /// <param name="byWords">
+        /// Also accepts a name that shares most words, such as OnPlaybackStart for ReportPlaybackStart.
+        /// </param>
+        public Suggestion? Resembling(string requested, bool byWords)
         {
             var distance = Levenshtein.Distance(
                 requested.ToLowerInvariant(),
@@ -743,9 +761,38 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
                 return new Suggestion(this, NameResemblance.ContainsName, distance);
             }
 
-            return distance <= Math.Min(MaximumTypoDistance, requested.Length / 3)
-                ? new Suggestion(this, NameResemblance.Typo, distance)
+            if (distance <= Math.Min(MaximumTypoDistance, requested.Length / 3))
+            {
+                return new Suggestion(this, NameResemblance.Typo, distance);
+            }
+
+            return byWords && SharesMostWords(requested, Name)
+                ? new Suggestion(this, NameResemblance.SharedWords, distance)
                 : null;
+        }
+
+        private static bool SharesMostWords(string requested, string name)
+        {
+            var words = Words(requested);
+            var shared = words.Count(Words(name).Contains);
+            return shared >= MinimumSharedWords && shared * 2 >= words.Count;
+        }
+
+        // PascalCase words
+        private static HashSet<string> Words(string name)
+        {
+            var words = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var start = 0;
+            for (var index = 1; index <= name.Length; index++)
+            {
+                if (index == name.Length || char.IsUpper(name[index]))
+                {
+                    words.Add(name[start..index]);
+                    start = index;
+                }
+            }
+
+            return words;
         }
     }
 

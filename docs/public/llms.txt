@@ -158,7 +158,8 @@ When no symbol has the member's name and no type matches the container of a
 qualified name, as in Nope.Missing, the error says so and names up to 10 types
 with a similar name. When the container exists, as in Calculator.Missing, the
 error says that the type has no such member and lists its members with a
-similar name. Without any, use members to list the type.
+similar name, then the members of other types that have the exact name.
+Without any, use members to list the type.
 
 By position (file is workspace-relative, line and character are one-based,
 character counts UTF-16 code units):
