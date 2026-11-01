@@ -62,7 +62,7 @@ internal sealed partial class LspQueries(
                 return await AccessAsync(request, found, cancellationToken);
             }
 
-            var references = found.Page(request.Limit, request.Offset);
+            var references = found.Locations.Page(request.Limit, request.Offset);
             return request.Context ? SourceLines.Add(references, paths) : references;
         }
 

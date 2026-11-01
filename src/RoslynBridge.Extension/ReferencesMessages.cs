@@ -12,10 +12,12 @@ internal sealed record ReferencesRequest(
 
 /// <param name="Found">False when the caller must ask textDocument/references instead.</param>
 /// <param name="Locations">Workspace references, in the shape of LSP locations.</param>
+/// <param name="Written">The locations that documentHighlight marks as writes.</param>
 /// <param name="Generated">References in source-generated documents, which are only counted.</param>
 internal sealed record ReferencesResponse(
     [property: JsonPropertyName("found")] bool Found,
     [property: JsonPropertyName("locations")] IReadOnlyList<LspLocation> Locations,
+    [property: JsonPropertyName("written")] IReadOnlyList<LspLocation> Written,
     [property: JsonPropertyName("generated")] int Generated
 );
 
