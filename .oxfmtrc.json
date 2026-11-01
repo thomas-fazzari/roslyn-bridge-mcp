@@ -1,9 +1,3 @@
 {
-  "ignorePatterns": [
-    ".mise/**",
-    "docs/bun.lock",
-    "docs/.astro/**",
-    "docs/dist/**",
-    "bench/results/**"
-  ]
+  "ignorePatterns": ["docs/bun.lock", "docs/.astro/**", "docs/dist/**", "bench/results/**"]
 }

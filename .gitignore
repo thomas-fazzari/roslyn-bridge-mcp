@@ -15,9 +15,6 @@
 !/THIRD_PARTY_NOTICES.md
 !/mise.toml
 !/mise.lock
-!/.mise/
-!/.mise/locks/
-!/.mise/locks/**
 !/hk.pkl
 !/Directory.Build.props
 !/Directory.Packages.props
