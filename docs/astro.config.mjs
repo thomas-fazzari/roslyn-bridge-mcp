@@ -75,6 +75,7 @@ export default defineConfig({
             { label: "Developer guide", slug: "development" },
             "development/setup",
             "development/validation",
+            "development/benchmarks",
             "development/contributing",
             "development/releases",
             { label: "C# conventions", slug: "development/conventions/csharp" },

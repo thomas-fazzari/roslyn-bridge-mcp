@@ -37,6 +37,10 @@ Read a whole file only to edit it.
 
 The snippet is all the agent needs. Do not describe the tools, their parameters or how the bridge works. The MCP server already sends each tool's description and its own usage instructions to the client when it connects. Repeating them in `AGENTS.md` costs context in every session and goes out of date when the tools change.
 
+## Benchmarks
+
+Each release is benchmarked against the previous one on real repositories. Results are in [bench/results](bench/results), and the [methodology](https://thomas-fazzari.github.io/roslyn-bridge-mcp/development/benchmarks/) explains how to read them.
+
 ## License
 
 Licensed under the GNU Affero General Public License, version 3 or later, with additional terms under section 7. See [LICENSE](LICENSE) and [NOTICE](NOTICE).

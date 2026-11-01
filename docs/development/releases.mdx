@@ -10,6 +10,8 @@ Tag a commit of `master` whose `ci-ok` check passed, and push the tag, such as `
 
 `.github/workflows/docs.yml` deploys the documentation site from the tagged commit after every job of the tag's build succeeds, so the site matches the latest release. To publish a documentation fix sooner, run that workflow by hand. A manual run deploys the branch it runs on, which may document unreleased changes.
 
+Once the release is published, you can commit its [benchmark results](benchmarks.mdx#release-results) in a separate pull request.
+
 To try a local package, run `mise run pack`. It writes the package to `artifacts/nupkg`. Install it with `dotnet tool install ThomasFazzari.RoslynBridge --tool-path DIRECTORY --add-source artifacts/nupkg --version 0.0.0-dev`.
 
 ## License notices
