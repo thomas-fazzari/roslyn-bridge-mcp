@@ -20,9 +20,11 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
     /// A partial type has one declaration per part, and the first is where navigation starts.
     /// An ambiguous or unknown name returns an error that lists candidates.
     /// </summary>
+    /// <param name="preferTypes">Drops the other matches when some are types.</param>
     public async Task<Result<IReadOnlyList<SymbolDeclaration>>> ResolveAsync(
         string text,
         string? file,
+        bool preferTypes,
         CancellationToken cancellationToken
     )
     {
@@ -49,6 +51,13 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
                 requested
             )
             .ToList();
+        if (
+            preferTypes
+            && declarations.Exists(declaration => LspSymbolKinds.IsType(declaration.Kind))
+        )
+        {
+            declarations.RemoveAll(declaration => !LspSymbolKinds.IsType(declaration.Kind));
+        }
 
         var projectsByFile = await ProjectsByFileAsync(declarations, cancellationToken);
         var symbols = DistinctSymbols(declarations, projectsByFile);

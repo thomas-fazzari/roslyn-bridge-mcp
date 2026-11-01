@@ -144,6 +144,8 @@ A constructor needs its parameter list: Calculator(ILogger).
 Partial declarations in one project count as one symbol. Same-named types in
 different projects are separate symbols.
 
+members, subtypes and supertypes only consider the types among the matches,
+when there are some.
 If the name matches several symbols, the error ambiguous_symbol lists up to 20
 candidates. Send any candidate symbol back unchanged. When candidates share
 a name, send the symbol with the candidate's file. When they also share the
