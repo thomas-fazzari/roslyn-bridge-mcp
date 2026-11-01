@@ -11,16 +11,12 @@ local linters = new Mapping<String, Step> {
     fix = "csharpier format {{files}}"
   }
   ["oxfmt"] {
-    glob = "**/*.{md,mdx,json,jsonc,yml,yaml,toml,js,mjs,ts}"
+    glob = "**/*.{json,jsonc,yml,yaml,toml,js,mjs,ts}"
     check = "bunx --bun oxfmt --check --no-error-on-unmatched-pattern {{files}}"
     fix = "bunx --bun oxfmt --write --no-error-on-unmatched-pattern {{files}}"
   }
-  // --no-globs drops the globs of .markdownlint-cli2.yaml, so this glob repeats them
-  ["markdownlint"] {
-    glob = List("README.md", "AGENTS.md", "CONTRIBUTING.md", "docs/**/*.mdx")
-    depends = "oxfmt"
-    check = "bunx --bun markdownlint-cli2 --no-globs {{files}}"
-    fix = "bunx --bun markdownlint-cli2 --no-globs --fix {{files}}"
+  ["rumdl"] = (Builtins.rumdl) {
+    glob = List("**/*.md", "**/*.mdx")
   }
   ["shellcheck"] = Builtins.shellcheck
   ["shfmt"] = Builtins.shfmt

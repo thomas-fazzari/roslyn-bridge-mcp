@@ -1,10 +1,16 @@
-local excluded = { artifacts = true, bin = true, node_modules = true, obj = true, TestResults = true }
+local excluded_names = { ".rumdl_cache", "artifacts", "bin", "node_modules", "obj", "TestResults" }
+
+local excluded, tree_filters = {}, {}
+for _, name in ipairs(excluded_names) do
+  excluded[name] = true
+  tree_filters[#tree_filters + 1] = "^" .. (name:gsub("%.", "\\.")) .. "$"
+end
 
 return {
   {
     "nvim-tree/nvim-tree.lua",
     optional = true,
-    opts = { filters = { custom = { "^artifacts$", "^bin$", "^node_modules$", "^obj$", "^TestResults$" } } },
+    opts = { filters = { custom = tree_filters } },
   },
   {
     "stevearc/oil.nvim",
@@ -16,5 +22,17 @@ return {
         end,
       },
     },
+  },
+  {
+    "stevearc/conform.nvim",
+    optional = true,
+    opts = { formatters_by_ft = { markdown = { "rumdl" }, mdx = { "rumdl" } } },
+  },
+  {
+    "neovim/nvim-lspconfig",
+    optional = true,
+    init = function()
+      vim.lsp.enable "rumdl"
+    end,
   },
 }

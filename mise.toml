@@ -5,6 +5,7 @@ dotnet = "10.0.402"
 "dotnet:csharpier" = "1.3.0"
 bun = "1.4.4"
 hk = "2.10.0"
+rumdl = "0.3.2"
 shellcheck = "0.11.0"
 shfmt = "3.14.1"
 perl = { version = "latest", os = ["linux", "macos"] }
@@ -65,10 +66,7 @@ run = "bunx --bun astro build --root docs"
 [tasks."docs:check"]
 description = "Lints Markdown, checks its formatting and builds the documentation"
 depends = ["docs:build"]
-run = [
-  "bunx --bun markdownlint-cli2",
-  'bunx --bun oxfmt --check README.md AGENTS.md CONTRIBUTING.md "docs/**/*.{mdx,mjs}"',
-]
+run = ["rumdl check .", 'bunx --bun oxfmt --check "docs/**/*.mjs"']
 
 [tasks."notices:check"]
 description = "Checks that THIRD_PARTY_NOTICES.md lists the packages the tool package ships"

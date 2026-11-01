@@ -4,9 +4,9 @@
 # Except this
 !/.gitignore
 !/.editorconfig
-!/.markdownlint-cli2.yaml
 !/.gitattributes
 !/.oxfmtrc.json
+!/.rumdl.toml
 !/AGENTS.md
 !/CONTRIBUTING.md
 !/README.md
