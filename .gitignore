@@ -20,9 +20,6 @@
 !/Directory.Packages.props
 !/RoslynBridge.slnx
 !/global.json
-!/package.json
-!/bun.lock
-!/bunfig.toml
 !/nuget.config
 !/.roslyn-bridge.json
 !/roslyn-bridge.code-workspace

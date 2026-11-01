@@ -5,6 +5,7 @@ dotnet = "10.0.402"
 "dotnet:csharpier" = "1.3.0"
 bun = "1.4.4"
 hk = "2.10.0"
+"aqua:oxc-project/oxc/oxfmt" = "0.75.0"
 rumdl = "0.3.2"
 shellcheck = "0.11.0"
 shfmt = "3.14.1"
@@ -14,8 +15,8 @@ perl = { version = "latest", os = ["linux", "macos"] }
 includes = ["eng/tasks"]
 
 [tasks.install]
-description = "Restores the .NET and Bun dependencies"
-run = ["dotnet restore RoslynBridge.slnx", "bun install --frozen-lockfile"]
+description = "Restores the .NET and documentation dependencies"
+run = ["dotnet restore RoslynBridge.slnx", "bun install --cwd docs --frozen-lockfile"]
 
 [tasks.build]
 description = "Builds the solution with analyzers (CONFIGURATION defaults to Debug)"
@@ -57,16 +58,18 @@ run = "hk check --all"
 
 [tasks."docs:dev"]
 description = "Serves the documentation with live updates"
-run = "bunx --bun astro dev --root docs --host 127.0.0.1 --port 5174"
+dir = "docs"
+run = "bunx --bun astro dev --host 127.0.0.1 --port 5174"
 
 [tasks."docs:build"]
 description = "Builds the documentation site"
-run = "bunx --bun astro build --root docs"
+dir = "docs"
+run = "bunx --bun astro build"
 
 [tasks."docs:check"]
 description = "Lints Markdown, checks its formatting and builds the documentation"
 depends = ["docs:build"]
-run = ["rumdl check .", 'bunx --bun oxfmt --check "docs/**/*.mjs"']
+run = ["rumdl check .", 'oxfmt --check "docs/**/*.mjs"']
 
 [tasks."notices:check"]
 description = "Checks that THIRD_PARTY_NOTICES.md lists the packages the tool package ships"

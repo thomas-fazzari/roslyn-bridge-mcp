@@ -11,7 +11,7 @@
     "PATH": "/home/vscode/.local/share/mise/shims:/home/vscode/.dotnet/tools:${containerEnv:PATH}"
   },
   "mounts": [
-    "source=roslyn-bridge-node-modules,target=${containerWorkspaceFolder}/node_modules,type=volume"
+    "source=roslyn-bridge-node-modules,target=${containerWorkspaceFolder}/docs/node_modules,type=volume"
   ],
-  "postCreateCommand": "sudo chown vscode:vscode node_modules && mise install && mise run install && dotnet tool install --global roslyn-language-server --prerelease"
+  "postCreateCommand": "sudo chown vscode:vscode docs/node_modules && mise install && mise run install && dotnet tool install --global roslyn-language-server --prerelease"
 }
