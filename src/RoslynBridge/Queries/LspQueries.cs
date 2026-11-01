@@ -83,10 +83,11 @@ internal sealed partial class LspQueries(
             return new HoverText(result.ToHoverText());
         }
 
+        // A generated partial, such as a regex generator's, lists its type a second time
         var locations = result.ToLocations(
             paths,
             request.Limit,
-            skipGenerated: false,
+            skipGenerated: request.Action is LspAction.Implementation,
             offset: request.Offset
         );
         return request.Context ? SourceLines.Add(locations, paths) : locations;

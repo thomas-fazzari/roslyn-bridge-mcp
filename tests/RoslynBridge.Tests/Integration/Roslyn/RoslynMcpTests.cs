@@ -374,6 +374,41 @@ public sealed partial class RoslynMcpTests
     }
 
     [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    public async Task CountsGeneratedPartsOfImplementationsWithoutListingThemAsync()
+    {
+        const string matcherFile = "Application/Matcher.cs";
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var workspace = await RoslynTestWorkspace.CreateAsync(cancellationToken);
+        await StartRoslynAsync(workspace);
+        await workspace.WriteFileAsync(
+            matcherFile,
+            "using System.Text.RegularExpressions;\nusing Sample.Contracts;\n\n"
+                + "namespace Sample.Application;\n\n"
+                + "public sealed partial class Matcher : IGreeter\n{\n"
+                + "    public string Greet(string name) => Pattern().Replace(name, \"\");\n\n"
+                + "    [GeneratedRegex(\"a\")]\n    private static partial Regex Pattern();\n}\n"
+        );
+        await workspace.CallAsync(
+            new LspRequest { Action = LspAction.Diagnostics, File = matcherFile }
+        );
+
+        var implementations = await workspace.CallAsync(
+            new LspRequest { Action = LspAction.Implementation, Symbol = "IGreeter" }
+        );
+
+        // The regex generator adds a second partial declaration of Matcher
+        implementations
+            .Should()
+            .Be(
+                $"""
+                {ImplementationTestFile} 5:21
+                {matcherFile} 6:29
+                generated code: 1 more omitted. Use lsp request to list them.
+                """
+            );
+    }
+
+    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
     public async Task ListsReadsThroughAnInterfaceAndTheBaseInOneFileAsync()
     {
         const string boxFile = "Application/Box.cs";
