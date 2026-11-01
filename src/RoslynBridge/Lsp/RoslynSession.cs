@@ -111,6 +111,56 @@ internal sealed partial class RoslynSession(
         }
     }
 
+    public Task<JsonNode?> RequestAsync(
+        string method,
+        JsonNode? parameters,
+        CancellationToken cancellationToken
+    ) =>
+        BridgeTelemetry.TraceLspAsync(
+            method,
+            () => InvokeAsync(method, parameters, cancellationToken)
+        );
+
+    public async Task NotifyAsync(
+        string method,
+        JsonNode? parameters,
+        CancellationToken cancellationToken
+    )
+    {
+        var rpc = _rpc ?? throw new InvalidOperationException("The Roslyn session is not started.");
+        cancellationToken.ThrowIfCancellationRequested();
+        try
+        {
+            await rpc.NotifyWithParameterObjectAsync(method, parameters)
+                .WaitAsync(cancellationToken);
+        }
+        catch
+        {
+            // A canceled write may still reach Roslyn, so document versions are untrusted until a reload
+            _restartRequired = true;
+            throw;
+        }
+    }
+
+    public async Task ReloadAsync(CancellationToken cancellationToken)
+    {
+        await StopAsync();
+        await EnsureStartedAsync(cancellationToken);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
+        await StopAsync();
+        _startupCancellation?.Dispose();
+        _documentLock.Dispose();
+    }
+
     private async Task StartAsync(CancellationToken cancellationToken)
     {
         try
@@ -124,16 +174,6 @@ internal sealed partial class RoslynSession(
             throw;
         }
     }
-
-    public Task<JsonNode?> RequestAsync(
-        string method,
-        JsonNode? parameters,
-        CancellationToken cancellationToken
-    ) =>
-        BridgeTelemetry.TraceLspAsync(
-            method,
-            () => InvokeAsync(method, parameters, cancellationToken)
-        );
 
     private async Task<JsonNode?> InvokeAsync(
         string method,
@@ -193,46 +233,6 @@ internal sealed partial class RoslynSession(
         }
 
         return tail.Length == 0 ? message : $"{message} Roslyn stderr: {tail}";
-    }
-
-    public async Task NotifyAsync(
-        string method,
-        JsonNode? parameters,
-        CancellationToken cancellationToken
-    )
-    {
-        var rpc = _rpc ?? throw new InvalidOperationException("The Roslyn session is not started.");
-        cancellationToken.ThrowIfCancellationRequested();
-        try
-        {
-            await rpc.NotifyWithParameterObjectAsync(method, parameters)
-                .WaitAsync(cancellationToken);
-        }
-        catch
-        {
-            // A canceled write may still reach Roslyn, so document versions are untrusted until a reload
-            _restartRequired = true;
-            throw;
-        }
-    }
-
-    public async Task ReloadAsync(CancellationToken cancellationToken)
-    {
-        await StopAsync();
-        await EnsureStartedAsync(cancellationToken);
-    }
-
-    public async ValueTask DisposeAsync()
-    {
-        if (_disposed)
-        {
-            return;
-        }
-
-        _disposed = true;
-        await StopAsync();
-        _startupCancellation?.Dispose();
-        _documentLock.Dispose();
     }
 
     private static TaskCompletionSource NewCompletionSource() =>

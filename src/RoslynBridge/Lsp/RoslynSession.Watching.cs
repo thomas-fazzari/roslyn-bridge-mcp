@@ -10,6 +10,22 @@ internal sealed partial class RoslynSession
     // On Windows, the 8 KB default overflows on a branch switch or a restore, which forces a full rescan
     private const int WatcherBufferBytes = 64 * 1024;
 
+    internal void QueueFile(string path)
+    {
+        if (!paths.IsWatched(path))
+        {
+            return;
+        }
+
+        if (_pendingFiles.Count >= WorkspacePaths.MaximumFileCount)
+        {
+            Interlocked.Exchange(ref _scanRequested, 1);
+            return;
+        }
+
+        _pendingFiles[path] = 0;
+    }
+
     private void StartWatching()
     {
         _watcher = new FileSystemWatcher(paths.Root)
@@ -40,22 +56,6 @@ internal sealed partial class RoslynSession
 
     private void OnWatcherError(object sender, ErrorEventArgs args) =>
         Interlocked.Exchange(ref _scanRequested, 1);
-
-    internal void QueueFile(string path)
-    {
-        if (!paths.IsWatched(path))
-        {
-            return;
-        }
-
-        if (_pendingFiles.Count >= WorkspacePaths.MaximumFileCount)
-        {
-            Interlocked.Exchange(ref _scanRequested, 1);
-            return;
-        }
-
-        _pendingFiles[path] = 0;
-    }
 
     private async Task SynchronizeWatchedFilesAsync(CancellationToken cancellationToken)
     {

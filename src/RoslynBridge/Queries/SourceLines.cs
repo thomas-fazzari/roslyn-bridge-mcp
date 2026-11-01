@@ -53,34 +53,6 @@ internal static class SourceLines
         };
     }
 
-    private static Dictionary<int, string>? LinesOf(
-        string[]? text,
-        IEnumerable<SourcePosition> positions
-    ) =>
-        text is null
-            ? null
-            : positions
-                .Select(position => position.Line)
-                .Where(line => line >= 1 && line <= text.Length)
-                .Distinct()
-                .ToDictionary(line => line, line => Trim(text[line - 1]));
-
-    private static string[]? Read(string? file, Dictionary<string, string[]?> files)
-    {
-        if (file is null)
-        {
-            return null;
-        }
-
-        if (!files.TryGetValue(file, out var text))
-        {
-            text = TryReadLines(file);
-            files[file] = text;
-        }
-
-        return text;
-    }
-
     /// <summary>
     /// Returns null when the file cannot be read.
     /// </summary>
@@ -108,6 +80,34 @@ internal static class SourceLines
         [
             .. TextEdits.GetLines(source).Select(line => source.Substring(line.Start, line.Length)),
         ];
+    }
+
+    private static Dictionary<int, string>? LinesOf(
+        string[]? text,
+        IEnumerable<SourcePosition> positions
+    ) =>
+        text is null
+            ? null
+            : positions
+                .Select(position => position.Line)
+                .Where(line => line >= 1 && line <= text.Length)
+                .Distinct()
+                .ToDictionary(line => line, line => Trim(text[line - 1]));
+
+    private static string[]? Read(string? file, Dictionary<string, string[]?> files)
+    {
+        if (file is null)
+        {
+            return null;
+        }
+
+        if (!files.TryGetValue(file, out var text))
+        {
+            text = TryReadLines(file);
+            files[file] = text;
+        }
+
+        return text;
     }
 
     private static string Trim(string line)

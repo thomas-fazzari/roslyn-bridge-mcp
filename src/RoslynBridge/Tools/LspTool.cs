@@ -144,6 +144,66 @@ internal sealed partial class LspTool(
 
     public void Dispose() => _gate.Dispose();
 
+    internal static CallToolResult Response(
+        ToolResult? result,
+        IReadOnlyList<string>? resolvedFiles = null
+    )
+    {
+        var heading = ResultText.ResolvedFiles(resolvedFiles ?? []);
+        var text =
+            heading
+            + ResultText.Render(result, ResultText.MaximumResponseCharacters - heading.Length);
+        // A receipt must reach the client, and it drops trailing operations to fit
+        return text.Length <= ResultText.MaximumResponseCharacters || result is EditReceipt
+            ? Text(text, isError: false)
+            : Failure(
+                new ToolError(
+                    ErrorCodes.ResultTooLarge,
+                    $"The result exceeds {ResultText.MaximumResponseCharacters} characters. Narrow the query or lower limit."
+                )
+            );
+    }
+
+    internal static CallToolResult ApplicationFailure(
+        EditApplicationException exception,
+        bool cancellationRequested
+    )
+    {
+        var cause = exception.InnerException!;
+        var code = cause switch
+        {
+            OperationCanceledException => cancellationRequested
+                ? ErrorCodes.Cancelled
+                : ErrorCodes.Timeout,
+            _ => ToolFailures.FailureCode(cause),
+        };
+        var message = cause.Message[..Math.Min(cause.Message.Length, MaximumErrorCharacters)];
+        var text = new StringBuilder(ResultText.Error(new ToolError(code, message), rpcCode: null))
+            .Append("\nfailed step: ")
+            .Append(exception.Phase.ToString().ToLowerInvariant());
+        if (exception.FailedPath is { } path)
+        {
+            text.Append(", path ").Append(path);
+        }
+
+        if (exception.FailedOperation is { } operation)
+        {
+            text.Append(", operation ").Append(operation);
+        }
+
+        text.Append('\n')
+            .Append(
+                ResultText.Render(
+                    exception.Result,
+                    ResultText.MaximumResponseCharacters - text.Length
+                )
+            );
+        return Text(text.ToString(), isError: true);
+    }
+
+    internal static CallToolResult Failure(ToolError failure, int? rpcCode = null) =>
+        Text(ResultText.Error(failure, rpcCode), isError: true);
+
     private CallToolResult ReportFailure(LspAction action, Exception exception)
     {
         OperationFailed(logger, action, exception);
@@ -355,66 +415,6 @@ internal sealed partial class LspTool(
 
         return isLifecycle || isSynchronization || method is LspMethods.WorkspaceApplyEdit;
     }
-
-    internal static CallToolResult Response(
-        ToolResult? result,
-        IReadOnlyList<string>? resolvedFiles = null
-    )
-    {
-        var heading = ResultText.ResolvedFiles(resolvedFiles ?? []);
-        var text =
-            heading
-            + ResultText.Render(result, ResultText.MaximumResponseCharacters - heading.Length);
-        // A receipt must reach the client, and it drops trailing operations to fit
-        return text.Length <= ResultText.MaximumResponseCharacters || result is EditReceipt
-            ? Text(text, isError: false)
-            : Failure(
-                new ToolError(
-                    ErrorCodes.ResultTooLarge,
-                    $"The result exceeds {ResultText.MaximumResponseCharacters} characters. Narrow the query or lower limit."
-                )
-            );
-    }
-
-    internal static CallToolResult ApplicationFailure(
-        EditApplicationException exception,
-        bool cancellationRequested
-    )
-    {
-        var cause = exception.InnerException!;
-        var code = cause switch
-        {
-            OperationCanceledException => cancellationRequested
-                ? ErrorCodes.Cancelled
-                : ErrorCodes.Timeout,
-            _ => ToolFailures.FailureCode(cause),
-        };
-        var message = cause.Message[..Math.Min(cause.Message.Length, MaximumErrorCharacters)];
-        var text = new StringBuilder(ResultText.Error(new ToolError(code, message), rpcCode: null))
-            .Append("\nfailed step: ")
-            .Append(exception.Phase.ToString().ToLowerInvariant());
-        if (exception.FailedPath is { } path)
-        {
-            text.Append(", path ").Append(path);
-        }
-
-        if (exception.FailedOperation is { } operation)
-        {
-            text.Append(", operation ").Append(operation);
-        }
-
-        text.Append('\n')
-            .Append(
-                ResultText.Render(
-                    exception.Result,
-                    ResultText.MaximumResponseCharacters - text.Length
-                )
-            );
-        return Text(text.ToString(), isError: true);
-    }
-
-    internal static CallToolResult Failure(ToolError failure, int? rpcCode = null) =>
-        Text(ResultText.Error(failure, rpcCode), isError: true);
 
     private static CallToolResult Text(string text, bool isError) =>
         new() { IsError = isError, Content = [new TextContentBlock { Text = text }] };

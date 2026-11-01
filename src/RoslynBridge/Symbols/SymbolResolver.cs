@@ -76,20 +76,6 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
         );
     }
 
-    private static string AmbiguityAdvice(List<SymbolDeclaration> symbols)
-    {
-        var names = symbols.DistinctBy(symbol => symbol.Name, StringComparer.Ordinal).Count();
-        if (names == symbols.Count)
-        {
-            return "Send one candidate symbol instead.";
-        }
-
-        var namesInFiles = symbols.DistinctBy(symbol => (symbol.Name, symbol.File)).Count();
-        return namesInFiles == symbols.Count
-            ? "Send one candidate symbol with its file."
-            : "Send the file, line and character of one candidate instead.";
-    }
-
     /// <summary>
     /// Same-named types in different projects are separate symbols.
     /// </summary>
@@ -123,62 +109,6 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
         }
 
         return symbols;
-    }
-
-    // An explicit interface implementation or a static constructor is private,
-    // unlike the same-named member beside it, so accessibility tells them apart
-    private static bool IsPartOf(
-        SymbolDeclaration declaration,
-        SymbolDeclaration symbol,
-        IReadOnlyDictionary<string, HashSet<string>> projectsByFile
-    ) =>
-        string.Equals(declaration.Name, symbol.Name, StringComparison.Ordinal)
-        && declaration.IsPrivate == symbol.IsPrivate
-        && SharesProject(declaration.File, symbol.File, projectsByFile);
-
-    // Without known projects, same-named declarations count as parts of one partial type
-    private static bool SharesProject(
-        string first,
-        string second,
-        IReadOnlyDictionary<string, HashSet<string>> projectsByFile
-    ) =>
-        string.Equals(first, second, StringComparison.Ordinal)
-        || !projectsByFile.TryGetValue(first, out var firstProjects)
-        || !projectsByFile.TryGetValue(second, out var secondProjects)
-        || firstProjects.Count == 0
-        || secondProjects.Count == 0
-        || firstProjects.Overlaps(secondProjects);
-
-    private async Task<Dictionary<string, HashSet<string>>> ProjectsByFileAsync(
-        List<SymbolDeclaration> declarations,
-        CancellationToken cancellationToken
-    )
-    {
-        var projectsByFile = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
-        var sharedNames = declarations
-            .GroupBy(declaration => declaration.Name, StringComparer.Ordinal)
-            .Where(group =>
-                group
-                    .DistinctBy(declaration => declaration.File, StringComparer.Ordinal)
-                    .Skip(1)
-                    .Any()
-            );
-        foreach (
-            var file in sharedNames
-                .SelectMany(group => group)
-                .Select(d => d.File)
-                .Distinct(StringComparer.Ordinal)
-        )
-        {
-            var uri = await session.OpenDocumentAsync(file, cancellationToken);
-            var contexts = await session.ProjectContextsAsync(uri, cancellationToken);
-            projectsByFile[file] = contexts
-                .Select(context => context.Id)
-                .OfType<string>()
-                .ToHashSet(StringComparer.Ordinal);
-        }
-
-        return projectsByFile;
     }
 
     /// <summary>
@@ -241,36 +171,6 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
                 .Select(declared => declared.Declaration),
         ];
 
-    private async Task<IEnumerable<DeclaredSymbol>> DeclaredMembersAsync(
-        IReadOnlyList<SymbolDeclaration> parts,
-        CancellationToken cancellationToken
-    )
-    {
-        var type = SymbolName.Parse(parts[0].Name)!;
-        var documents = await DocumentSymbolsAsync(
-            parts
-                .Select(part => part.File)
-                .Distinct(StringComparer.Ordinal)
-                .Order(StringComparer.Ordinal),
-            cancellationToken
-        );
-        return documents
-            .SelectMany(document =>
-                Declarations(
-                    document.Symbols,
-                    document.File,
-                    container: null,
-                    containerDisplay: null
-                )
-            )
-            .Where(declared =>
-                declared.Name.Segments.Length == type.Segments.Length + 1
-                && declared
-                    .Name.Segments[..type.Segments.Length]
-                    .SequenceEqual(type.Segments, StringComparer.Ordinal)
-            );
-    }
-
     /// <summary>
     /// Exact matches win over loose ones. A constructor needs its parameter list in the request.
     /// </summary>
@@ -299,6 +199,106 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
                 : candidates.Where(declared => requested.Selects(declared.Name, exact: false));
 
         return selected.Select(declared => declared.Declaration);
+    }
+
+    private static string AmbiguityAdvice(List<SymbolDeclaration> symbols)
+    {
+        var names = symbols.DistinctBy(symbol => symbol.Name, StringComparer.Ordinal).Count();
+        if (names == symbols.Count)
+        {
+            return "Send one candidate symbol instead.";
+        }
+
+        var namesInFiles = symbols.DistinctBy(symbol => (symbol.Name, symbol.File)).Count();
+        return namesInFiles == symbols.Count
+            ? "Send one candidate symbol with its file."
+            : "Send the file, line and character of one candidate instead.";
+    }
+
+    // An explicit interface implementation or a static constructor is private,
+    // unlike the same-named member beside it, so accessibility tells them apart
+    private static bool IsPartOf(
+        SymbolDeclaration declaration,
+        SymbolDeclaration symbol,
+        IReadOnlyDictionary<string, HashSet<string>> projectsByFile
+    ) =>
+        string.Equals(declaration.Name, symbol.Name, StringComparison.Ordinal)
+        && declaration.IsPrivate == symbol.IsPrivate
+        && SharesProject(declaration.File, symbol.File, projectsByFile);
+
+    // Without known projects, same-named declarations count as parts of one partial type
+    private static bool SharesProject(
+        string first,
+        string second,
+        IReadOnlyDictionary<string, HashSet<string>> projectsByFile
+    ) =>
+        string.Equals(first, second, StringComparison.Ordinal)
+        || !projectsByFile.TryGetValue(first, out var firstProjects)
+        || !projectsByFile.TryGetValue(second, out var secondProjects)
+        || firstProjects.Count == 0
+        || secondProjects.Count == 0
+        || firstProjects.Overlaps(secondProjects);
+
+    private async Task<Dictionary<string, HashSet<string>>> ProjectsByFileAsync(
+        List<SymbolDeclaration> declarations,
+        CancellationToken cancellationToken
+    )
+    {
+        var projectsByFile = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
+        var sharedNames = declarations
+            .GroupBy(declaration => declaration.Name, StringComparer.Ordinal)
+            .Where(group =>
+                group
+                    .DistinctBy(declaration => declaration.File, StringComparer.Ordinal)
+                    .Skip(1)
+                    .Any()
+            );
+        foreach (
+            var file in sharedNames
+                .SelectMany(group => group)
+                .Select(d => d.File)
+                .Distinct(StringComparer.Ordinal)
+        )
+        {
+            var uri = await session.OpenDocumentAsync(file, cancellationToken);
+            var contexts = await session.ProjectContextsAsync(uri, cancellationToken);
+            projectsByFile[file] = contexts
+                .Select(context => context.Id)
+                .OfType<string>()
+                .ToHashSet(StringComparer.Ordinal);
+        }
+
+        return projectsByFile;
+    }
+
+    private async Task<IEnumerable<DeclaredSymbol>> DeclaredMembersAsync(
+        IReadOnlyList<SymbolDeclaration> parts,
+        CancellationToken cancellationToken
+    )
+    {
+        var type = SymbolName.Parse(parts[0].Name)!;
+        var documents = await DocumentSymbolsAsync(
+            parts
+                .Select(part => part.File)
+                .Distinct(StringComparer.Ordinal)
+                .Order(StringComparer.Ordinal),
+            cancellationToken
+        );
+        return documents
+            .SelectMany(document =>
+                Declarations(
+                    document.Symbols,
+                    document.File,
+                    container: null,
+                    containerDisplay: null
+                )
+            )
+            .Where(declared =>
+                declared.Name.Segments.Length == type.Segments.Length + 1
+                && declared
+                    .Name.Segments[..type.Segments.Length]
+                    .SequenceEqual(type.Segments, StringComparer.Ordinal)
+            );
     }
 
     // Opening a document changes the session, so only the symbol requests run concurrently
