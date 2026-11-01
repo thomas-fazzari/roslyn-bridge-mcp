@@ -21,6 +21,11 @@
       "description": "The oxc repository prefixes the tags of each tool",
       "matchDepNames": ["aqua:oxc-project/oxc/oxfmt"],
       "extractVersion": "^oxfmt_v(?<version>.+)$"
+    },
+    {
+      "description": "Relocatable Perl versions have four parts, such as 5.44.0.0",
+      "matchDepNames": ["aqua:skaji/relocatable-perl"],
+      "versioning": "loose"
     }
   ]
 }

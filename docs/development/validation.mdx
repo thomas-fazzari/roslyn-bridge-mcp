@@ -16,7 +16,7 @@ Run the checks for the areas you changed before reporting work as done. Tasks ar
 
 [Renovate](https://docs.renovatebot.com), configured in `.github/renovate.json`, opens the dependency update pull requests.
 
-`mise.lock` pins the checksum of each tool for every platform. Run `mise lock` after changing a tool in `mise.toml`, including on a Renovate branch that updates one.
+`mise.lock` pins the checksum of each tool for every platform. Run `mise lock` after changing a tool in `mise.toml` or the SDK in `global.json`, including on a Renovate branch that updates one. The CI installs in locked mode and fails until then.
 
 ## Running a subset of tests
 
