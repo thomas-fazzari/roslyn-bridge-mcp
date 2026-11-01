@@ -58,6 +58,9 @@ internal static class LspMethods
     public const string Initialized = "initialized";
     public const string SolutionOpen = "solution/open";
     public const string ProjectOpen = "project/open";
+    public const string ServerActivateExtension = "server/_vs_activateExtension";
+    public const string TextDocumentDispatchExtensionMessage =
+        "textDocument/_vs_dispatchExtensionMessage";
     public const string Shutdown = "shutdown";
     public const string Exit = "exit";
     public const string Progress = "$/progress";

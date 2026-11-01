@@ -314,6 +314,44 @@ public sealed partial class RoslynMcpTests
     }
 
     [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    public async Task ListsReferencesOfAnOverrideWithoutItsSiblingsAsync()
+    {
+        const string circleFile = "Application/Circle.cs";
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var workspace = await RoslynTestWorkspace.CreateAsync(cancellationToken);
+        await StartRoslynAsync(workspace);
+        await workspace.WriteFileAsync(
+            circleFile,
+            "namespace Sample.Application;\n\npublic sealed class Circle() : Shape(\"circle\")\n{\n"
+                + "    public override double Area() => 3;\n}\n\npublic static class Areas\n{\n"
+                + "    public static double OfSquare(Square square) => square.Area();\n\n"
+                + "    public static double OfCircle(Circle circle) => circle.Area();\n}\n"
+        );
+        await workspace.CallAsync(
+            new LspRequest { Action = LspAction.Diagnostics, File = circleFile }
+        );
+
+        var references = Lines(
+            await workspace.CallAsync(
+                new LspRequest
+                {
+                    Action = LspAction.References,
+                    Symbol = "Square.Area",
+                    Context = true,
+                }
+            )
+        );
+
+        // A search that cascades through Shape.Area would also list the sibling override's call
+        references
+            .Should()
+            .Contain(line => line.Contains("square.Area()", StringComparison.Ordinal));
+        references
+            .Should()
+            .NotContain(line => line.Contains("circle.Area()", StringComparison.Ordinal));
+    }
+
+    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
     public async Task ReadsSourceAndMembersAcrossPartialDeclarationsAsync()
     {
         const string ledgerFile = "Application/Ledger.cs";
