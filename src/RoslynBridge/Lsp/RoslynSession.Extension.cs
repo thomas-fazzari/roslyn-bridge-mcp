@@ -9,12 +9,15 @@ namespace RoslynBridge.Lsp;
 internal sealed partial class RoslynSession
 {
     private const string ReferencesMessage = "RoslynBridge.Extension.ReferencesHandler";
+    private const string CallersMessage = "RoslynBridge.Extension.CallersHandler";
 
     private static readonly string _extensionPath = Path.Combine(
         AppContext.BaseDirectory,
         "extension",
         "RoslynBridge.Extension.dll"
     );
+
+    private static readonly string[] _extensionMessages = [ReferencesMessage, CallersMessage];
 
     private bool _extensionActive;
 
@@ -26,7 +29,27 @@ internal sealed partial class RoslynSession
     /// LSP locations and a count of generated references, or null when the caller must ask
     /// textDocument/references.
     /// </returns>
-    public async Task<JsonNode?> FindReferencesAsync(
+    public Task<JsonNode?> FindReferencesAsync(
+        JsonObject parameters,
+        CancellationToken cancellationToken
+    ) => DispatchExtensionAsync(ReferencesMessage, parameters, cancellationToken);
+
+    /// <summary>
+    /// Finds callers inside Roslyn, with the calls through base and interface members.
+    /// </summary>
+    /// <param name="parameters">The textDocument and zero-based position of the request.</param>
+    /// <returns>
+    /// LSP incoming calls, or null when the caller must ask callHierarchy/incomingCalls.
+    /// </returns>
+    public async Task<JsonArray?> FindCallersAsync(
+        JsonObject parameters,
+        CancellationToken cancellationToken
+    ) =>
+        (await DispatchExtensionAsync(CallersMessage, parameters, cancellationToken))?["calls"]
+        as JsonArray;
+
+    private async Task<JsonNode?> DispatchExtensionAsync(
+        string messageName,
         JsonObject parameters,
         CancellationToken cancellationToken
     )
@@ -43,7 +66,7 @@ internal sealed partial class RoslynSession
                 LspMethods.TextDocumentDispatchExtensionMessage,
                 new JsonObject
                 {
-                    ["messageName"] = ReferencesMessage,
+                    ["messageName"] = messageName,
                     ["message"] = parameters["position"]!.ToJsonString(),
                     ["textDocument"] = parameters["textDocument"]!.DeepClone(),
                 },
@@ -62,8 +85,8 @@ internal sealed partial class RoslynSession
             return null;
         }
 
-        var references = JsonNode.Parse(response);
-        return references?["found"]?.GetValue<bool>() is true ? references : null;
+        var found = JsonNode.Parse(response);
+        return found?["found"]?.GetValue<bool>() is true ? found : null;
     }
 
     private async Task ActivateExtensionAsync(CancellationToken cancellationToken)
@@ -92,11 +115,9 @@ internal sealed partial class RoslynSession
 
         _extensionActive =
             result?["documentMessageHandlers"] is JsonArray handlers
-            && handlers.Any(handler =>
-                string.Equals(
-                    handler?.GetValue<string>(),
-                    ReferencesMessage,
-                    StringComparison.Ordinal
+            && _extensionMessages.All(message =>
+                handlers.Any(handler =>
+                    string.Equals(handler?.GetValue<string>(), message, StringComparison.Ordinal)
                 )
             );
         if (!_extensionActive)
@@ -122,13 +143,13 @@ internal sealed partial class RoslynSession
 
     [LoggerMessage(
         Level = LogLevel.Warning,
-        Message = "The Roslyn extension is unavailable, references will use textDocument/references: {Reason}"
+        Message = "The Roslyn extension is unavailable, references and callers will use the LSP requests: {Reason}"
     )]
     private static partial void LogExtensionUnavailable(ILogger logger, string reason);
 
     [LoggerMessage(
         Level = LogLevel.Warning,
-        Message = "The Roslyn extension failed, references will use textDocument/references until the next session: {Reason}"
+        Message = "The Roslyn extension failed, references and callers will use the LSP requests until the next session: {Reason}"
     )]
     private static partial void LogExtensionFailed(ILogger logger, string reason);
 }

@@ -49,7 +49,7 @@ A benchmark shows `NA` when a call failed. The BenchmarkDotNet log in `artifacts
 
 ## Release results
 
-After a release is published, run its benchmarks against the previous tag:
+When a published release changes performance, run its benchmarks against the previous tag:
 
 ```sh
 mise run bench:release v2.2.0

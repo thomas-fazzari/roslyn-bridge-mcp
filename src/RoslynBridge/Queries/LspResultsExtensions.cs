@@ -37,6 +37,7 @@ internal static class LspResultsExtensions
                 .ThenBy(item => item.Position?.Line)
                 .ThenBy(item => item.Position?.Character)
                 .ThenBy(item => item.Name, StringComparer.Ordinal)
+                .ThenBy(item => item.Through, StringComparer.Ordinal)
                 .ToList();
             return new SymbolList(
                 [.. items.Skip(offset).Take(limit)],
@@ -177,6 +178,7 @@ internal static class LspResultsExtensions
         return Symbol(symbol, paths) with
         {
             Calls = [.. (call.FromRanges ?? []).Select(range => range.Start.OneBased)],
+            Through = call.Through,
         };
     }
 

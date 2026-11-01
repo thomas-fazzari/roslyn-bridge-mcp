@@ -322,6 +322,11 @@ internal static partial class ResultText
     private static void AppendSymbolTree(StringBuilder text, SymbolItem symbol, string indent)
     {
         AppendSymbol(text, symbol, indent);
+        if (symbol.Through is { } through)
+        {
+            text.Append(Indent).Append("through ").Append(through).Append('\n');
+        }
+
         if (symbol.Lines is { } lines)
         {
             AppendSourceLines(text, LinePositions(symbol), lines);

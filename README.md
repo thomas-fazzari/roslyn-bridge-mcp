@@ -39,7 +39,7 @@ The snippet is all the agent needs. Do not describe the tools, their parameters 
 
 ## Benchmarks
 
-Each release is benchmarked against the previous one on real repositories. Results are in [bench/results](bench/results), and the [methodology](https://thomas-fazzari.github.io/roslyn-bridge-mcp/development/benchmarks/) explains how to read them.
+Releases that change performance are benchmarked against the previous one on real repositories. Results are in [bench/results](bench/results), and the [methodology](https://thomas-fazzari.github.io/roslyn-bridge-mcp/development/benchmarks/) explains how to read them.
 
 ## License
 

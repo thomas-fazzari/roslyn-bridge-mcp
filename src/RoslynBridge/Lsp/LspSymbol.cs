@@ -20,10 +20,14 @@ internal sealed record LspSymbol(
 /// <summary>
 /// An incoming call has <see cref="From"/>. An outgoing call has <see cref="To"/>.
 /// </summary>
+/// <param name="Through">
+/// Set by the Roslyn extension on calls made through a base or interface member, which it names.
+/// </param>
 internal sealed record LspCall(
     LspSymbol? From = null,
     LspSymbol? To = null,
-    LspRange[]? FromRanges = null
+    LspRange[]? FromRanges = null,
+    string? Through = null
 );
 
 internal sealed record LspHighlight(LspRange Range, int? Kind = null);

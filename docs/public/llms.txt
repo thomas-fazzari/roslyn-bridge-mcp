@@ -168,7 +168,8 @@ implementation - Find implementations of an interface or abstract member.
 references - Find the references to a symbol. Use definition for its declaration.
 reads - Find the references that read a field, property, local, parameter or event.
 writes - Find the references that write it.
-callers - Find the methods that call this method, with their call sites.
+callers - Find the methods that call this method, with their call sites,
+  including calls through the base or interface members it implements.
 callees - Find the methods this method calls, with the call sites in its file.
 supertypes - Find the base types and interfaces of a type.
 subtypes - Find the types that derive from or implement a type.
@@ -226,6 +227,11 @@ Send everything after the kind back unchanged as the symbol argument. A result
 outside the workspace keeps Roslyn's name. The calls line is present only for
 callers and callees. callees lists calls only. A final line counts the
 property, field and constant accesses it leaves out.
+A caller that calls the member through a base or interface member gets a
+through line before its calls line, and a separate entry for its direct calls:
+src/Consumer.cs:7:26 method MyApp.Consumer.Run(IGreeter)
+  through IGreeter.Greet(string)
+  calls 7:59
 In every result, a constructor has the kind constructor. An explicit
 constructor is named like MyApp.Box.Box(int). A primary constructor has no
 declaration of its own, so its line names the type. An empty result reads

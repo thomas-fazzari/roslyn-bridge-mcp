@@ -63,6 +63,8 @@ Then run `mise run test-integration` and `mise run docs:check`.
 
 The extension matches that handler's results by calling internal Roslyn members through reflection, because the public search also lists the references of sibling overrides. It also marks the references that write the symbol, as `textDocument/documentHighlight` does. When activation or a query fails, the bridge logs a warning and uses `textDocument/references` until the next session. It then sends one `textDocument/documentHighlight` request per file to tell reads from writes. That is slower, and it misses a reference when the file's first one goes through another symbol, such as an interface member.
 
+The extension also answers `callers`. The `callHierarchy/incomingCalls` handler keeps only direct calls, so it misses every call made through an interface or base member. The extension lists those too, and names the member they go through. Without the extension, `callers` falls back to that handler and lists direct calls only.
+
 `RoslynServerVersion` in `Directory.Packages.props` sets the server that `setup` installs, that the CI tests against and that the extension compiles against. After changing it, run `mise run test-integration` on every platform the CI covers, since Roslyn changes its path handling between versions.
 
 ## Common changes
