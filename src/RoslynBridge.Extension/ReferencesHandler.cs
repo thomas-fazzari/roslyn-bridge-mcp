@@ -14,10 +14,11 @@ namespace RoslynBridge.Extension;
 internal sealed class ReferencesHandler
     : IExtensionDocumentMessageHandler<ReferencesRequest, ReferencesResponse>
 {
-    private static readonly ReferencesResponse _notFound = new(Found: false, [], Generated: 0);
+    private static readonly ReferencesResponse _notFound = new(Found: false, [], [], Generated: 0);
 
     private readonly MethodInfo _featureOptions;
     private readonly MethodInfo _findReferences;
+    private readonly PropertyInfo _isWrittenTo;
 
     /// <summary>
     /// Throws when Roslyn lacks the internal search, so the extension fails to activate.
@@ -42,6 +43,12 @@ internal sealed class ReferencesHandler
                 BindingFlags.NonPublic | BindingFlags.Static,
                 [typeof(ISymbol), typeof(Solution), options, typeof(CancellationToken)]
             ) ?? throw new MissingMethodException(nameof(SymbolFinder), "FindReferencesAsync");
+        // documentHighlight tells reads from writes with this internal property
+        _isWrittenTo =
+            typeof(ReferenceLocation).GetProperty(
+                "IsWrittenTo",
+                BindingFlags.NonPublic | BindingFlags.Instance
+            ) ?? throw new MissingMemberException(nameof(ReferenceLocation), "IsWrittenTo");
     }
 
     public async Task<ReferencesResponse> ExecuteAsync(
@@ -80,6 +87,7 @@ internal sealed class ReferencesHandler
         );
         var seen = new HashSet<(string?, TextSpan)>();
         var locations = new List<LspLocation>();
+        var written = new List<LspLocation>();
         var generated = 0;
         foreach (
             var reference in referenced.SelectMany(symbolReferences => symbolReferences.Locations)
@@ -106,15 +114,18 @@ internal sealed class ReferencesHandler
             }
 
             var span = location.GetLineSpan();
-            locations.Add(
-                new LspLocation(
-                    new Uri(filePath).AbsoluteUri,
-                    new LspRange(Position(span.StartLinePosition), Position(span.EndLinePosition))
-                )
+            var found = new LspLocation(
+                new Uri(filePath).AbsoluteUri,
+                new LspRange(Position(span.StartLinePosition), Position(span.EndLinePosition))
             );
+            locations.Add(found);
+            if (_isWrittenTo.GetValue(reference) is true)
+            {
+                written.Add(found);
+            }
         }
 
-        return new ReferencesResponse(Found: true, locations, generated);
+        return new ReferencesResponse(Found: true, locations, written, generated);
     }
 
     private Task<ImmutableArray<ReferencedSymbol>> FindReferencesAsync(

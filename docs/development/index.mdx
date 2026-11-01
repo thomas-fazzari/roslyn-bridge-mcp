@@ -61,7 +61,7 @@ Then run `mise run test-integration` and `mise run docs:check`.
 
 `src/RoslynBridge.Extension` runs inside the Roslyn process. The bridge activates it once Roslyn has loaded the workspace, then sends it reference queries for `references`, `reads` and `writes`. This avoids the 500 ms batching delay of the `textDocument/references` handler.
 
-The extension matches that handler's results by calling two internal Roslyn members through reflection, because the public search also lists the references of sibling overrides. When activation or a query fails, the bridge logs a warning and uses `textDocument/references` until the next session. The results are the same, only slower.
+The extension matches that handler's results by calling internal Roslyn members through reflection, because the public search also lists the references of sibling overrides. It also marks the references that write the symbol, as `textDocument/documentHighlight` does. When activation or a query fails, the bridge logs a warning and uses `textDocument/references` until the next session. It then sends one `textDocument/documentHighlight` request per file to tell reads from writes. That is slower, and it misses a reference when the file's first one goes through another symbol, such as an interface member.
 
 `RoslynServerVersion` in `Directory.Packages.props` sets the server that `setup` installs, that the CI tests against and that the extension compiles against. After changing it, run `mise run test-integration` on every platform the CI covers, since Roslyn changes its path handling between versions.
 

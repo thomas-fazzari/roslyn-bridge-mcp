@@ -352,6 +352,39 @@ public sealed partial class RoslynMcpTests
     }
 
     [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    public async Task ListsReadsThroughAnInterfaceAndTheBaseInOneFileAsync()
+    {
+        const string boxFile = "Application/Box.cs";
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var workspace = await RoslynTestWorkspace.CreateAsync(cancellationToken);
+        await StartRoslynAsync(workspace);
+        await workspace.WriteFileAsync(
+            boxFile,
+            "namespace Sample.Application;\n\npublic interface ISized\n{\n    int Size { get; }\n}\n\n"
+                + "public class Box\n{\n    public int Size { get; set; }\n}\n\n"
+                + "public sealed class Crate : Box, ISized { }\n\n"
+                + "public static class Sizes\n{\n"
+                + "    public static int OfSized(ISized sized) => sized.Size;\n\n"
+                + "    public static int OfBox(Box box) => box.Size;\n}\n"
+        );
+        await workspace.CallAsync(
+            new LspRequest { Action = LspAction.Diagnostics, File = boxFile }
+        );
+
+        var references = await workspace.CallAsync(
+            new LspRequest { Action = LspAction.References, Symbol = "Box.Size" }
+        );
+        var reads = await workspace.CallAsync(
+            new LspRequest { Action = LspAction.Reads, Symbol = "Box.Size" }
+        );
+
+        // Box.Size implements ISized.Size for Crate. A highlight from the file's first reference,
+        // which goes through ISized, would miss box.Size
+        references.Should().Be($"{boxFile} 17:54 19:45");
+        reads.Should().Be($"{boxFile} 17:54 19:45");
+    }
+
+    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
     public async Task ReadsSourceAndMembersAcrossPartialDeclarationsAsync()
     {
         const string ledgerFile = "Application/Ledger.cs";
