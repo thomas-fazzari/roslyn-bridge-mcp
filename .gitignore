@@ -48,6 +48,12 @@
 !/eng/**
 !/docs/
 !/docs/**
+!/bench/
+!/bench/fixtures.tsv
+!/bench/results/
+!/bench/results/**
+!/bench/RoslynBridge.Benchmarks/
+!/bench/RoslynBridge.Benchmarks/**
 
 # Generated files and local settings stay ignored inside allowed dirs
 **/bin/
@@ -56,6 +62,7 @@
 /docs/.astro/
 /docs/dist/
 **/TestResults/
+**/BenchmarkDotNet.Artifacts/
 **/.DS_Store
 **/*.user
 **/*.suo
