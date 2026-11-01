@@ -29,6 +29,11 @@ internal sealed record SymbolItem(string Name, string? Kind)
     public IReadOnlyList<SourcePosition> Calls { get; init; } = [];
 
     /// <summary>
+    /// The base or interface member that the calls go through, for a caller.
+    /// </summary>
+    public string? Through { get; init; }
+
+    /// <summary>
     /// The trimmed source line of each call site or position, when context was requested.
     /// </summary>
     public IReadOnlyDictionary<int, string>? Lines { get; init; }

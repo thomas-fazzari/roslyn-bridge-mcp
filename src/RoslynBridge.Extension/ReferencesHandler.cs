@@ -12,7 +12,7 @@ namespace RoslynBridge.Extension;
 /// Finds references as textDocument/references does, without the 500 ms batching delay of its handler.
 /// </summary>
 internal sealed class ReferencesHandler
-    : IExtensionDocumentMessageHandler<ReferencesRequest, ReferencesResponse>
+    : IExtensionDocumentMessageHandler<PositionRequest, ReferencesResponse>
 {
     private static readonly ReferencesResponse _notFound = new(Found: false, [], [], Generated: 0);
 
@@ -52,7 +52,7 @@ internal sealed class ReferencesHandler
     }
 
     public async Task<ReferencesResponse> ExecuteAsync(
-        ReferencesRequest message,
+        PositionRequest message,
         ExtensionDocumentMessageContext context,
         CancellationToken cancellationToken
     )
@@ -62,8 +62,7 @@ internal sealed class ReferencesHandler
             return _notFound;
         }
 
-        var text = await document.GetTextAsync(cancellationToken);
-        var position = text.Lines.GetPosition(new LinePosition(message.Line, message.Character));
+        var position = await document.GetPositionAsync(message, cancellationToken);
         // On a literal, Roslyn lists its occurrences instead of references
         if (await TouchesLiteralAsync(document, position, cancellationToken))
         {
@@ -113,11 +112,7 @@ internal sealed class ReferencesHandler
                 continue;
             }
 
-            var span = location.GetLineSpan();
-            var found = new LspLocation(
-                new Uri(filePath).AbsoluteUri,
-                new LspRange(Position(span.StartLinePosition), Position(span.EndLinePosition))
-            );
+            var found = new LspLocation(filePath.ToLspUri(), location.ToLspRange());
             locations.Add(found);
             if (_isWrittenTo.GetValue(reference) is true)
             {
@@ -154,7 +149,4 @@ internal sealed class ReferencesHandler
         return root.FindToken(position).IsLiteralTouching(position)
             || (position > 0 && root.FindToken(position - 1).IsLiteralTouching(position));
     }
-
-    private static LspPosition Position(LinePosition position) =>
-        new(position.Line, position.Character);
 }

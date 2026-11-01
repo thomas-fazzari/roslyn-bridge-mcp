@@ -6,25 +6,27 @@ set -euo pipefail
 output="$PWD/artifacts/bench"
 head="${BENCH_HEAD:-}"
 baseline="${BENCH_BASELINE-master}"
-worktrees=()
+# Outside the repository, where BenchmarkDotNet would find a second copy of its project.
+# Resolved, because MSBuild names embedded resources wrongly under a symlink such as macOS /var.
+sources="$(cd "$(mktemp -d)" && pwd -P)"
 
-remove_worktrees() {
-  local worktree
-  # macOS bash 3.2 rejects an empty array under set -u
-  for worktree in ${worktrees[@]+"${worktrees[@]}"}; do
-    git worktree remove --force "$worktree"
+remove_sources() {
+  local source
+  for source in "$sources"/*; do
+    if [[ -d "$source" ]]; then
+      git worktree remove --force "$source"
+    fi
   done
+  rm -rf "$sources"
 }
-trap remove_worktrees EXIT
+trap remove_sources EXIT
 
 # Builds a git ref in a temporary worktree, or this checkout when the ref is empty
 publish() {
   local ref="$1" destination="$output/$2" source=.
   if [[ -n "$ref" ]]; then
-    source="$output/$2-source"
-    git worktree remove --force "$source" 2>/dev/null || true
+    source="$sources/$2"
     git worktree add --quiet --detach "$source" "$ref"
-    worktrees+=("$source")
   fi
   dotnet publish "$source/src/RoslynBridge/RoslynBridge.csproj" --configuration Release \
     --output "$destination" --verbosity quiet

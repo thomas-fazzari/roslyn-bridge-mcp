@@ -147,18 +147,19 @@ internal sealed class BridgeSession : IAsyncDisposable
 
     private async Task WaitUntilLoadedAsync(CancellationToken cancellationToken)
     {
-        while (true)
+        var status = await CallAsync("lsp", [("action", "status")], cancellationToken);
+        while (status.Contains("loading: true", StringComparison.Ordinal))
         {
-            var status = await CallAsync("lsp", [("action", "status")], cancellationToken);
-            if (
-                status.Contains("running: true", StringComparison.Ordinal)
-                && status.Contains("loading: false", StringComparison.Ordinal)
-            )
-            {
-                return;
-            }
-
             await Task.Delay(_statusInterval, cancellationToken);
+            status = await CallAsync("lsp", [("action", "status")], cancellationToken);
+        }
+
+        // The bridge starts loading before it answers, so a load that stopped without a server failed
+        if (!status.Contains("running: true", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                $"Roslyn failed to load the workspace. The bridge log is in {LogsVariable}."
+            );
         }
     }
 

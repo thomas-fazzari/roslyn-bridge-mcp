@@ -21,7 +21,11 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <EmbeddedResource Include="Lsp/ClientCapabilities.json" />
+    <!-- MSBuild derives a shorter name when the project path goes through a symlink -->
+    <EmbeddedResource
+      Include="Lsp/ClientCapabilities.json"
+      LogicalName="RoslynBridge.Lsp.ClientCapabilities.json"
+    />
   </ItemGroup>
 
   <ItemGroup>

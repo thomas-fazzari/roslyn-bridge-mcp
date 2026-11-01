@@ -93,6 +93,13 @@ internal sealed partial class RoslynSession(
                 ),
             cancellationToken
         );
+        // A load started at launch has no caller until the first tool call
+        _ = _startup.ContinueWith(
+            load => LogLoadFailed(logger, load.Exception!.GetBaseException()),
+            CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted,
+            TaskScheduler.Default
+        );
     }
 
     /// <summary>
@@ -531,6 +538,9 @@ internal sealed partial class RoslynSession(
         Message = "Roslyn loaded the workspace, with {FileCount} watched files."
     )]
     private static partial void LogWorkspaceLoaded(ILogger logger, int fileCount);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Roslyn failed to load the workspace.")]
+    private static partial void LogLoadFailed(ILogger logger, Exception exception);
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "Roslyn stderr stream closed.")]
     private static partial void LogStderrClosed(ILogger logger);

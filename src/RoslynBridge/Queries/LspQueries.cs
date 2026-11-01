@@ -178,7 +178,41 @@ internal sealed partial class LspQueries(
         CancellationToken cancellationToken
     )
     {
-        var (prepare, expand) = request.Action switch
+        var (related, accesses, prepared) =
+            request.Action is LspAction.Callers
+            && await session.FindCallersAsync(position, cancellationToken) is { } calls
+                ? (calls, 0, true)
+                : await ExpandHierarchyAsync(request.Action, position, cancellationToken);
+
+        var result = await NameSymbolsAsync(
+            related.ToRelatedSymbols(paths, request.Limit, request.Offset) with
+            {
+                Accesses = accesses,
+                Hierarchy = prepared ? request.Action : null,
+            },
+            cancellationToken
+        );
+        if (!request.Context)
+        {
+            return result;
+        }
+
+        // Outgoing call sites are in the requested document, not in the callee's file
+        var callSiteFile =
+            request.Action is LspAction.Callees
+                ? paths.TryGetWorkspaceFile(position["textDocument"]!["uri"]!.GetValue<string>())
+                : null;
+        return SourceLines.Add(result, paths, callSiteFile);
+    }
+
+    /// <returns>Prepared is false when Roslyn found no symbol to expand.</returns>
+    private async Task<(JsonArray Related, int Accesses, bool Prepared)> ExpandHierarchyAsync(
+        LspAction action,
+        JsonObject position,
+        CancellationToken cancellationToken
+    )
+    {
+        var (prepare, expand) = action switch
         {
             LspAction.Callers => (
                 LspMethods.TextDocumentPrepareCallHierarchy,
@@ -209,7 +243,7 @@ internal sealed partial class LspQueries(
             {
                 // Outgoing calls also list property, field and constant accesses, which hide the calls
                 if (
-                    request.Action is LspAction.Callees
+                    action is LspAction.Callees
                     && !LspSymbolKinds.IsInvocable(entry.Read<LspCall>().To?.Kind)
                 )
                 {
@@ -221,25 +255,7 @@ internal sealed partial class LspQueries(
             }
         }
 
-        var result = await NameSymbolsAsync(
-            related.ToRelatedSymbols(paths, request.Limit, request.Offset) with
-            {
-                Accesses = accesses,
-                Hierarchy = items is { Count: > 0 } ? request.Action : null,
-            },
-            cancellationToken
-        );
-        if (!request.Context)
-        {
-            return result;
-        }
-
-        // Outgoing call sites are in the requested document, not in the callee's file
-        var callSiteFile =
-            request.Action is LspAction.Callees
-                ? paths.TryGetWorkspaceFile(position["textDocument"]!["uri"]!.GetValue<string>())
-                : null;
-        return SourceLines.Add(result, paths, callSiteFile);
+        return (related, accesses, items is { Count: > 0 });
     }
 
     /// <summary>

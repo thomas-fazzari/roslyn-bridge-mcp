@@ -352,6 +352,28 @@ public sealed partial class RoslynMcpTests
     }
 
     [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    public async Task ListsCallersOfAnImplementationThroughItsInterfaceAsync()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var workspace = await RoslynTestWorkspace.CreateAsync(cancellationToken);
+
+        var callers = await workspace.CallAsync(
+            new LspRequest { Action = LspAction.Callers, Symbol = "Greeter.Greet" }
+        );
+
+        // Consumer only calls IGreeter.Greet, which Greeter implements
+        callers
+            .Should()
+            .Be(
+                $"""
+                {ConsumerTestFile}:7:26 method Sample.Application.Consumer.Run(IGreeter)
+                  through IGreeter.Greet(string)
+                  calls 7:59
+                """
+            );
+    }
+
+    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
     public async Task ListsReadsThroughAnInterfaceAndTheBaseInOneFileAsync()
     {
         const string boxFile = "Application/Box.cs";
