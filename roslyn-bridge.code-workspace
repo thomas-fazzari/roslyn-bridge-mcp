@@ -17,6 +17,7 @@
       "*.csproj": "xml",
       "*.props": "xml",
       "*.slnx": "xml",
+      "*.mdx": "markdown",
     },
     "files.exclude": {
       "**/artifacts": true,

@@ -5,18 +5,15 @@ using RoslynBridge.Settings;
 
 namespace RoslynBridge.Lsp;
 
-/// <summary>
-/// A running Roslyn language server seen through its standard streams.
-/// </summary>
 internal interface IRoslynServer : IDisposable
 {
     /// <summary>
-    /// Stream the bridge writes requests to.
+    /// The stream the bridge writes requests to.
     /// </summary>
     Stream Input { get; }
 
     /// <summary>
-    /// Stream the bridge reads responses from.
+    /// The stream the bridge reads responses from.
     /// </summary>
     Stream Output { get; }
 
@@ -31,9 +28,6 @@ internal interface IRoslynServer : IDisposable
 
 internal delegate IRoslynServer RoslynLauncher(BridgeOptions options, WorkspacePaths paths);
 
-/// <summary>
-/// The Roslyn language server as a child process.
-/// </summary>
 internal sealed class RoslynProcess(Process process) : IRoslynServer
 {
     public static IRoslynServer Start(BridgeOptions options, WorkspacePaths paths)

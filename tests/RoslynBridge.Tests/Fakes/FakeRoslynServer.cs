@@ -35,21 +35,18 @@ internal sealed class FakeRoslynServer : IRoslynServer
     }
 
     /// <summary>
-    /// Answers workspace/symbol, document symbol, definition, references, document highlight, diagnostic, project context,
-    /// hierarchy, code action and workspace/executeCommand requests, given the method and its parameters.
-    /// A references request that the bridge cancels ends without waiting for its answer.
-    /// The default handler returns null.
+    /// A references request that the bridge cancels ends without waiting for its answer. The default handler returns null.
     /// </summary>
     public Func<string, JsonNode?, Task<JsonNode?>> Handle { get; set; } =
         (_, _) => Task.FromResult<JsonNode?>(null);
 
     /// <summary>
-    /// Completes when the fake reports the project load, which defaults to at once.
+    /// Completes when the fake reports the project load. Defaults to at once.
     /// </summary>
     public Task ProjectLoad { get; set; } = Task.CompletedTask;
 
     /// <summary>
-    /// The textDocument/didOpen, textDocument/didChange, solution/open and project/open notifications received, in arrival order.
+    /// Only didOpen, didChange, solution/open and project/open, in arrival order.
     /// </summary>
     public IReadOnlyCollection<(string Method, JsonNode? Parameters)> Notifications =>
         _notifications;
@@ -69,7 +66,6 @@ internal sealed class FakeRoslynServer : IRoslynServer
         await _errorWriter.FlushAsync(cancellationToken);
     }
 
-    /// <summary>Sends a request to the bridge, as Roslyn does with workspace/applyEdit.</summary>
     public Task<JsonNode?> RequestClientAsync(
         string method,
         JsonNode parameters,
@@ -77,8 +73,7 @@ internal sealed class FakeRoslynServer : IRoslynServer
     ) => _rpc.InvokeWithParameterObjectAsync<JsonNode?>(method, parameters, cancellationToken);
 
     /// <summary>
-    /// Sends a $/progress notification, then waits for the bridge to answer a request sent after it,
-    /// which shows that the bridge handled the notification.
+    /// Returns after the bridge answers a request sent after the notification, so it has handled it.
     /// </summary>
     public async Task ReportProgressAsync(
         string token,
@@ -96,7 +91,6 @@ internal sealed class FakeRoslynServer : IRoslynServer
         );
     }
 
-    /// <summary>Ends the process abruptly, as a crash would.</summary>
     public void Crash()
     {
         if (HasExited)

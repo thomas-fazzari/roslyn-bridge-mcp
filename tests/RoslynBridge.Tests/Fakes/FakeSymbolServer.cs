@@ -5,15 +5,10 @@ using RoslynBridge.Lsp;
 
 namespace RoslynBridge.Tests.Fakes;
 
-/// <summary>
-/// Answers workspace symbol queries and document symbol requests from fixed tables, so a test
-/// describes only the symbols it needs.
-/// </summary>
 internal static class FakeSymbolServer
 {
-    /// <param name="workspace">The workspace symbols of each query. Other queries find none.</param>
-    /// <param name="documents">The document symbols of each file name. Other files have none.</param>
-    /// <returns>A launcher that starts a fake server answering from the tables.</returns>
+    /// <param name="workspace">Other queries find none.</param>
+    /// <param name="documents">By file name. Other files have none.</param>
     public static RoslynLauncher With(
         Dictionary<string, JsonObject[]> workspace,
         Dictionary<string, JsonObject[]>? documents = null

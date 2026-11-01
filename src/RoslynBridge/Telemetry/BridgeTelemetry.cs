@@ -15,8 +15,7 @@ using OpenTelemetry.Trace;
 namespace RoslynBridge.Telemetry;
 
 /// <summary>
-/// Traces, metrics and logs of tool calls, Roslyn requests and the workspace.
-/// The bridge exports them over OTLP only when <see cref="EnableVariable"/> is set, and the OTEL_ variables configure the export.
+/// Exports over OTLP only when <see cref="EnableVariable"/> is set. The OTEL_ variables configure the export.
 /// </summary>
 internal static class BridgeTelemetry
 {
@@ -132,7 +131,7 @@ internal static class BridgeTelemetry
     extension(IHost host)
     {
         /// <summary>
-        /// Creates the providers before the host runs, so they observe the workspace load that starts first.
+        /// Creates the providers early, so they observe the workspace load that starts first.
         /// </summary>
         public IHost StartTelemetry()
         {
@@ -171,7 +170,7 @@ internal static class BridgeTelemetry
         );
 
     /// <summary>
-    /// Records the duration with the tags, copies them to the activity and marks it failed when they hold an <see cref="ErrorType"/>.
+    /// Marks the activity failed when the tags hold an <see cref="ErrorType"/>.
     /// </summary>
     public static void Complete(
         Activity? activity,

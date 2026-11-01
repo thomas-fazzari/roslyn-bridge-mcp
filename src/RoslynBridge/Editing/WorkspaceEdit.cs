@@ -5,15 +5,14 @@ using RoslynBridge.Lsp;
 
 namespace RoslynBridge.Editing;
 
-/// <param name="Changes">The text edits by document URI.</param>
-/// <param name="DocumentChanges">The ordered document operations. A workspace edit uses only one of the two.</param>
+/// <param name="DocumentChanges">A workspace edit uses only one of the two.</param>
 internal sealed record WorkspaceEdit(
     Dictionary<string, TextEdit?[]?>? Changes = null,
     DocumentChange?[]? DocumentChanges = null
 );
 
 /// <summary>
-/// A text document edit, which has no <paramref name="Kind"/>, or a create, rename or delete operation.
+/// A text document edit has no <paramref name="Kind"/>.
 /// </summary>
 internal sealed record DocumentChange(
     string? Kind = null,
@@ -25,7 +24,7 @@ internal sealed record DocumentChange(
     FileOperationOptions? Options = null
 );
 
-/// <param name="Version">The document version the edit was computed against, or null for any version.</param>
+/// <param name="Version">Null accepts any version.</param>
 internal sealed record VersionedDocument(string Uri, int? Version = null);
 
 internal sealed record FileOperationOptions(

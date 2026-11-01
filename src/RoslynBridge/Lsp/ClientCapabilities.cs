@@ -3,9 +3,6 @@
 
 namespace RoslynBridge.Lsp;
 
-/// <summary>
-/// Describes the standard LSP features implemented by this bridge.
-/// </summary>
 internal static class ClientCapabilities
 {
     public static JsonObject Create(WorkspacePaths paths)

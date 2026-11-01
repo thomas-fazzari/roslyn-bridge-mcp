@@ -6,9 +6,6 @@ using StreamJsonRpc;
 
 namespace RoslynBridge.Lsp;
 
-/// <summary>
-/// Answers Roslyn requests and consumes its notifications while tool calls are pending.
-/// </summary>
 internal sealed partial class ClientCallbacks(
     RoslynSession session,
     WorkspacePaths paths,

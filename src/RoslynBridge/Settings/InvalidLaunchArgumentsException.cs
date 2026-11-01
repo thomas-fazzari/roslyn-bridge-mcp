@@ -3,7 +3,4 @@
 
 namespace RoslynBridge.Settings;
 
-/// <summary>
-/// The command line holds an unknown option or a value that cannot apply.
-/// </summary>
 internal sealed class InvalidLaunchArgumentsException(string message) : Exception(message);

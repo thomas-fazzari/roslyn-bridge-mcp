@@ -14,10 +14,9 @@ internal static class ProjectSettingsReader
     };
 
     /// <summary>
-    /// Reads the settings file of the workspace root.
+    /// Returns empty settings when there is no file.
     /// </summary>
-    /// <returns>The settings, which are empty when there is no file.</returns>
-    /// <exception cref="InvalidSettingsException">The file cannot be read, has an unknown key, or holds a faulty setting.</exception>
+    /// <exception cref="InvalidSettingsException">The file is unreadable, has an unknown key or a faulty setting.</exception>
     public static ProjectSettings Read(string root)
     {
         var path = Path.Combine(root, ProjectSettings.FileName);

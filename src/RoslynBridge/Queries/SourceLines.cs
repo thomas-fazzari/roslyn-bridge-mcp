@@ -6,9 +6,6 @@ using RoslynBridge.Results;
 
 namespace RoslynBridge.Queries;
 
-/// <summary>
-/// Adds the saved source lines of navigation results, so callers can read each occurrence in place.
-/// </summary>
 internal static class SourceLines
 {
     internal const int MaximumLineCharacters = 200;
@@ -34,8 +31,7 @@ internal static class SourceLines
     }
 
     /// <summary>
-    /// Items with call sites get the lines of their calls, which are in <paramref name="callSiteFile"/>
-    /// when it is set, and in the item's own file otherwise. Other items get the line of their position.
+    /// Call sites are in <paramref name="callSiteFile"/> when it is set, otherwise in the item's own file.
     /// </summary>
     public static SymbolList Add(SymbolList symbols, WorkspacePaths paths, string? callSiteFile)
     {
@@ -85,7 +81,9 @@ internal static class SourceLines
         return text;
     }
 
-    /// <returns>The lines of a saved file, or null when it cannot be read.</returns>
+    /// <summary>
+    /// Returns null when the file cannot be read.
+    /// </summary>
     public static string[]? TryReadLines(string? file)
     {
         if (file is null)
@@ -103,7 +101,6 @@ internal static class SourceLines
         }
     }
 
-    /// <summary>Returns the lines of a saved file, without their line breaks.</summary>
     public static string[] ReadLines(string file)
     {
         var source = File.ReadAllText(file);

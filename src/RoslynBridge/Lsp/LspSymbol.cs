@@ -3,10 +3,7 @@
 
 namespace RoslynBridge.Lsp;
 
-/// <summary>
-/// A document symbol, workspace symbol or hierarchy item.
-/// </summary>
-/// <param name="Glyph">The Roslyn extension that encodes the kind and accessibility of a document symbol.</param>
+/// <param name="Glyph">A Roslyn extension that encodes the kind and accessibility of a document symbol.</param>
 internal sealed record LspSymbol(
     string Name,
     int Kind,
@@ -21,7 +18,7 @@ internal sealed record LspSymbol(
 );
 
 /// <summary>
-/// An incoming call has <see cref="From"/>, and an outgoing call has <see cref="To"/>.
+/// An incoming call has <see cref="From"/>. An outgoing call has <see cref="To"/>.
 /// </summary>
 internal sealed record LspCall(
     LspSymbol? From = null,

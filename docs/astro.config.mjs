@@ -79,7 +79,6 @@ export default defineConfig({
             "development/releases",
             { label: "C# conventions", slug: "development/conventions/csharp" },
             { label: "Testing conventions", slug: "development/conventions/testing" },
-            "development/documentation",
           ],
         },
       ],

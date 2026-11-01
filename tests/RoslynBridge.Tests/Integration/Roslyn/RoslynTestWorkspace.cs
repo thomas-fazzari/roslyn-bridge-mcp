@@ -11,12 +11,6 @@ using static RoslynBridge.Tests.Unit.TestHelpers;
 
 namespace RoslynBridge.Tests.Integration.Roslyn;
 
-/// <summary>
-/// Runs the built MCP host against an isolated copy of a real C# solution.
-/// </summary>
-/// <remarks>
-/// Set ROSLYN_BRIDGE_TEST_SERVER to select an installed Roslyn server by its executable path.
-/// </remarks>
 internal sealed class RoslynTestWorkspace : IAsyncDisposable
 {
     private readonly DirectoryInfo _directory;
@@ -99,8 +93,6 @@ internal sealed class RoslynTestWorkspace : IAsyncDisposable
         };
     }
 
-    /// <summary>Closes the host input and waits for the host to exit.</summary>
-    /// <returns>The exit code of the host.</returns>
     public async Task<int> StopAsync()
     {
         if (_client is not null)
@@ -175,7 +167,7 @@ internal sealed class RoslynTestWorkspace : IAsyncDisposable
     }
 
     /// <summary>
-    /// Sends a request the way an agent would: to the tool that owns its action, with flat arguments.
+    /// Calls the tool that owns the action, with flat arguments, as an agent would.
     /// </summary>
     private static (string Tool, Dictionary<string, object?> Arguments) ToolCall(LspRequest request)
     {

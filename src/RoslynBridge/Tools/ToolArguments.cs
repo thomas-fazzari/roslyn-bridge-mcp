@@ -8,7 +8,7 @@ using ModelContextProtocol.Server;
 namespace RoslynBridge.Tools;
 
 /// <summary>
-/// Checks the arguments of a tool call against the input schema the tool publishes, which the SDK does not enforce.
+/// The SDK does not enforce the input schema that a tool publishes.
 /// </summary>
 internal static class ToolArguments
 {

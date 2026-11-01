@@ -7,7 +7,6 @@ namespace RoslynBridge.Output;
 
 internal static partial class ResultText
 {
-    // Room kept for the closing lines that report what was left out
     private const int ClosingReserve = 200;
 
     private static void AppendActions(StringBuilder text, ActionListing listing)
@@ -154,13 +153,11 @@ internal static partial class ResultText
         }
     }
 
-    // kind path, or rename old -> new
     private static string Operation(FileOperation operation) =>
         operation.OldPath is { } oldPath
             ? $"{operation.Kind} {oldPath} -> {operation.Path}\n"
             : $"{operation.Kind} {operation.Path}\n";
 
-    // Appends whole blocks while they fit, keeping room for the closing lines
     private static int AppendWithin(StringBuilder text, IEnumerable<string> blocks, int budget)
     {
         var shown = 0;

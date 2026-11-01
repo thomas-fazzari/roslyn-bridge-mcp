@@ -5,10 +5,7 @@ using System.Runtime.InteropServices;
 
 namespace RoslynBridge.Lsp;
 
-/// <summary>
-/// Finds the Roslyn server and the .NET install it runs on.
-/// </summary>
-/// <param name="bridgeRoot">The .NET install that runs the bridge, used unless --dotnet-root names another.</param>
+/// <param name="bridgeRoot">The .NET install that runs the bridge. Used unless --dotnet-root names another.</param>
 internal sealed class RoslynLocator(
     Func<string, string?> environment,
     string home,
@@ -70,7 +67,7 @@ internal sealed class RoslynLocator(
     }
 
     /// <summary>
-    /// Points the Roslyn process at <paramref name="root"/> without changing the bridge's own environment.
+    /// Changes only the child environment, not the bridge's own.
     /// </summary>
     public static void ApplyDotnetRoot(IDictionary<string, string?> childEnvironment, string root)
     {

@@ -8,12 +8,8 @@ using RoslynBridge.Results;
 namespace RoslynBridge.Symbols;
 
 /// <summary>
-/// Finds the declaration of a C# symbol from its name.
+/// Workspace symbol search matches loosely, so it only selects candidate files. Their document symbols give the exact names.
 /// </summary>
-/// <remarks>
-/// Roslyn's workspace symbol search matches names loosely and reports localized containers.
-/// It only selects candidate files. Their document symbols give the exact qualified names.
-/// </remarks>
 internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths)
 {
     internal const int MaximumCandidates = 20;
@@ -21,11 +17,8 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
     private const int MaximumTypoDistance = 3;
 
     /// <summary>
-    /// Returns the declarations of the symbol named by <paramref name="text"/>,
-    /// searching only <paramref name="file"/> when it is given.
-    /// A partial type has one declaration per part. The first one is where navigation starts.
-    /// An ambiguous name returns an error that lists the candidate symbols.
-    /// An unknown name returns an error that lists similar symbols, when there are any.
+    /// A partial type has one declaration per part, and the first is where navigation starts.
+    /// An ambiguous or unknown name returns an error that lists candidates.
     /// </summary>
     public async Task<Result<IReadOnlyList<SymbolDeclaration>>> ResolveAsync(
         string text,
@@ -98,8 +91,7 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
     }
 
     /// <summary>
-    /// Keeps one declaration per symbol. Partial declarations share a name and a project,
-    /// while same-named types in different projects are separate symbols.
+    /// Same-named types in different projects are separate symbols.
     /// </summary>
     internal static List<SymbolDeclaration> DistinctSymbols(
         IEnumerable<SymbolDeclaration> declarations,
@@ -190,8 +182,7 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
     }
 
     /// <summary>
-    /// Returns the names of the declarations at one-based positions in workspace files,
-    /// in the format <see cref="ResolveAsync"/> accepts. Positions without a declaration are omitted.
+    /// Returns names in the format <see cref="ResolveAsync"/> accepts. Positions without a declaration are omitted.
     /// </summary>
     public async Task<
         IReadOnlyDictionary<(string File, SourcePosition Position), string>
@@ -205,7 +196,7 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
         );
 
     /// <summary>
-    /// Returns the innermost declaration whose lines contain <paramref name="line"/>, or null outside any.
+    /// Returns the innermost declaration that contains the line, or null.
     /// </summary>
     public async Task<SymbolDeclaration?> DeclarationAtAsync(
         string file,
@@ -221,8 +212,7 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
     }
 
     /// <summary>
-    /// Returns the members declared directly in the parts of a type, in file and line order.
-    /// Members of its extension blocks count as its own.
+    /// Members of extension blocks count as the type's own.
     /// </summary>
     public async Task<IReadOnlyList<SymbolDeclaration>> MembersAsync(
         IReadOnlyList<SymbolDeclaration> parts,
@@ -234,10 +224,9 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
             ),
         ];
 
-    /// <returns>
-    /// The members of the type that a derived class inherits, in file and line order:
-    /// every member except private ones, constructors and finalizers.
-    /// </returns>
+    /// <summary>
+    /// Excludes private members, constructors and finalizers.
+    /// </summary>
     public async Task<IReadOnlyList<SymbolDeclaration>> InheritableMembersAsync(
         IReadOnlyList<SymbolDeclaration> parts,
         CancellationToken cancellationToken
@@ -283,9 +272,7 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
     }
 
     /// <summary>
-    /// Returns the declarations in document symbol trees that <paramref name="requested"/> selects.
-    /// Exact matches win over loose ones, so every returned name selects only its own declaration.
-    /// A constructor is selected only when the request includes its parameter list.
+    /// Exact matches win over loose ones. A constructor needs its parameter list in the request.
     /// </summary>
     internal static IEnumerable<SymbolDeclaration> FindDeclarations(
         IEnumerable<(string File, LspSymbol[] Symbols)> documents,

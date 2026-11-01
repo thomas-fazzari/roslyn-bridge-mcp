@@ -7,16 +7,13 @@ using RoslynBridge.Requests;
 namespace RoslynBridge.Tests.Fakes;
 
 /// <summary>
-/// Answers document diagnostic pulls with a report and its result id, and answers <c>unchanged</c>
-/// to that result id, as Roslyn does while a document stays the same.
+/// Answers <c>unchanged</c> to a known result id, as Roslyn does while a document stays the same.
 /// </summary>
 internal static class FakeDiagnosticServer
 {
     internal const string ResultId = "report-1";
 
-    /// <param name="code">The code of the one warning that each report holds.</param>
     /// <param name="sent">Receives the previous result id of each pull, or null when a pull sends none.</param>
-    /// <returns>A launcher that starts a fake server answering diagnostic pulls.</returns>
     public static RoslynLauncher WithResultIds(string code, ConcurrentQueue<string?> sent) =>
         (_, _) =>
             new FakeRoslynServer

@@ -21,8 +21,7 @@ public sealed partial class RoslynMcpTests
         };
 
     /// <summary>
-    /// Starts Roslyn and waits for the project load, so a file written next reaches Roslyn
-    /// as a change to the loaded workspace.
+    /// A file written next reaches Roslyn as a change to the loaded workspace.
     /// </summary>
     private static async Task StartRoslynAsync(RoslynTestWorkspace workspace) =>
         await workspace.CallAsync(

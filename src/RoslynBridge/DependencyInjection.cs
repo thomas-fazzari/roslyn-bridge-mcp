@@ -19,7 +19,7 @@ internal static class BridgeServices
     extension(ILoggingBuilder logging)
     {
         /// <summary>
-        /// Sends every log to standard error, which keeps standard output for MCP messages.
+        /// Standard output is reserved for MCP messages.
         /// </summary>
         public ILoggingBuilder AddStandardErrorConsole() =>
             logging.AddConsole(static options =>

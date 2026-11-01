@@ -9,7 +9,7 @@ using static RoslynBridge.Tests.Unit.TestHelpers;
 namespace RoslynBridge.Tests.Assertions;
 
 /// <summary>
-/// Asserts the outcome of a tool response. A failure message includes the response text.
+/// A failure message includes the response text.
 /// </summary>
 [CustomAssertions]
 internal sealed class CallToolResultAssertions(

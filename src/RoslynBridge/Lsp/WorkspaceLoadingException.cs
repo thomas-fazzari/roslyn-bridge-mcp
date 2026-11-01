@@ -4,9 +4,8 @@
 namespace RoslynBridge.Lsp;
 
 /// <summary>
-/// Reports that Roslyn is still loading the workspace when a caller stops waiting. The load continues.
+/// Thrown when a caller stops waiting for the load. The load continues.
 /// </summary>
-/// <param name="progress">What Roslyn reported so far, or null when it reported nothing.</param>
 internal sealed class WorkspaceLoadingException(LoadProgress? progress)
     : Exception(Describe(progress))
 {

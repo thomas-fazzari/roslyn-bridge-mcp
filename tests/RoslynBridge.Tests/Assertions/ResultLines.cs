@@ -5,7 +5,6 @@ using System.Text.RegularExpressions;
 
 namespace RoslynBridge.Tests.Assertions;
 
-// Reads the lines of the text results the bridge returns
 internal static partial class ResultLines
 {
     public const int RegexTimeoutMilliseconds = 1_000;

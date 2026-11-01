@@ -11,7 +11,7 @@ internal sealed partial class RoslynSession
     private static readonly TimeSpan _projectAttachPollInterval = TimeSpan.FromMilliseconds(200);
 
     /// <summary>
-    /// Returns the project contexts of an open document, or none when the server lacks the extension.
+    /// Returns no contexts when the server lacks the extension.
     /// </summary>
     public async Task<ProjectContext[]> ProjectContextsAsync(
         string uri,
@@ -36,9 +36,7 @@ internal sealed partial class RoslynSession
     }
 
     /// <summary>
-    /// Opens the C# files and returns those outside every project, after waiting for Roslyn
-    /// to attach the files created since the load. Roslyn treats a new file as a miscellaneous
-    /// file, without semantic diagnostics, until its project picks the file up.
+    /// Returns the files outside every project. Waits for Roslyn to attach files created since the load.
     /// </summary>
     public async Task<HashSet<string>> WaitForProjectsAsync(
         IReadOnlyCollection<string> files,

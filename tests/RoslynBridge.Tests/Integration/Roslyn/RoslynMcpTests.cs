@@ -10,19 +10,6 @@ using static RoslynBridge.Tests.Unit.TestHelpers;
 
 namespace RoslynBridge.Tests.Integration.Roslyn;
 
-/// <summary>
-/// Tests the MCP bridge against the real Roslyn language server in temporary workspaces.
-/// These tests are explicit and are excluded from mise run test and mise run check.
-/// </summary>
-/// <remarks>
-/// Requires roslyn-language-server on PATH, or its path in ROSLYN_BRIDGE_TEST_SERVER.
-/// Set it locally in the [env] table of mise.local.toml. From the repository root, run:
-/// <code>
-/// mise run test-integration
-/// </code>
-/// The command builds the project. The tests restore their fixtures, launch Roslyn,
-/// and delete their temporary workspaces when finished.
-/// </remarks>
 public sealed partial class RoslynMcpTests
 {
     private const int TestTimeoutMilliseconds = 300_000;

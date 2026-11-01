@@ -3,15 +3,11 @@
 
 namespace RoslynBridge.Settings;
 
-/// <summary>
-/// Checks settings against the workspace. The command line shares the folder and timeout rules.
-/// </summary>
 internal static class ProjectSettingsValidator
 {
     private static readonly string[] _solutionExtensions = [".sln", ".slnx", ".slnf"];
     private static readonly string[] _projectExtensions = [".csproj"];
 
-    /// <returns>Every fault of the settings, which is empty when they are valid.</returns>
     public static List<string> Faults(string root, ProjectSettings settings)
     {
         var faults = new List<string>();
@@ -49,11 +45,12 @@ internal static class ProjectSettingsValidator
         return faults;
     }
 
-    /// <returns>Whether the value names one folder, without a path separator.</returns>
+    /// <summary>
+    /// A folder name has no path separator.
+    /// </summary>
     public static bool IsFolderName(string? value) =>
         !string.IsNullOrWhiteSpace(value) && !value.AsSpan().ContainsAny('/', '\\');
 
-    /// <returns>Whether the number of seconds is an allowed timeout.</returns>
     public static bool IsTimeout(int seconds) =>
         seconds
             is >= ProjectSettings.MinimumTimeoutSeconds

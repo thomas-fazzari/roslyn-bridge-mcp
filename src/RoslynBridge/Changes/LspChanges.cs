@@ -294,8 +294,7 @@ internal sealed partial class LspChanges(
             );
 
     /// <summary>
-    /// Sends the written files to Roslyn without waiting for the file watcher, then waits for
-    /// Roslyn to attach created C# files to their projects. Reloads Roslyn when one stays outside.
+    /// Reloads Roslyn when a created C# file stays outside every project.
     /// </summary>
     private async Task SynchronizeAsync(EditReceipt receipt, CancellationToken cancellationToken)
     {
@@ -329,7 +328,7 @@ internal sealed partial class LspChanges(
     }
 
     /// <summary>
-    /// Synchronizes Roslyn with the workspace and records what it received. Call it before the first Roslyn read of a change.
+    /// Call before the first Roslyn read of a change.
     /// </summary>
     private async Task<WorkspaceSnapshot> CaptureAsync(CancellationToken cancellationToken)
     {

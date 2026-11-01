@@ -3,9 +3,6 @@
 
 namespace RoslynBridge.Requests;
 
-/// <summary>
-/// One operation dispatched by a tool to the shared Roslyn session.
-/// </summary>
 internal sealed record LspRequest
 {
     internal const int DefaultResultLimit = 50;
@@ -49,7 +46,7 @@ internal sealed record LspRequest
     public JsonObject? Parameters { get; init; }
 
     /// <summary>
-    /// The independent navigation requests of a bulk request. They take their limit, offset and context from it.
+    /// The bulk request's limit, offset and context apply to each of them.
     /// </summary>
     public IReadOnlyList<LspRequest> Queries { get; init; } = [];
 
@@ -63,9 +60,6 @@ internal sealed record LspRequest
 
     public int Offset { get; init; }
 
-    /// <summary>
-    /// Returns the offset of the page after the one at <paramref name="offset"/>, or null on the last page.
-    /// </summary>
     internal static int? NextOffset(int offset, int limit, int total) =>
         offset < total - limit ? offset + limit : null;
 }

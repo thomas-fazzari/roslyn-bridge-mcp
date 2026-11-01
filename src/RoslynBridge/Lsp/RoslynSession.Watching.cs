@@ -85,7 +85,6 @@ internal sealed partial class RoslynSession
         }
         catch
         {
-            // Retry the same paths, and the scan only when one was requested
             if (scanRequested)
             {
                 Interlocked.Exchange(ref _scanRequested, 1);
@@ -101,12 +100,8 @@ internal sealed partial class RoslynSession
     }
 
     /// <summary>
-    /// Whether a changed path is a directory or a deleted directory with known files.
+    /// True for a directory or a deleted directory with known files, as the watcher may not list its files.
     /// </summary>
-    /// <remarks>
-    /// The watcher may not report the files of a directory one by one.
-    /// A missing path without known files, such as an editor swap file, needs no walk.
-    /// </remarks>
     private bool RequiresRescan(List<string> changedPaths)
     {
         HashSet<string>? knownDirectories = null;

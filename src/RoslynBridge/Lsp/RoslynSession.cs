@@ -10,11 +10,9 @@ using StreamJsonRpc;
 namespace RoslynBridge.Lsp;
 
 /// <summary>
-/// Owns one Roslyn process and its workspace for the lifetime of the MCP host.
+/// Owns one Roslyn process for the lifetime of the MCP host. Document and workspace file calls may run
+/// concurrently. Callers must serialize start, stop and reload.
 /// </summary>
-/// <remarks>
-/// Document and workspace file calls may run concurrently, and callers must serialize start, stop and reload.
-/// </remarks>
 [DebuggerDisplay("running = {IsRunning}, open documents = {_documents.Count}")]
 internal sealed partial class RoslynSession(
     SettingsMonitor settings,
@@ -63,7 +61,7 @@ internal sealed partial class RoslynSession(
     >? ApplyWorkspaceEditAsync { get; private set; }
 
     /// <summary>
-    /// Sends Roslyn's workspace/applyEdit requests to <paramref name="handler"/> until the result is disposed.
+    /// Routes workspace/applyEdit requests to <paramref name="handler"/> until the result is disposed.
     /// Without a handler, the bridge refuses them.
     /// </summary>
     public IDisposable HandleWorkspaceEdits(
@@ -74,9 +72,6 @@ internal sealed partial class RoslynSession(
         return new WorkspaceEditScope(this);
     }
 
-    /// <summary>
-    /// Starts loading the workspace unless Roslyn is ready or loading, without waiting for the load.
-    /// </summary>
     public async Task StartLoadingAsync()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -101,11 +96,8 @@ internal sealed partial class RoslynSession(
     }
 
     /// <summary>
-    /// Starts Roslyn when needed and waits up to the startup timeout for the workspace to load.
+    /// The load continues when the startup timeout ends the wait.
     /// </summary>
-    /// <remarks>
-    /// The load continues when the wait ends, so a later call can use it.
-    /// </remarks>
     public async Task EnsureStartedAsync(CancellationToken cancellationToken)
     {
         await StartLoadingAsync();
@@ -338,7 +330,6 @@ internal sealed partial class RoslynSession(
         LogWorkspaceLoaded(logger, _workspaceFiles.Count);
     }
 
-    // Roslyn finds what to load itself unless the settings name a solution or projects
     private async Task OpenConfiguredProjectsAsync(CancellationToken cancellationToken)
     {
         if (_launched.Solution is { } solution)

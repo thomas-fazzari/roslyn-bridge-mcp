@@ -12,11 +12,11 @@ mise run hooks:install
 
 `hk.pkl` defines the Git hooks for [hk](https://hk.jdx.dev).
 
-| Hook       | Runs                                                                                                                                                                           |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| pre-commit | The formatters and linters of `hk.pkl` on staged files, then stages their fixes                                                                                                |
-| commit-msg | `eng/tasks/commit-msg.pl`, which checks the [commit message](contributing.mdx#checks)                                                                                          |
-| pre-push   | The same steps in check mode on pushed files, `build` when C# or build files change, `docs:build` when the documentation, `README.md`, `AGENTS.md` or `CONTRIBUTING.md` change |
+| Hook       | Runs                                                                                  |
+| ---------- | ------------------------------------------------------------------------------------- |
+| pre-commit | The formatters and linters of `hk.pkl` on staged files, then stages their fixes       |
+| commit-msg | `eng/tasks/commit-msg.pl`, which checks the [commit message](contributing.mdx#checks) |
+| pre-push   | The same steps in check mode on pushed files, plus the builds those files affect      |
 
 ## Editor
 

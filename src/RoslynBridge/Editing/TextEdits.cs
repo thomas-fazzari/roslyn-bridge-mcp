@@ -109,6 +109,6 @@ internal static class TextEdits
 }
 
 /// <summary>
-/// The offset and length of one line in a text, without its line break.
+/// The length excludes the line break.
 /// </summary>
 internal readonly record struct LineSpan(int Start, int Length);

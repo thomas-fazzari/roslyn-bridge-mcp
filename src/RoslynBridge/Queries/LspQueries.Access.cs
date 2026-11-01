@@ -12,10 +12,6 @@ internal sealed partial class LspQueries
     private const int ReadHighlight = 2;
     private const int WriteHighlight = 3;
 
-    /// <summary>
-    /// Keeps the references that Roslyn highlights as reads or as writes in their file, then pages them.
-    /// </summary>
-    /// <returns>The reads or writes, or the error of a failed highlight request.</returns>
     private async Task<Result<ToolResult>> AccessAsync(
         LspRequest request,
         JsonNode? references,
@@ -44,10 +40,6 @@ internal sealed partial class LspQueries
         return request.Context ? SourceLines.Add(locations, paths) : locations;
     }
 
-    /// <summary>
-    /// Asks for the highlights of each workspace file once, at its first reference.
-    /// </summary>
-    /// <returns>The positions of the reads or of the writes, or the first error.</returns>
     private async Task<Result<HashSet<(string File, SourcePosition Position)>>> HighlightedAsync(
         IReadOnlyList<(string File, SourcePosition Position)> references,
         bool writes,
@@ -76,10 +68,9 @@ internal sealed partial class LspQueries
         return results.SelectMany(result => result.Value).ToHashSet();
     }
 
-    /// <returns>
-    /// The reads or the writes in the file, with the file name of each. Roslyn highlights an argument
-    /// passed by reference as a write, so its text decides whether it also reads.
-    /// </returns>
+    /// <summary>
+    /// Roslyn highlights an argument passed by reference as a write, so its text decides whether it also reads.
+    /// </summary>
     private async Task<Result<List<(string File, SourcePosition Position)>>> HighlightsAsync(
         string file,
         SourcePosition position,

@@ -10,10 +10,7 @@ internal sealed partial class LspQueries
 {
     private const int MaximumConcurrentQueries = 4;
 
-    /// <summary>
-    /// Reports each query in request order, a failed one as its own section.
-    /// </summary>
-    /// <param name="fileErrors">The errors of the query files that match several files, by name.</param>
+    /// <param name="fileErrors">The errors of query files that match several files, by name.</param>
     public async Task<Result<ToolResult>> BulkAsync(
         LspRequest request,
         IReadOnlyDictionary<string, ToolError> fileErrors,

@@ -5,9 +5,6 @@ using System.IO.Pipelines;
 
 namespace RoslynBridge.Lsp;
 
-/// <summary>
-/// Limits bytes retained by the JSON-RPC reader without interpreting its framing.
-/// </summary>
 internal sealed class BoundedPipeReader(PipeReader inner, long maximumBytes) : PipeReader
 {
     public override void AdvanceTo(SequencePosition consumed) => inner.AdvanceTo(consumed);

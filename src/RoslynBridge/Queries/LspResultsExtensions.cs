@@ -8,9 +8,6 @@ using RoslynBridge.Symbols;
 
 namespace RoslynBridge.Queries;
 
-/// <summary>
-/// Converts Roslyn results to the compact, one-based shapes returned by the tool.
-/// </summary>
 internal static class LspResultsExtensions
 {
     private const string SourceGeneratedScheme = "roslyn-source-generated:";
@@ -18,20 +15,18 @@ internal static class LspResultsExtensions
     extension(JsonNode? result)
     {
         /// <summary>
-        /// Reduces hover content to its text, whether Roslyn returns markup, a marked string or an array.
+        /// Accepts markup, a marked string or an array.
         /// </summary>
         public string ToHoverText() => HoverText(result?["contents"]).Trim();
 
         /// <summary>
-        /// Converts document or workspace symbols. Document symbols keep their nesting and declaration end.
-        /// The offset and limit apply to nested symbols too, in document order.
-        /// A skipped symbol leaves its listed members at its level.
+        /// The offset and limit apply to nested symbols in document order. A skipped symbol leaves its listed members at its level.
         /// </summary>
         public SymbolList ToSymbolList(WorkspacePaths paths, int limit, int offset = 0) =>
             result.ReadArray<LspSymbol>().ToSymbolList(paths, limit, offset);
 
         /// <summary>
-        /// Converts call or type hierarchy results, in file and position order. Call results also list their call sites.
+        /// Call results also list their call sites.
         /// </summary>
         public SymbolList ToRelatedSymbols(WorkspacePaths paths, int limit, int offset = 0)
         {
@@ -51,7 +46,6 @@ internal static class LspResultsExtensions
         }
 
         /// <summary>
-        /// Groups locations by file, in path and position order, without duplicates.
         /// With <paramref name="skipGenerated"/>, source-generated locations are only counted.
         /// </summary>
         public Locations ToLocations(
@@ -61,10 +55,6 @@ internal static class LspResultsExtensions
             int offset = 0
         ) => result.FindLocations(paths, skipGenerated).Page(limit, offset);
 
-        /// <summary>
-        /// Collects locations, in path and position order, without duplicates.
-        /// With <paramref name="skipGenerated"/>, source-generated locations are only counted.
-        /// </summary>
         public FoundLocations FindLocations(WorkspacePaths paths, bool skipGenerated)
         {
             var locations = result switch
@@ -112,9 +102,6 @@ internal static class LspResultsExtensions
             );
         }
 
-        /// <summary>
-        /// Returns the one-based start of each document highlight of the given LSP kind.
-        /// </summary>
         public List<SourcePosition> ToHighlightStarts(int kind) =>
             [
                 .. LspJson
@@ -141,9 +128,6 @@ internal static class LspResultsExtensions
 
     extension(FoundLocations found)
     {
-        /// <summary>
-        /// Groups the page of locations that starts at <paramref name="offset"/> by file.
-        /// </summary>
         public Locations Page(int limit, int offset)
         {
             var files = found
@@ -196,7 +180,6 @@ internal static class LspResultsExtensions
         };
     }
 
-    /// <param name="parent">The name of the document symbol that contains this one, if any.</param>
     private static SymbolItem Symbol(LspSymbol symbol, WorkspacePaths paths, string? parent = null)
     {
         var range = symbol.SelectionRange ?? symbol.Location?.Range ?? symbol.Range;
@@ -288,7 +271,6 @@ internal static class LspResultsExtensions
     private static string? ContainerName(string? container) =>
         container?.StartsWith("in ", StringComparison.Ordinal) is true ? container[3..] : container;
 
-    /// <returns>The name after the name of its type when the type is known, or null for an invalid name.</returns>
     private static SymbolName? Qualified(string name, string? type)
     {
         var member = SymbolName.Parse(name);
@@ -326,8 +308,7 @@ internal static class LspResultsExtensions
         paths.TryGetWorkspaceFile(value) is { } file ? paths.RelativePath(file) : value;
 }
 
-/// <param name="Positions">The distinct locations, in path and position order.</param>
-/// <param name="Generated">Source-generated locations left out of <paramref name="Positions"/>.</param>
+/// <param name="Positions">Distinct locations, in path and position order.</param>
 internal sealed record FoundLocations(
     IReadOnlyList<(string File, SourcePosition Position)> Positions,
     int Generated
