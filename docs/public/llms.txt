@@ -209,8 +209,8 @@ Location links use the target selection start. limit caps occurrences, not
 files. limit defaults to 50 and accepts 1 through 250. A final line starting with
 "truncated:" gives the total count and the next offset. Inspect it before claiming
 a complete reference or implementation list. No match returns "no locations".
-References leave out source-generated code and end with a line counting the
-omitted occurrences. Use the lsp tool with action=request to list them.
+References and implementations leave out source-generated code and end with a
+line counting the omitted occurrences. Use the lsp tool with action=request to list them.
 reads and writes return the lines of references, filtered to the references
 that read or write the symbol. x += 1, x++ and out x are writes. A ref argument
 is both, except that Volatile.Read and Interlocked.Read only read and
