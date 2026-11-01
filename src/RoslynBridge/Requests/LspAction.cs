@@ -85,6 +85,12 @@ internal static class LspActions
                     or LspAction.Supertypes
                     or LspAction.Subtypes;
 
+        /// <summary>
+        /// Whether the action only applies to a type.
+        /// </summary>
+        public bool TakesType =>
+            action is LspAction.Members or LspAction.Subtypes or LspAction.Supertypes;
+
         public bool IsChange =>
             action is LspAction.Rename or LspAction.RenameFile or LspAction.CodeActions;
     }

@@ -173,7 +173,12 @@ internal sealed partial class LspQueries
             return [];
         }
 
-        var parts = await resolver.ResolveAsync(declaration.Name, file: null, cancellationToken);
+        var parts = await resolver.ResolveAsync(
+            declaration.Name,
+            file: null,
+            preferTypes: true,
+            cancellationToken
+        );
         return parts.Error is null ? parts.Value : [declaration];
     }
 
@@ -293,7 +298,12 @@ internal sealed partial class LspQueries
         if (request.Symbol is not null)
         {
             return request is { Line: null, Character: null }
-                ? await resolver.ResolveAsync(request.Symbol, request.File, cancellationToken)
+                ? await resolver.ResolveAsync(
+                    request.Symbol,
+                    request.File,
+                    request.Action.TakesType,
+                    cancellationToken
+                )
                 : ToolError.InvalidRequest(
                     "Pass symbol with an optional file, or a file with a line."
                 );

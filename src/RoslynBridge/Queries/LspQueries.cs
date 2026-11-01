@@ -457,6 +457,7 @@ internal sealed partial class LspQueries(
             var resolved = await resolver.ResolveAsync(
                 request.Symbol,
                 request.File,
+                request.Action.TakesType,
                 cancellationToken
             );
             if (resolved.Error is { } error)
