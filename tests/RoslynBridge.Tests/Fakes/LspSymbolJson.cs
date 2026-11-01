@@ -5,9 +5,6 @@ using RoslynBridge.Lsp;
 
 namespace RoslynBridge.Tests.Fakes;
 
-/// <summary>
-/// Builds the LSP symbol payloads that fake servers return.
-/// </summary>
 internal static class LspSymbolJson
 {
     public const int LspClassKind = 5;

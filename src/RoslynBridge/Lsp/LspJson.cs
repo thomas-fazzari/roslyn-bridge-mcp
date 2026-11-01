@@ -16,7 +16,7 @@ internal static class LspJson
     extension(JsonNode? node)
     {
         /// <summary>
-        /// Reads a value that the protocol requires, and reports a missing or malformed field as invalid LSP data.
+        /// Reports a missing or malformed field as invalid LSP data.
         /// </summary>
         public T Read<T>()
         {
@@ -33,7 +33,9 @@ internal static class LspJson
             }
         }
 
-        /// <returns>The elements of an array result, or none for a null result or any other kind of value.</returns>
+        /// <summary>
+        /// Returns none for a null or non-array result.
+        /// </summary>
         public T[] ReadArray<T>() => node is JsonArray ? node.Read<T[]>() : [];
     }
 }

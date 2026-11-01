@@ -7,9 +7,6 @@ using StreamJsonRpc;
 
 namespace RoslynBridge;
 
-/// <summary>
-/// Maps the exceptions that a tool call reports as errors, instead of failing on them, to error codes.
-/// </summary>
 internal static class ToolFailures
 {
     public static bool IsReported(Exception exception) =>

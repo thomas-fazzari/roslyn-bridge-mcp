@@ -54,9 +54,6 @@ internal sealed record SymbolName(ImmutableArray<string> Segments, string? Param
             : new SymbolName(segments, parameters);
     }
 
-    /// <summary>
-    /// Removes the trailing type that Roslyn appends to member names, as in <c>Put(int) : void</c>.
-    /// </summary>
     public static string WithoutType(string text)
     {
         var name = text.Trim();
@@ -66,7 +63,9 @@ internal sealed record SymbolName(ImmutableArray<string> Segments, string? Param
 
     public bool IsCtor => Parameters is not null && NamesItsType;
 
-    /// <returns>The constructor kind when Roslyn reports this constructor as a method, otherwise the reported kind.</returns>
+    /// <summary>
+    /// Roslyn reports some constructors as methods.
+    /// </summary>
     public int? CorrectedKind(int? reported) =>
         reported is LspSymbolKinds.Method && NamesItsType ? LspSymbolKinds.Constructor : reported;
 
@@ -76,9 +75,7 @@ internal sealed record SymbolName(ImmutableArray<string> Segments, string? Param
         && string.Equals(BaseName(type), member, StringComparison.Ordinal);
 
     /// <summary>
-    /// Returns whether this requested name selects a declared symbol.
-    /// The requested segments must end the declared segments, and a requested parameter list must match.
-    /// A loose match also accepts a segment without its generic arity and a parameter type without its trailing <c>?</c>.
+    /// The requested segments must end the declared ones. A loose match ignores generic arity and a trailing <c>?</c>.
     /// </summary>
     public bool Selects(SymbolName declared, bool exact) =>
         Segments.Length <= declared.Segments.Length
@@ -96,18 +93,12 @@ internal sealed record SymbolName(ImmutableArray<string> Segments, string? Param
         return arity < 0 ? segment : segment[..arity];
     }
 
-    /// <summary>
-    /// Removes a trailing parameter list, as in <c>Run(int)</c>.
-    /// </summary>
     public static string WithoutParameters(string text)
     {
         var open = text.Length > 0 && text[^1] is ')' or ']' ? MatchingOpen(text) : -1;
         return open < 0 ? text : text[..open];
     }
 
-    /// <summary>
-    /// Appends a member name to the name of its container.
-    /// </summary>
     public SymbolName Append(SymbolName member) =>
         new([.. Segments, .. member.Segments], member.Parameters);
 
@@ -210,7 +201,7 @@ internal sealed record SymbolName(ImmutableArray<string> Segments, string? Param
         return text[index] is '<' or '>' && IsOperatorToken(text, index) ? 0 : depth;
     }
 
-    // Angle brackets in operator names (e.g. "operator <(Money, Money)") are not generic arguments
+    // Angle brackets in operator names such as operator <(Money, Money) are not generic arguments
     private static bool IsOperatorToken(string text, int index)
     {
         var start = index;

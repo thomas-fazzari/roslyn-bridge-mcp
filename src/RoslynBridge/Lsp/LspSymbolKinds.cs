@@ -3,9 +3,6 @@
 
 namespace RoslynBridge.Lsp;
 
-/// <summary>
-/// Names of the LSP SymbolKind values.
-/// </summary>
 internal static class LspSymbolKinds
 {
     internal const int Namespace = 3;

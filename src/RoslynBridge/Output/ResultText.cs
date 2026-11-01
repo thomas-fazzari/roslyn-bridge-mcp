@@ -8,9 +8,7 @@ using RoslynBridge.Results;
 namespace RoslynBridge.Output;
 
 /// <summary>
-/// Renders tool results as compact text lines, the only content the tools return.
-/// Positions are one-based <c>line:character</c> pairs and paths are relative to the workspace.
-/// A line that names a symbol starts with its location and ends with the name, which can be sent back unchanged.
+/// Positions are one-based <c>line:character</c> pairs. A line that names a symbol ends with the name, which can be sent back unchanged.
 /// </summary>
 internal static partial class ResultText
 {
@@ -72,9 +70,6 @@ internal static partial class ResultText
         return Finish(text);
     }
 
-    /// <summary>
-    /// Returns the lines that start a response whose file names were completed to workspace-relative paths.
-    /// </summary>
     public static string ResolvedFiles(IEnumerable<string> files) =>
         string.Concat(files.Select(file => $"{ResolvedFilePrefix}{file}\n"));
 
@@ -95,7 +90,6 @@ internal static partial class ResultText
         return Finish(text);
     }
 
-    /// <returns>The code that <see cref="Error"/> wrote at the start of <paramref name="text"/>, or null for a text that is not an error.</returns>
     public static string? ErrorCode(string text)
     {
         if (!text.StartsWith(ErrorPrefix, StringComparison.Ordinal))
@@ -124,7 +118,6 @@ internal static partial class ResultText
         return Encoding.UTF8.GetString(buffer.GetBuffer(), 0, (int)buffer.Length);
     }
 
-    // A block per section, dropping the largest ones when they do not all fit
     private static void AppendSections(
         StringBuilder text,
         SectionsReport report,
@@ -326,7 +319,6 @@ internal static partial class ResultText
         }
     }
 
-    // A symbol line, then its call sites or source lines, then its members indented below it
     private static void AppendSymbolTree(StringBuilder text, SymbolItem symbol, string indent)
     {
         AppendSymbol(text, symbol, indent);
@@ -348,7 +340,6 @@ internal static partial class ResultText
         }
     }
 
-    // Source lines belong to the call sites when there are some, and to the declaration otherwise
     private static IEnumerable<SourcePosition> LinePositions(SymbolItem symbol)
     {
         if (symbol.Calls.Count > 0)
@@ -398,7 +389,6 @@ internal static partial class ResultText
         }
     }
 
-    // A header per declaration, file:first-last kind name, then its saved text
     private static void AppendSource(StringBuilder text, SourceParts source)
     {
         foreach (var part in source.Parts)
@@ -421,7 +411,6 @@ internal static partial class ResultText
         }
     }
 
-    // The type once, then its members grouped by file, with names relative to the type
     private static void AppendMembers(StringBuilder text, TypeMembers members)
     {
         text.Append(members.Type.Kind).Append(' ').Append(members.Type.Name).Append('\n');
@@ -481,7 +470,6 @@ internal static partial class ResultText
         }
     }
 
-    // location kind name, with the detail and container when Roslyn reports them
     private static void AppendSymbol(StringBuilder text, SymbolItem symbol, string indent)
     {
         text.Append(indent);
@@ -525,7 +513,7 @@ internal static partial class ResultText
         };
     }
 
-    // an offset past the last result leaves the page empty, which must not read as no results
+    // An offset past the last result leaves the page empty, which must not read as no results
     private static void AppendPageEnd(
         StringBuilder text,
         int total,
@@ -563,7 +551,6 @@ internal static partial class ResultText
         AppendTruncation(text, total, noun, nextOffset, limited);
     }
 
-    /// <param name="nextOffset">The offset of the next page, which a truncated paged result always has.</param>
     /// <param name="limited">Whether a result without pages left items out.</param>
     private static void AppendTruncation(
         StringBuilder text,

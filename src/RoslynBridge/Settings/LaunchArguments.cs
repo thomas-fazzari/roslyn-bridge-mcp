@@ -4,7 +4,7 @@
 namespace RoslynBridge.Settings;
 
 /// <summary>
-/// What the command line sets, where an unset timeout is null so the settings file can fill it.
+/// An unset timeout is null, so the settings file can fill it.
 /// </summary>
 internal sealed record LaunchArguments
 {

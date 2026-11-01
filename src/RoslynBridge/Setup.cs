@@ -6,9 +6,6 @@ using RoslynBridge.Lsp;
 
 namespace RoslynBridge;
 
-/// <summary>
-/// Checks that Roslyn can start and prints the command that registers the bridge in each agent.
-/// </summary>
 internal static class Setup
 {
     internal const string Command = "setup";
@@ -70,9 +67,8 @@ internal static class Setup
     }
 
     /// <summary>
-    /// Builds the command an agent runs, which must start without the user's shell environment.
+    /// The command must start without the user's shell environment.
     /// </summary>
-    /// <param name="dotnetRoot">The .NET install that runs the bridge.</param>
     /// <param name="hostRoots">The installs a .NET tool launcher finds without DOTNET_ROOT.</param>
     internal static string BridgeCommand(
         string processPath,

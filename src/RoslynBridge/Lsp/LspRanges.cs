@@ -38,8 +38,7 @@ internal readonly record struct LspRange(
 }
 
 /// <summary>
-/// An LSP <c>Location</c>, or a <c>LocationLink</c> whose target fields <see cref="TargetUri"/> and
-/// <see cref="TargetSelectionRange"/> stand in for <see cref="Uri"/> and <see cref="Range"/>.
+/// A <c>Location</c>, or a <c>LocationLink</c> whose <see cref="TargetUri"/> and <see cref="TargetSelectionRange"/> replace the others.
 /// </summary>
 internal sealed record LspLocation(
     string? Uri = null,

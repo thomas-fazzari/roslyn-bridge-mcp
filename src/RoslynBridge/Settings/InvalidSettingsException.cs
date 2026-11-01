@@ -3,9 +3,6 @@
 
 namespace RoslynBridge.Settings;
 
-/// <summary>
-/// The settings file is unreadable or holds settings that cannot apply.
-/// </summary>
 internal sealed class InvalidSettingsException(IReadOnlyList<string> faults)
     : Exception($"{ProjectSettings.FileName} is invalid:\n- {string.Join("\n- ", faults)}")
 {

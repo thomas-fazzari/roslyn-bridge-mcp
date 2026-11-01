@@ -3,9 +3,6 @@
 
 namespace RoslynBridge.Lsp;
 
-/// <summary>
-/// Wire names shared by LSP requests, callbacks and method permissions.
-/// </summary>
 internal static class LspMethods
 {
     public const string CallHierarchyIncomingCalls = "callHierarchy/incomingCalls";

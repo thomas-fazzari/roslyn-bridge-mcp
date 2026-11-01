@@ -13,12 +13,12 @@ internal sealed record BridgeOptions
     public string WorkspaceRoot { get; init; } = Directory.GetCurrentDirectory();
 
     /// <summary>
-    /// The Roslyn server executable, or <see langword="null" /> to find it.
+    /// Null lets the bridge find the server.
     /// </summary>
     public string? ServerPath { get; init; }
 
     /// <summary>
-    /// The .NET install that runs Roslyn, or <see langword="null" /> to find it.
+    /// Null lets the bridge find the install.
     /// </summary>
     public string? DotnetRoot { get; init; }
 
@@ -29,27 +29,27 @@ internal sealed record BridgeOptions
         TimeSpan.FromSeconds(DefaultRequestTimeoutSeconds);
 
     /// <summary>
-    /// Folder names to leave out of the workspace, in addition to the built-in list.
+    /// Folder names left out in addition to the built-in list.
     /// </summary>
     public FrozenSet<string> Exclude { get; init; } = [];
 
     /// <summary>
-    /// The full path of the solution to load, or null to let Roslyn find what to load.
+    /// A full path. Null lets Roslyn find what to load.
     /// </summary>
     public string? Solution { get; init; }
 
     /// <summary>
-    /// The full paths of the projects to load, which are empty to let Roslyn find them.
+    /// Full paths. Empty lets Roslyn find what to load.
     /// </summary>
     public IReadOnlyList<string> Projects { get; init; } = [];
 
     /// <summary>
-    /// The project's default severity of diagnostics, or null for the built-in default.
+    /// Null uses the built-in default.
     /// </summary>
     public DiagnosticSeverity? DiagnosticsSeverity { get; init; }
 
     /// <summary>
-    /// Fills what the arguments leave unset from the settings file, and adds the excluded folders of both.
+    /// Arguments win over the settings file. The excluded folders of both apply.
     /// </summary>
     public static BridgeOptions From(LaunchArguments arguments, ProjectSettings settings) =>
         new()

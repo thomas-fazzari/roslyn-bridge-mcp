@@ -3,8 +3,7 @@
 
 namespace RoslynBridge.Results;
 
-/// <param name="Server">The server executable passed as an option, or null when the bridge finds it.</param>
-/// <param name="Progress">What Roslyn reports about the load in progress, or null when it is not loading or reported none.</param>
+/// <param name="Server">Null when the bridge finds the server itself.</param>
 internal sealed record SessionStatus(
     bool Running,
     bool Loading,

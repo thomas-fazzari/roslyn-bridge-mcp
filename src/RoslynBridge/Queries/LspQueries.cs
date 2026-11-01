@@ -165,7 +165,6 @@ internal sealed partial class LspQueries(
     }
 
     /// <summary>
-    /// Replaces the name and container Roslyn reports with a symbol name that navigate and edit accept.
     /// Items without a declaration in a workspace file keep Roslyn's name.
     /// </summary>
     private async Task<SymbolList> NameSymbolsAsync(
@@ -266,7 +265,6 @@ internal sealed partial class LspQueries(
     }
 
     /// <param name="files">Full paths of C# files.</param>
-    /// <param name="request">Selects the severity, codes, summary, limit and offset of the report.</param>
     public async Task<DiagnosticReport> DiagnosticsAsync(
         IReadOnlyCollection<string> files,
         LspRequest request,
@@ -425,7 +423,6 @@ internal sealed partial class LspQueries(
     }
 
     /// <summary>
-    /// Returns the one-based position a request targets, from its symbol name or its explicit position.
     /// A hierarchy or impact request moves a usage position to its declaration.
     /// </summary>
     private async Task<Result<(string File, SourcePosition Position)>> LocateAsync(
@@ -470,11 +467,9 @@ internal sealed partial class LspQueries(
     }
 
     /// <summary>
-    /// Returns the workspace declaration a usage refers to, or the position itself without a single one.
+    /// Roslyn prepares no call hierarchy at a member access such as <c>value.Method()</c>.
+    /// Returns the position itself without a single workspace declaration.
     /// </summary>
-    /// <remarks>
-    /// Roslyn prepares no call hierarchy at a member access, such as <c>value.Method()</c>.
-    /// </remarks>
     private async Task<(string File, SourcePosition Position)> DeclarationOfAsync(
         string file,
         SourcePosition position,

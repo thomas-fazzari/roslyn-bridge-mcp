@@ -14,10 +14,8 @@ internal sealed partial class RoslynSession
     );
 
     /// <summary>
-    /// Pulls the diagnostics of a document, sending the result id of its last report so that
-    /// Roslyn can answer that nothing changed instead of sending the same report again.
+    /// Returns the full report, reusing the previous one when Roslyn answers unchanged.
     /// </summary>
-    /// <returns>The full diagnostic report of the document.</returns>
     public async Task<LspDiagnosticReport> DiagnosticReportAsync(
         string uri,
         CancellationToken cancellationToken

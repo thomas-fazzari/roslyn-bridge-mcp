@@ -6,9 +6,6 @@ using RoslynBridge.Telemetry;
 
 namespace RoslynBridge.Tests.Unit.Telemetry;
 
-/// <summary>
-/// Collects the activities and measurements of the bridge while the test runs.
-/// </summary>
 internal sealed class TelemetryRecorder : IDisposable
 {
     private readonly ConcurrentQueue<Activity> _activities = new();

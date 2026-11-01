@@ -15,9 +15,6 @@ using RoslynBridge.Tools;
 
 namespace RoslynBridge.Tests.Unit;
 
-/// <summary>
-/// Provides the test cancellation token, creates sessions and tools, writes workspace files and builds LSP workspace edits.
-/// </summary>
 internal static class TestHelpers
 {
     public static CancellationToken TestCt => TestContext.Current.CancellationToken;

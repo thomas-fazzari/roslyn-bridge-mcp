@@ -13,20 +13,19 @@ internal sealed partial class RoslynSession
     private ImmutableList<TrackedProgress> _progress = [];
 
     /// <summary>
-    /// The latest progress Roslyn began and has not ended, or null when the workspace is not loading or Roslyn reported none.
+    /// The latest unfinished progress while the workspace loads, otherwise null.
     /// </summary>
     public LoadProgress? Progress =>
         IsLoading ? Volatile.Read(ref _progress).LastOrDefault()?.Progress : null;
 
-    /// <summary>
-    /// Applies a <c>$/progress</c> value to the progress that carries the token.
-    /// </summary>
     internal void ReportProgress(string token, WorkDoneProgress value) =>
         ImmutableInterlocked.Update(ref _progress, tracked => WithProgress(tracked, token, value));
 
     private void ClearProgress() => Volatile.Write(ref _progress, []);
 
-    /// <returns>The tracked progress after the value, which a report for an unknown token leaves unchanged.</returns>
+    /// <summary>
+    /// A report for an unknown token leaves the progress unchanged.
+    /// </summary>
     private static ImmutableList<TrackedProgress> WithProgress(
         ImmutableList<TrackedProgress> tracked,
         string token,
@@ -64,7 +63,9 @@ internal sealed partial class RoslynSession
         }
     }
 
-    /// <returns>The title without the trailing dots that Roslyn adds, as in Loading Workspace.slnx...</returns>
+    /// <summary>
+    /// Drops the trailing dots that Roslyn adds.
+    /// </summary>
     private static string Title(WorkDoneProgress value) =>
         value.Title?.TrimEnd('.', '\u2026') ?? string.Empty;
 

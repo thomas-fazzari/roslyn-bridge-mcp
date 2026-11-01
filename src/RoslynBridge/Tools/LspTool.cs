@@ -151,7 +151,7 @@ internal sealed partial class LspTool(
     }
 
     /// <summary>
-    /// Adds the diagnostics of the changed files to an applied edit, so checking it needs no further call.
+    /// Adds the diagnostics of the changed files to an applied edit.
     /// </summary>
     private async Task<Result<ToolResult>> WithDiagnosticsAsync(
         Result<ToolResult> result,
@@ -376,9 +376,6 @@ internal sealed partial class LspTool(
             );
     }
 
-    /// <summary>
-    /// Reports a failed application with the step that failed and the receipt of the writes that completed.
-    /// </summary>
     internal static CallToolResult ApplicationFailure(
         EditApplicationException exception,
         bool cancellationRequested

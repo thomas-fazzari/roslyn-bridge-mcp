@@ -3,10 +3,6 @@
 
 namespace RoslynBridge.Editing;
 
-/// <summary>
-/// The workspace state Roslyn computed an edit against.
-/// </summary>
-/// <param name="Files">Stamps of the watched files Roslyn had received.</param>
 [DebuggerDisplay("{Files.Count} files, {DocumentVersions.Count} open documents")]
 internal sealed record WorkspaceSnapshot(
     IReadOnlyDictionary<string, FileStamp> Files,
@@ -14,7 +10,7 @@ internal sealed record WorkspaceSnapshot(
 )
 {
     /// <summary>
-    /// Content fingerprints of the files a preview read, checked again when it is applied.
+    /// Content fingerprints of the files a preview read. Checked again on apply.
     /// </summary>
     public IReadOnlyDictionary<string, string> Fingerprints { get; init; } =
         FrozenDictionary<string, string>.Empty;

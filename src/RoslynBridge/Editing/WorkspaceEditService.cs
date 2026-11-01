@@ -16,7 +16,9 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
     private const int MaximumEditBytes = 64 * BytesPerMebibyte;
     private const int MaximumEditedFiles = 256;
 
-    /// <returns>The previewed files, and the snapshot with the fingerprints of the files the edit reads.</returns>
+    /// <summary>
+    /// The returned snapshot holds the fingerprints of the files the edit reads.
+    /// </summary>
     public async Task<(IReadOnlyList<FilePreview> Files, WorkspaceSnapshot Snapshot)> PreviewAsync(
         JsonObject edit,
         WorkspaceSnapshot snapshot,

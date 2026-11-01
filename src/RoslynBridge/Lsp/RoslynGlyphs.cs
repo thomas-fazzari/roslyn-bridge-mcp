@@ -3,9 +3,6 @@
 
 namespace RoslynBridge.Lsp;
 
-/// <summary>
-/// Values of the <c>glyph</c> that Roslyn adds to document symbols, which encodes the kind and the accessibility.
-/// </summary>
 internal static class RoslynGlyphs
 {
     // Values of Microsoft.CodeAnalysis.Glyph
@@ -26,6 +23,5 @@ internal static class RoslynGlyphs
         71 // StructurePrivate
     );
 
-    /// <returns>Whether the glyph marks a private symbol. A missing glyph counts as not private.</returns>
     public static bool IsPrivate(int? glyph) => glyph is { } value && _private.Contains(value);
 }

@@ -3,9 +3,6 @@
 
 namespace RoslynBridge.Lsp;
 
-/// <summary>
-/// The reply of Roslyn's <c>_vs_getProjectContexts</c> extension.
-/// </summary>
 internal sealed record ProjectContexts(
     [property: JsonPropertyName("_vs_projectContexts")] ProjectContext[]? Contexts = null
 );

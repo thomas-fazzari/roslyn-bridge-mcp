@@ -6,14 +6,11 @@ using RoslynBridge.Results;
 
 namespace RoslynBridge.Symbols;
 
-/// <summary>
-/// A declaration found for a symbol name, at a one-based position in a workspace file.
-/// </summary>
 /// <param name="Name">Qualified name with its parameter list, which resolves back to this symbol.</param>
 /// <param name="Signature">Roslyn's unqualified name, with the member type when it has one.</param>
+/// <param name="Line">One-based. The position of the name.</param>
 /// <param name="FirstLine">One-based first line of the whole declaration.</param>
-/// <param name="LastLine">One-based last line of the whole declaration.</param>
-/// <param name="IsPrivate">Whether Roslyn marks the symbol private, as an explicit interface implementation.</param>
+/// <param name="IsPrivate">Roslyn marks an explicit interface implementation as private.</param>
 [DebuggerDisplay("{Name} at {File}:{Line}:{Character}")]
 internal sealed record SymbolDeclaration(
     string Name,
@@ -27,9 +24,6 @@ internal sealed record SymbolDeclaration(
     bool IsPrivate = false
 )
 {
-    /// <summary>
-    /// Returns the symbol as results show it, with a workspace-relative file.
-    /// </summary>
     public SymbolItem ToItem(WorkspacePaths paths) =>
         new(Name, Kind is { } kind && LspSymbolKinds.TryGetName(kind, out var name) ? name : null)
         {

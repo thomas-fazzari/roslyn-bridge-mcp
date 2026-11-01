@@ -14,8 +14,7 @@ internal sealed partial class LspQueries
     private const int MaximumSourceCharacters = 31_000;
 
     /// <summary>
-    /// Returns the saved text of each declaration of a symbol, with its documentation comment.
-    /// Declarations that do not fit the response budget are left out and their lines counted.
+    /// Declarations that do not fit the response budget are left out and counted.
     /// </summary>
     public async Task<Result<SourceParts>> SourceAsync(
         LspRequest request,
@@ -57,8 +56,7 @@ internal sealed partial class LspQueries
     }
 
     /// <summary>
-    /// Returns the members declared in a type, across its partial declarations. With
-    /// <see cref="LspRequest.Inherited"/>, the members that its base classes in the workspace pass on follow.
+    /// With <see cref="LspRequest.Inherited"/>, the members of workspace base classes follow.
     /// </summary>
     public async Task<Result<TypeMembers>> MembersAsync(
         LspRequest request,
@@ -89,10 +87,9 @@ internal sealed partial class LspQueries
         );
     }
 
-    /// <returns>
-    /// The members that the base classes of the type in the workspace pass on, nearest base first, with the
-    /// base class as their container. A member that a nearer type redeclares, such as an override, is left out.
-    /// </returns>
+    /// <summary>
+    /// Nearest base first, with the base class as container. A member that a nearer type redeclares is left out.
+    /// </summary>
     private async Task<List<SymbolItem>> InheritedMembersAsync(
         SymbolDeclaration type,
         IReadOnlyList<SymbolDeclaration> own,
@@ -141,7 +138,9 @@ internal sealed partial class LspQueries
         return inherited;
     }
 
-    /// <returns>The base class of a type hierarchy item, or null when Roslyn reports none in the workspace.</returns>
+    /// <summary>
+    /// Null when Roslyn reports no base class in the workspace.
+    /// </summary>
     private async Task<JsonNode?> BaseClassAsync(JsonNode item, CancellationToken cancellationToken)
     {
         var supertypes = await session.RequestAsync(
@@ -154,7 +153,9 @@ internal sealed partial class LspQueries
             ?.DeepClone();
     }
 
-    /// <returns>The declarations of a base class, one per partial part, or none when its file cannot be read.</returns>
+    /// <summary>
+    /// Empty when the file of the base class cannot be read.
+    /// </summary>
     private async Task<IReadOnlyList<SymbolDeclaration>> BaseDeclarationsAsync(
         JsonNode baseClass,
         CancellationToken cancellationToken
@@ -180,9 +181,6 @@ internal sealed partial class LspQueries
     private static string MemberKey(SymbolDeclaration member) =>
         SymbolName.WithoutType(member.Signature);
 
-    /// <summary>
-    /// Runs the impact navigations on the declaration the request targets, which is resolved only once.
-    /// </summary>
     private async Task<Result<ToolResult>> ImpactAsync(
         LspRequest request,
         CancellationToken cancellationToken

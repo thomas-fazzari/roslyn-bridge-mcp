@@ -10,9 +10,6 @@ using RoslynBridge.Tools;
 
 namespace RoslynBridge.Tests.Unit.Tools;
 
-/// <summary>
-/// Serves the registered tools over an in-memory transport, so a test calls them as an MCP client does.
-/// </summary>
 internal sealed class ToolServer : IAsyncDisposable
 {
     private readonly ServiceProvider _services;

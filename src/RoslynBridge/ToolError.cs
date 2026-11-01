@@ -5,10 +5,7 @@ using RoslynBridge.Results;
 
 namespace RoslynBridge;
 
-/// <summary>
-/// An expected failure, reported to the client as the structured error of a tool response.
-/// </summary>
-/// <param name="Candidates">Values the client can send instead, such as the symbols an ambiguous or unknown name may mean.</param>
+/// <param name="Candidates">Values the client can send instead, such as the symbols an ambiguous name may mean.</param>
 internal sealed record ToolError(
     string Code,
     string Message,
@@ -24,19 +21,18 @@ internal sealed record ToolError(
 }
 
 /// <summary>
-/// Reports a <see cref="ToolError"/> from code too deep in a call chain to return a <see cref="Result{T}"/>.
+/// For code too deep in a call chain to return a <see cref="Result{T}"/>.
 /// </summary>
 internal sealed class ToolErrorException(ToolError error) : Exception(error.Message)
 {
     public ToolError Error { get; } = error;
 }
 
-/// <summary>
-/// The value of an operation, or the <see cref="ToolError"/> that prevented it.
-/// </summary>
 internal readonly struct Result<T>(T value, ToolError? error)
 {
-    /// <summary>The value, which is meaningful only when <see cref="Error"/> is null.</summary>
+    /// <summary>
+    /// Meaningful only when <see cref="Error"/> is null.
+    /// </summary>
     public T Value { get; } = value;
 
     public ToolError? Error { get; } = error;
@@ -56,9 +52,6 @@ internal static class ResultExtensions
     }
 }
 
-/// <summary>
-/// The error codes that tool responses report.
-/// </summary>
 internal static class ErrorCodes
 {
     internal const string InvalidRequest = "invalid_request";

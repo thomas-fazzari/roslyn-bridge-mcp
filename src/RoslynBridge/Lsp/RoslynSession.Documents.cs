@@ -110,7 +110,7 @@ internal sealed partial class RoslynSession
     }
 
     /// <summary>
-    /// Opens the documents one at a time, so their versions stay in order, and returns their URIs.
+    /// Opens the documents one at a time, so their versions stay in order.
     /// </summary>
     public async Task<List<string>> OpenDocumentsAsync(
         IReadOnlyCollection<string> files,
@@ -147,7 +147,7 @@ internal sealed partial class RoslynSession
     }
 
     /// <summary>
-    /// Sends files the bridge wrote, created or deleted, without waiting for the file watcher.
+    /// Sends files the bridge changed without waiting for the file watcher.
     /// </summary>
     public async Task SynchronizeFilesAsync(
         IEnumerable<string> files,
@@ -181,8 +181,7 @@ internal sealed partial class RoslynSession
     }
 
     /// <summary>
-    /// Compares every watched file with what Roslyn last received and sends the differences,
-    /// without waiting for the file watcher. Returns the file stamps Roslyn now has.
+    /// Sends every difference from what Roslyn last received. Returns the stamps Roslyn now has.
     /// </summary>
     public async Task<Dictionary<string, FileStamp>> SynchronizeWorkspaceAsync(
         CancellationToken cancellationToken
@@ -194,9 +193,6 @@ internal sealed partial class RoslynSession
         return new Dictionary<string, FileStamp>(_workspaceFiles, StringComparer.Ordinal);
     }
 
-    /// <summary>
-    /// Returns the full paths of the workspace files the session knows, after synchronizing with the disk.
-    /// </summary>
     public async Task<string[]> WorkspaceFilesAsync(CancellationToken cancellationToken)
     {
         await SynchronizeAsync(cancellationToken);

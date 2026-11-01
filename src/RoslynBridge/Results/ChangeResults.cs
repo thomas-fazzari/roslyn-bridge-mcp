@@ -3,10 +3,7 @@
 
 namespace RoslynBridge.Results;
 
-/// <summary>
-/// An edit that has not been applied, stored under its proposal ID.
-/// </summary>
-/// <param name="Command">The command a code action runs when it is applied, if any.</param>
+/// <param name="Command">The command a code action runs when applied.</param>
 internal sealed record ProposalPreview(
     string ProposalId,
     IReadOnlyList<FilePreview> Files,
@@ -18,8 +15,8 @@ internal sealed record ProposalPreview(
 
 internal sealed record ListedAction(int Index, string? Kind, string Title);
 
-/// <param name="Total">Listed actions before limiting, without hidden ones.</param>
-/// <param name="Hidden">Suppress or configure actions left out of the listing.</param>
+/// <param name="Total">Before limiting, without hidden actions.</param>
+/// <param name="Hidden">Suppress or configure actions left out.</param>
 internal sealed record ActionListing(
     string ProposalId,
     IReadOnlyList<ListedAction> Actions,

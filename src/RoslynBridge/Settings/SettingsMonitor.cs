@@ -3,19 +3,12 @@
 
 namespace RoslynBridge.Settings;
 
-/// <summary>
-/// Holds the effective options, which change only on <see cref="Reload"/>.
-/// </summary>
 internal sealed class SettingsMonitor(Func<BridgeOptions> load)
 {
     private BridgeOptions _current = load();
 
     public BridgeOptions CurrentValue => Volatile.Read(ref _current);
 
-    /// <summary>
-    /// Reads the arguments and the settings file again.
-    /// </summary>
-    /// <returns>The new options.</returns>
     public BridgeOptions Reload()
     {
         var options = load();

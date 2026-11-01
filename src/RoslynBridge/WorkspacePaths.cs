@@ -15,20 +15,17 @@ internal sealed class WorkspacePaths(string root)
     internal static FrozenSet<string> ExcludedDirectories { get; } =
         new[]
         {
-            // VCS
             ".git",
             ".hg",
             ".svn",
             ".jj",
             ".bzr",
-            // Editors / IDE
             ".vs",
             ".idea",
             ".vscode",
             ".fleet",
             ".ionide",
             ".history",
-            // .NET / build
             "bin",
             IntermediateDirectoryName,
             "packages",
@@ -39,7 +36,6 @@ internal sealed class WorkspacePaths(string root)
             ".sonarqube",
             ".sonarlint",
             ".cache",
-            // Full-stack
             "node_modules",
             ".next",
             ".nuxt",
@@ -56,11 +52,9 @@ internal sealed class WorkspacePaths(string root)
             "build",
             "out",
             "coverage",
-            // Python (e.g. tooling/scripts)
             ".venv",
             "venv",
             "__pycache__",
-            // Rust (e.g. tooling)
             "target",
         }.ToFrozenSet(StringComparer.Ordinal);
 
@@ -122,8 +116,7 @@ internal sealed class WorkspacePaths(string root)
     public string ToUri(string file) => new Uri(Resolve(file)).AbsoluteUri;
 
     /// <summary>
-    /// Returns the local path of a file URI, including a Windows drive written as c%3A, which
-    /// <see cref="Uri.LocalPath"/> leaves unusable.
+    /// Handles a Windows drive written as c%3A, which <see cref="Uri.LocalPath"/> leaves unusable.
     /// </summary>
     public static string LocalPath(Uri uri)
     {
@@ -140,7 +133,7 @@ internal sealed class WorkspacePaths(string root)
     }
 
     /// <summary>
-    /// Returns the full path of a file URI inside the workspace, or null for any other location.
+    /// Returns null for a location outside the workspace.
     /// </summary>
     public string? TryGetWorkspaceFile(string uri)
     {
@@ -154,8 +147,7 @@ internal sealed class WorkspacePaths(string root)
     }
 
     /// <summary>
-    /// Returns the full path of a file reported in a tool result, which is workspace-relative,
-    /// or null for an external or generated location, which keeps its URI.
+    /// Returns null for an external or generated location, which keeps its URI.
     /// </summary>
     public string? ResultFilePath(string file) =>
         file.Contains("://", StringComparison.Ordinal) ? null : Path.GetFullPath(file, Root);
@@ -164,8 +156,7 @@ internal sealed class WorkspacePaths(string root)
         Relative(fullPath).Replace(Path.DirectorySeparatorChar, '/');
 
     /// <summary>
-    /// Returns the workspace-relative paths of the files outside excluded directories whose trailing
-    /// path segments are <paramref name="name"/>, in ordinal order.
+    /// Matches whole trailing path segments of <paramref name="name"/>, outside excluded directories.
     /// </summary>
     public List<string> RelativePathsEndingWith(IEnumerable<string> files, string name)
     {
@@ -195,7 +186,7 @@ internal sealed class WorkspacePaths(string root)
     private FrozenSet<string> _excluded = ExcludedDirectories;
 
     /// <summary>
-    /// Adds folder names to the built-in excluded list, replacing the names of an earlier call.
+    /// Replaces the names of an earlier call. The built-in list always applies.
     /// </summary>
     public void Exclude(IEnumerable<string> names) =>
         Volatile.Write(
@@ -210,10 +201,8 @@ internal sealed class WorkspacePaths(string root)
         string.Equals(name, IntermediateDirectoryName, StringComparison.Ordinal)
         || !IsExcludedDirectory(name);
 
-    /// <summary>Returns whether any component of a workspace path is an excluded directory name.</summary>
     public bool IsExcluded(string fullPath) => Components(fullPath).Any(IsExcludedDirectory);
 
-    /// <summary>Returns whether Roslyn must see changes to a workspace path.</summary>
     public bool IsWatched(string fullPath) => Components(fullPath).All(IsWatchedDirectory);
 
     private string Relative(string fullPath) => Path.GetRelativePath(Root, fullPath);
@@ -221,11 +210,9 @@ internal sealed class WorkspacePaths(string root)
     private string[] Components(string fullPath) =>
         Relative(fullPath).Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
 
-    /// <summary>Enumerates the files of the workspace, outside excluded directories.</summary>
     public IEnumerable<WorkspaceFile> EnumerateFiles() =>
         EnumerateFiles(name => !IsExcludedDirectory(name));
 
-    /// <summary>Returns whether the root or a folder up to two levels below holds a solution or project file.</summary>
     public bool ContainsProject()
     {
         try
@@ -239,7 +226,6 @@ internal sealed class WorkspacePaths(string root)
         }
     }
 
-    /// <summary>Enumerates the files whose changes Roslyn must see, including those under obj.</summary>
     public IEnumerable<WorkspaceFile> EnumerateWatchedFiles() => EnumerateFiles(IsWatchedDirectory);
 
     // Symlinks and unreadable directories are skipped
@@ -295,7 +281,7 @@ internal readonly record struct WorkspaceFile(string Path, long Length, DateTime
 internal readonly record struct FileStamp(long Length, DateTime ModifiedUtc)
 {
     /// <summary>
-    /// Returns the stamp of a regular file, or null for a missing file or a symlink, which the workspace scan skips.
+    /// Returns null for a missing file or a symlink, which the workspace scan skips.
     /// </summary>
     public static FileStamp? Read(string path)
     {

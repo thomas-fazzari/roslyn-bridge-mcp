@@ -61,7 +61,7 @@ internal static class LspActions
         public string Name => JsonNamingPolicy.SnakeCaseLower.ConvertName(action.ToString());
 
         /// <summary>
-        /// Whether the action reads from the navigate tool.
+        /// Whether the navigate tool serves the action.
         /// </summary>
         public bool IsNavigation =>
             action
@@ -76,14 +76,8 @@ internal static class LspActions
             || action.IsHierarchy
             || action.IsAccess;
 
-        /// <summary>
-        /// Whether the action lists the references that read or write a symbol.
-        /// </summary>
         public bool IsAccess => action is LspAction.Reads or LspAction.Writes;
 
-        /// <summary>
-        /// Whether the action expands a call or type hierarchy.
-        /// </summary>
         public bool IsHierarchy =>
             action
                 is LspAction.Callers
@@ -91,9 +85,6 @@ internal static class LspActions
                     or LspAction.Supertypes
                     or LspAction.Subtypes;
 
-        /// <summary>
-        /// Whether the action proposes or applies a workspace change.
-        /// </summary>
         public bool IsChange =>
             action is LspAction.Rename or LspAction.RenameFile or LspAction.CodeActions;
     }

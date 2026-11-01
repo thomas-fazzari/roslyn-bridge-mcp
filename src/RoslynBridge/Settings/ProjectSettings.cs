@@ -5,9 +5,6 @@ using RoslynBridge.Requests;
 
 namespace RoslynBridge.Settings;
 
-/// <summary>
-/// The settings of <c>.roslyn-bridge.json</c>, as the file spells them.
-/// </summary>
 internal sealed record ProjectSettings
 {
     internal const string FileName = ".roslyn-bridge.json";
