@@ -49,34 +49,6 @@ internal static class TextEdits
         return result.ToString();
     }
 
-    private static Change Parse(TextEdit? edit, int index, List<LineSpan> lines)
-    {
-        if (edit is null)
-        {
-            throw new ToolErrorException(ToolError.InvalidLspData("Missing text edit."));
-        }
-
-        return new Change(
-            GetOffset(edit.Range.Start, lines),
-            GetOffset(edit.Range.End, lines),
-            edit.NewText,
-            index
-        );
-    }
-
-    private static int GetOffset(LspPosition position, List<LineSpan> lines)
-    {
-        var (line, character) = (position.Line, position.Character);
-        if (line < 0 || line >= lines.Count || character < 0 || character > lines[line].Length)
-        {
-            throw new ToolErrorException(
-                ToolError.InvalidLspData("The text edit position is outside the document.")
-            );
-        }
-
-        return lines[line].Start + character;
-    }
-
     internal static List<LineSpan> GetLines(string source)
     {
         var lines = new List<LineSpan>();
@@ -104,6 +76,34 @@ internal static class TextEdits
     // Roslyn's SourceText line breaks, which LSP positions count
     internal static bool IsLineBreak(char character) =>
         character is '\r' or '\n' or '\u0085' or '\u2028' or '\u2029';
+
+    private static Change Parse(TextEdit? edit, int index, List<LineSpan> lines)
+    {
+        if (edit is null)
+        {
+            throw new ToolErrorException(ToolError.InvalidLspData("Missing text edit."));
+        }
+
+        return new Change(
+            GetOffset(edit.Range.Start, lines),
+            GetOffset(edit.Range.End, lines),
+            edit.NewText,
+            index
+        );
+    }
+
+    private static int GetOffset(LspPosition position, List<LineSpan> lines)
+    {
+        var (line, character) = (position.Line, position.Character);
+        if (line < 0 || line >= lines.Count || character < 0 || character > lines[line].Length)
+        {
+            throw new ToolErrorException(
+                ToolError.InvalidLspData("The text edit position is outside the document.")
+            );
+        }
+
+        return lines[line].Start + character;
+    }
 
     private sealed record Change(int Start, int End, string Text, int Index);
 }

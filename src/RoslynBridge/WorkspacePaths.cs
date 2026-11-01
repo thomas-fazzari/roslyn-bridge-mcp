@@ -174,10 +174,6 @@ internal sealed class WorkspacePaths(string root)
         ];
     }
 
-    private static bool EndsWithSegments(string relative, string suffix) =>
-        relative.EndsWith(suffix, StringComparison.Ordinal)
-        && (relative.Length == suffix.Length || relative[^(suffix.Length + 1)] == '/');
-
     internal static bool IsOutside(string relative) =>
         Path.IsPathRooted(relative)
         || string.Equals(relative, "..", StringComparison.Ordinal)
@@ -205,11 +201,6 @@ internal sealed class WorkspacePaths(string root)
 
     public bool IsWatched(string fullPath) => Components(fullPath).All(IsWatchedDirectory);
 
-    private string Relative(string fullPath) => Path.GetRelativePath(Root, fullPath);
-
-    private string[] Components(string fullPath) =>
-        Relative(fullPath).Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-
     public IEnumerable<WorkspaceFile> EnumerateFiles() =>
         EnumerateFiles(name => !IsExcludedDirectory(name));
 
@@ -227,6 +218,15 @@ internal sealed class WorkspacePaths(string root)
     }
 
     public IEnumerable<WorkspaceFile> EnumerateWatchedFiles() => EnumerateFiles(IsWatchedDirectory);
+
+    private static bool EndsWithSegments(string relative, string suffix) =>
+        relative.EndsWith(suffix, StringComparison.Ordinal)
+        && (relative.Length == suffix.Length || relative[^(suffix.Length + 1)] == '/');
+
+    private string Relative(string fullPath) => Path.GetRelativePath(Root, fullPath);
+
+    private string[] Components(string fullPath) =>
+        Relative(fullPath).Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
 
     // Symlinks and unreadable directories are skipped
     private FileSystemEnumerable<WorkspaceFile> Files(

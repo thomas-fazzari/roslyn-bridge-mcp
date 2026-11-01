@@ -94,6 +94,86 @@ internal sealed partial class LspQueries(
         return request.Context ? SourceLines.Add(locations, paths) : locations;
     }
 
+    public async Task<SymbolList> SymbolsAsync(
+        LspRequest request,
+        CancellationToken cancellationToken
+    )
+    {
+        if (request.File is null)
+        {
+            var query = request.Query ?? string.Empty;
+            var symbols = await session.RequestAsync(
+                LspMethods.WorkspaceSymbol,
+                new JsonObject { ["query"] = query },
+                cancellationToken
+            );
+            // Roslyn returns fuzzy matches in file order, so exact and prefix matches come first
+            var ranked = LspJson
+                .ReadArray<LspSymbol>(symbols)
+                .OrderBy(symbol => MatchRank(symbol.Name, query))
+                .ThenBy(symbol => symbol.Location?.Uri, StringComparer.Ordinal)
+                .ThenBy(symbol => symbol.Location?.Range?.Start)
+                .ToArray();
+            return ranked.ToSymbolList(paths, request.Limit, request.Offset);
+        }
+
+        var uri = await session.OpenDocumentAsync(request.File, cancellationToken);
+        var documentSymbols = await session.RequestAsync(
+            LspMethods.TextDocumentDocumentSymbol,
+            LspParameters.Document(uri),
+            cancellationToken
+        );
+        return documentSymbols.ToSymbolList(paths, request.Limit, request.Offset);
+    }
+
+    public async Task<Result<DiagnosticReport>> DiagnosticsAsync(
+        LspRequest request,
+        CancellationToken cancellationToken
+    )
+    {
+        var files = SelectFiles(request.File).Take(MaximumDiagnosticFiles + 1).ToArray();
+        if (files.Length > MaximumDiagnosticFiles)
+        {
+            return ToolError.InvalidRequest(
+                $"Diagnostics accepts at most {MaximumDiagnosticFiles} files. Use a narrower glob."
+            );
+        }
+
+        return await DiagnosticsAsync(files, request, cancellationToken);
+    }
+
+    /// <param name="files">Full paths of C# files.</param>
+    public async Task<DiagnosticReport> DiagnosticsAsync(
+        IReadOnlyCollection<string> files,
+        LspRequest request,
+        CancellationToken cancellationToken
+    )
+    {
+        await session.SynchronizeNewFilesAsync(files, cancellationToken);
+        var scanned = new List<ScannedFile>(files.Count);
+        foreach (var batch in files.Chunk(RoslynSession.MaximumOpenDocuments))
+        {
+            scanned.AddRange(await ScanAsync(batch, cancellationToken));
+        }
+
+        return Report(scanned, request);
+    }
+
+    public async Task<Result<JsonObject>> PositionAsync(
+        LspRequest request,
+        CancellationToken cancellationToken
+    )
+    {
+        var location = await LocateAsync(request, cancellationToken);
+        if (location.Error is { } error)
+        {
+            return error;
+        }
+
+        var (file, position) = location.Value;
+        return await PositionParametersAsync(file, position, cancellationToken);
+    }
+
     private async Task<SymbolList> HierarchyAsync(
         LspRequest request,
         JsonObject position,
@@ -216,71 +296,6 @@ internal sealed partial class LspQueries(
             ? (path, position)
             : null;
 
-    public async Task<SymbolList> SymbolsAsync(
-        LspRequest request,
-        CancellationToken cancellationToken
-    )
-    {
-        if (request.File is null)
-        {
-            var query = request.Query ?? string.Empty;
-            var symbols = await session.RequestAsync(
-                LspMethods.WorkspaceSymbol,
-                new JsonObject { ["query"] = query },
-                cancellationToken
-            );
-            // Roslyn returns fuzzy matches in file order, so exact and prefix matches come first
-            var ranked = LspJson
-                .ReadArray<LspSymbol>(symbols)
-                .OrderBy(symbol => MatchRank(symbol.Name, query))
-                .ThenBy(symbol => symbol.Location?.Uri, StringComparer.Ordinal)
-                .ThenBy(symbol => symbol.Location?.Range?.Start)
-                .ToArray();
-            return ranked.ToSymbolList(paths, request.Limit, request.Offset);
-        }
-
-        var uri = await session.OpenDocumentAsync(request.File, cancellationToken);
-        var documentSymbols = await session.RequestAsync(
-            LspMethods.TextDocumentDocumentSymbol,
-            LspParameters.Document(uri),
-            cancellationToken
-        );
-        return documentSymbols.ToSymbolList(paths, request.Limit, request.Offset);
-    }
-
-    public async Task<Result<DiagnosticReport>> DiagnosticsAsync(
-        LspRequest request,
-        CancellationToken cancellationToken
-    )
-    {
-        var files = SelectFiles(request.File).Take(MaximumDiagnosticFiles + 1).ToArray();
-        if (files.Length > MaximumDiagnosticFiles)
-        {
-            return ToolError.InvalidRequest(
-                $"Diagnostics accepts at most {MaximumDiagnosticFiles} files. Use a narrower glob."
-            );
-        }
-
-        return await DiagnosticsAsync(files, request, cancellationToken);
-    }
-
-    /// <param name="files">Full paths of C# files.</param>
-    public async Task<DiagnosticReport> DiagnosticsAsync(
-        IReadOnlyCollection<string> files,
-        LspRequest request,
-        CancellationToken cancellationToken
-    )
-    {
-        await session.SynchronizeNewFilesAsync(files, cancellationToken);
-        var scanned = new List<ScannedFile>(files.Count);
-        foreach (var batch in files.Chunk(RoslynSession.MaximumOpenDocuments))
-        {
-            scanned.AddRange(await ScanAsync(batch, cancellationToken));
-        }
-
-        return Report(scanned, request);
-    }
-
     private async Task<IEnumerable<ScannedFile>> ScanAsync(
         string[] batch,
         CancellationToken cancellationToken
@@ -376,21 +391,6 @@ internal sealed partial class LspQueries(
                 .OrderByDescending(summary => summary.Count)
                 .ThenBy(summary => summary.Example.Code, StringComparer.Ordinal),
         ];
-
-    public async Task<Result<JsonObject>> PositionAsync(
-        LspRequest request,
-        CancellationToken cancellationToken
-    )
-    {
-        var location = await LocateAsync(request, cancellationToken);
-        if (location.Error is { } error)
-        {
-            return error;
-        }
-
-        var (file, position) = location.Value;
-        return await PositionParametersAsync(file, position, cancellationToken);
-    }
 
     private async Task<JsonObject> PositionParametersAsync(
         string file,

@@ -49,115 +49,6 @@ internal sealed partial class LspChanges(
         };
     }
 
-    private async Task<Result<ToolResult>> RenameAsync(
-        LspRequest request,
-        CancellationToken cancellationToken
-    )
-    {
-        if (string.IsNullOrWhiteSpace(request.NewName))
-        {
-            return ToolError.InvalidRequest("Provide newName for the rename.");
-        }
-
-        var snapshot = await CaptureAsync(cancellationToken);
-        var position = await queries.PositionAsync(request, cancellationToken);
-        if (position.Error is { } error)
-        {
-            return error;
-        }
-
-        var parameters = position.Value;
-        parameters["newName"] = request.NewName;
-        snapshot = await WithDocumentVersionsAsync(snapshot, cancellationToken);
-        if (
-            await session.RequestAsync(LspMethods.TextDocumentRename, parameters, cancellationToken)
-            is not JsonObject edit
-        )
-        {
-            return ToolError.InvalidLspData("Roslyn cannot rename the selected symbol.");
-        }
-
-        return await CompleteAsync(
-            new PendingChange(request.Action, snapshot, edit, Command: null),
-            request.Apply,
-            cancellationToken
-        );
-    }
-
-    private async Task<Result<ToolResult>> RenameFileAsync(
-        LspRequest request,
-        CancellationToken cancellationToken
-    )
-    {
-        if (string.IsNullOrWhiteSpace(request.File) || string.IsNullOrWhiteSpace(request.NewName))
-        {
-            return ToolError.InvalidRequest("Provide file and newName for rename_file.");
-        }
-
-        if (session.Capabilities?["workspace"]?["fileOperations"]?["willRename"] is null)
-        {
-            return ToolError.InvalidRequest("Roslyn does not advertise file rename support.");
-        }
-
-        var oldUri = paths.ToUri(request.File);
-        var newUri = paths.ToUri(request.NewName);
-        var snapshot = await CaptureAsync(cancellationToken);
-        var parameters = new JsonObject
-        {
-            ["files"] = new JsonArray(new JsonObject { ["oldUri"] = oldUri, ["newUri"] = newUri }),
-        };
-        var edit =
-            await session.RequestAsync(
-                LspMethods.WorkspaceWillRenameFiles,
-                parameters,
-                cancellationToken
-            ) as JsonObject
-            ?? [];
-        var changes = ToDocumentChanges(edit);
-        changes.Add(
-            (JsonNode)
-                new JsonObject
-                {
-                    ["kind"] = FileOperation.Rename,
-                    ["oldUri"] = oldUri,
-                    ["newUri"] = newUri,
-                }
-        );
-        edit = new JsonObject { ["documentChanges"] = changes };
-        return await CompleteAsync(
-            new PendingChange(request.Action, snapshot, edit, Command: null),
-            request.Apply,
-            cancellationToken
-        );
-    }
-
-    private async Task<Result<ToolResult>> UseProposalAsync(
-        LspRequest request,
-        CancellationToken cancellationToken
-    )
-    {
-        if (
-            !_pending.TryGetValue(request.ProposalId!, out var pending)
-            || pending.Action != request.Action
-            || DateTimeOffset.UtcNow - pending.CreatedAt > _proposalLifetime
-        )
-        {
-            return ToolError.InvalidRequest(
-                "The proposal is unknown or expired. Request a new preview."
-            );
-        }
-
-        var result = pending.Actions is not null
-            ? await SelectActionAsync(pending, request, cancellationToken)
-            : await CompleteAsync(pending, request.Apply, cancellationToken);
-        if (request.Apply && result.Error is null)
-        {
-            _pending.Remove(request.ProposalId!);
-        }
-
-        return result;
-    }
-
     internal async Task<ToolResult> CompleteAsync(
         PendingChange change,
         bool apply,
@@ -270,6 +161,115 @@ internal sealed partial class LspChanges(
             CommandResult = commandResult,
             Synchronized = true,
         };
+    }
+
+    private async Task<Result<ToolResult>> RenameAsync(
+        LspRequest request,
+        CancellationToken cancellationToken
+    )
+    {
+        if (string.IsNullOrWhiteSpace(request.NewName))
+        {
+            return ToolError.InvalidRequest("Provide newName for the rename.");
+        }
+
+        var snapshot = await CaptureAsync(cancellationToken);
+        var position = await queries.PositionAsync(request, cancellationToken);
+        if (position.Error is { } error)
+        {
+            return error;
+        }
+
+        var parameters = position.Value;
+        parameters["newName"] = request.NewName;
+        snapshot = await WithDocumentVersionsAsync(snapshot, cancellationToken);
+        if (
+            await session.RequestAsync(LspMethods.TextDocumentRename, parameters, cancellationToken)
+            is not JsonObject edit
+        )
+        {
+            return ToolError.InvalidLspData("Roslyn cannot rename the selected symbol.");
+        }
+
+        return await CompleteAsync(
+            new PendingChange(request.Action, snapshot, edit, Command: null),
+            request.Apply,
+            cancellationToken
+        );
+    }
+
+    private async Task<Result<ToolResult>> RenameFileAsync(
+        LspRequest request,
+        CancellationToken cancellationToken
+    )
+    {
+        if (string.IsNullOrWhiteSpace(request.File) || string.IsNullOrWhiteSpace(request.NewName))
+        {
+            return ToolError.InvalidRequest("Provide file and newName for rename_file.");
+        }
+
+        if (session.Capabilities?["workspace"]?["fileOperations"]?["willRename"] is null)
+        {
+            return ToolError.InvalidRequest("Roslyn does not advertise file rename support.");
+        }
+
+        var oldUri = paths.ToUri(request.File);
+        var newUri = paths.ToUri(request.NewName);
+        var snapshot = await CaptureAsync(cancellationToken);
+        var parameters = new JsonObject
+        {
+            ["files"] = new JsonArray(new JsonObject { ["oldUri"] = oldUri, ["newUri"] = newUri }),
+        };
+        var edit =
+            await session.RequestAsync(
+                LspMethods.WorkspaceWillRenameFiles,
+                parameters,
+                cancellationToken
+            ) as JsonObject
+            ?? [];
+        var changes = ToDocumentChanges(edit);
+        changes.Add(
+            (JsonNode)
+                new JsonObject
+                {
+                    ["kind"] = FileOperation.Rename,
+                    ["oldUri"] = oldUri,
+                    ["newUri"] = newUri,
+                }
+        );
+        edit = new JsonObject { ["documentChanges"] = changes };
+        return await CompleteAsync(
+            new PendingChange(request.Action, snapshot, edit, Command: null),
+            request.Apply,
+            cancellationToken
+        );
+    }
+
+    private async Task<Result<ToolResult>> UseProposalAsync(
+        LspRequest request,
+        CancellationToken cancellationToken
+    )
+    {
+        if (
+            !_pending.TryGetValue(request.ProposalId!, out var pending)
+            || pending.Action != request.Action
+            || DateTimeOffset.UtcNow - pending.CreatedAt > _proposalLifetime
+        )
+        {
+            return ToolError.InvalidRequest(
+                "The proposal is unknown or expired. Request a new preview."
+            );
+        }
+
+        var result = pending.Actions is not null
+            ? await SelectActionAsync(pending, request, cancellationToken)
+            : await CompleteAsync(pending, request.Apply, cancellationToken);
+        if (request.Apply && result.Error is null)
+        {
+            _pending.Remove(request.ProposalId!);
+        }
+
+        return result;
     }
 
     private static EditApplicationException ApplicationFailure(

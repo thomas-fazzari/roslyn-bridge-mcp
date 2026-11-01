@@ -48,67 +48,6 @@ internal sealed partial class RoslynSession
         return await OpenDocumentCoreAsync(file, cancellationToken);
     }
 
-    private async Task<string> OpenDocumentCoreAsync(
-        string file,
-        CancellationToken cancellationToken
-    )
-    {
-        var path = paths.Resolve(file);
-        if (!IsCSharpFile(path))
-        {
-            throw new ToolErrorException(
-                ToolError.InvalidRequest($"Only C# files can be opened: {paths.RelativePath(path)}")
-            );
-        }
-
-        if (ReadDocumentStamp(path) is not { } stamp)
-        {
-            throw new ToolErrorException(
-                ToolError.InvalidRequest($"The file does not exist: {paths.RelativePath(path)}")
-            );
-        }
-
-        var uri = new Uri(path).AbsoluteUri;
-        if (_documents.TryGetValue(path, out var open))
-        {
-            // Least recently used documents close first, so callers can keep a batch open
-            _openedOrder.Remove(open.Node);
-            _openedOrder.AddLast(open.Node);
-            return uri;
-        }
-
-        if (_documents.Count >= MaximumOpenDocuments)
-        {
-            var oldest =
-                _openedOrder.First
-                ?? throw new InvalidOperationException("The open document order is empty.");
-            await CloseDocumentAsync(oldest.Value, cancellationToken);
-        }
-
-        var text = await ReadDocumentAsync(path, cancellationToken);
-        await NotifyAsync(
-            LspMethods.TextDocumentDidOpen,
-            new JsonObject
-            {
-                ["textDocument"] = new JsonObject
-                {
-                    ["uri"] = uri,
-                    ["languageId"] = "csharp",
-                    ["version"] = InitialDocumentVersion,
-                    ["text"] = text,
-                },
-            },
-            cancellationToken
-        );
-
-        _documents.Add(
-            path,
-            new OpenDocument(text, InitialDocumentVersion, _openedOrder.AddLast(path), stamp)
-        );
-
-        return uri;
-    }
-
     /// <summary>
     /// Opens the documents one at a time, so their versions stay in order.
     /// </summary>
@@ -133,18 +72,6 @@ internal sealed partial class RoslynSession
             BridgeTelemetry.SyncDuration,
             () => SynchronizeAllAsync(cancellationToken)
         );
-
-    private async Task SynchronizeAllAsync(CancellationToken cancellationToken)
-    {
-        using var held = await LockDocumentsAsync(cancellationToken);
-        foreach (var path in _documents.Keys.ToArray())
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            await SynchronizeDocumentAsync(path, cancellationToken);
-        }
-
-        await SynchronizeWatchedFilesAsync(cancellationToken);
-    }
 
     /// <summary>
     /// Sends files the bridge changed without waiting for the file watcher.
@@ -223,6 +150,83 @@ internal sealed partial class RoslynSession
         {
             _watchRegistrations.TryRemove(registration.Id, out _);
         }
+    }
+
+    internal static bool IsCSharpFile(string path) =>
+        path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)
+        || path.EndsWith(".csx", StringComparison.OrdinalIgnoreCase);
+
+    private async Task<string> OpenDocumentCoreAsync(
+        string file,
+        CancellationToken cancellationToken
+    )
+    {
+        var path = paths.Resolve(file);
+        if (!IsCSharpFile(path))
+        {
+            throw new ToolErrorException(
+                ToolError.InvalidRequest($"Only C# files can be opened: {paths.RelativePath(path)}")
+            );
+        }
+
+        if (ReadDocumentStamp(path) is not { } stamp)
+        {
+            throw new ToolErrorException(
+                ToolError.InvalidRequest($"The file does not exist: {paths.RelativePath(path)}")
+            );
+        }
+
+        var uri = new Uri(path).AbsoluteUri;
+        if (_documents.TryGetValue(path, out var open))
+        {
+            // Least recently used documents close first, so callers can keep a batch open
+            _openedOrder.Remove(open.Node);
+            _openedOrder.AddLast(open.Node);
+            return uri;
+        }
+
+        if (_documents.Count >= MaximumOpenDocuments)
+        {
+            var oldest =
+                _openedOrder.First
+                ?? throw new InvalidOperationException("The open document order is empty.");
+            await CloseDocumentAsync(oldest.Value, cancellationToken);
+        }
+
+        var text = await ReadDocumentAsync(path, cancellationToken);
+        await NotifyAsync(
+            LspMethods.TextDocumentDidOpen,
+            new JsonObject
+            {
+                ["textDocument"] = new JsonObject
+                {
+                    ["uri"] = uri,
+                    ["languageId"] = "csharp",
+                    ["version"] = InitialDocumentVersion,
+                    ["text"] = text,
+                },
+            },
+            cancellationToken
+        );
+
+        _documents.Add(
+            path,
+            new OpenDocument(text, InitialDocumentVersion, _openedOrder.AddLast(path), stamp)
+        );
+
+        return uri;
+    }
+
+    private async Task SynchronizeAllAsync(CancellationToken cancellationToken)
+    {
+        using var held = await LockDocumentsAsync(cancellationToken);
+        foreach (var path in _documents.Keys.ToArray())
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            await SynchronizeDocumentAsync(path, cancellationToken);
+        }
+
+        await SynchronizeWatchedFilesAsync(cancellationToken);
     }
 
     private static FileStamp? ReadDocumentStamp(string path)
@@ -347,10 +351,6 @@ internal sealed partial class RoslynSession
 
         await CloseDocumentAsync(path, cancellationToken);
     }
-
-    internal static bool IsCSharpFile(string path) =>
-        path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)
-        || path.EndsWith(".csx", StringComparison.OrdinalIgnoreCase);
 
     private async Task CloseDocumentAsync(string path, CancellationToken cancellationToken)
     {

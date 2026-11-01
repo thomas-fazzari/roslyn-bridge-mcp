@@ -91,6 +91,26 @@ internal sealed class CommandEdits(
         }
     }
 
+    public async Task StopAsync()
+    {
+        Task drained;
+        lock (_admission)
+        {
+            _accepting = false;
+            drained = _callbacksDrained?.Task ?? Task.CompletedTask;
+        }
+
+        await _lifetime.CancelAsync();
+        await drained;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await StopAsync();
+        _lifetime.Dispose();
+        _gate.Dispose();
+    }
+
     private async Task<ApplyWorkspaceEditResult> ApplyAndCaptureAsync(
         JsonObject edit,
         CancellationToken token
@@ -121,26 +141,6 @@ internal sealed class CommandEdits(
         {
             return FailCallback(exception, EditApplicationPhase.Synchronize, applied: true);
         }
-    }
-
-    public async Task StopAsync()
-    {
-        Task drained;
-        lock (_admission)
-        {
-            _accepting = false;
-            drained = _callbacksDrained?.Task ?? Task.CompletedTask;
-        }
-
-        await _lifetime.CancelAsync();
-        await drained;
-    }
-
-    public async ValueTask DisposeAsync()
-    {
-        await StopAsync();
-        _lifetime.Dispose();
-        _gate.Dispose();
     }
 
     private bool TryBeginCallback()

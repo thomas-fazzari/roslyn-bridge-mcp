@@ -12,6 +12,7 @@ Use the `roslyn` MCP tools for C# code before text search or reading whole files
 - Prefer early returns and small helpers to compound conditions and nested ternaries.
 - Comment only a constraint the code cannot show, in 2 lines at most.
 - Add docstrings only when they tell the caller something the signature does not.
+- Put private methods at the end of the type, before the `[LoggerMessage]` methods.
 - Never write interim code that a later step will delete.
 - Change only what the task needs. Report unrelated problems instead of fixing them.
 - Never relax an analyzer rule to make a change pass. Ask first.

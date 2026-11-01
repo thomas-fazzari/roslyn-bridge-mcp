@@ -557,10 +557,6 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
     private static string DestinationOperation(EditedDocument document) =>
         document.Original is null ? FileOperation.Create : FileOperation.Change;
 
-    private readonly record struct PendingMutation(string Path, string Operation);
-
-    private sealed record ApplyFailure(Exception Exception, PendingMutation? Mutation);
-
     private static string Required(string? value, string property) =>
         value ?? throw new ToolErrorException(ToolError.InvalidLspData($"Missing {property}."));
 
@@ -583,4 +579,8 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
             );
         }
     }
+
+    private readonly record struct PendingMutation(string Path, string Operation);
+
+    private sealed record ApplyFailure(Exception Exception, PendingMutation? Mutation);
 }

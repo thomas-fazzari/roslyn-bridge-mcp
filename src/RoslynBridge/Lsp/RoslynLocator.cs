@@ -32,9 +32,6 @@ internal sealed class RoslynLocator(
             BridgeRoot()
         );
 
-    private static string Executable(string name) =>
-        OperatingSystem.IsWindows() ? $"{name}.exe" : name;
-
     // The runtime directory is ROOT/shared/Microsoft.NETCore.App/VERSION
     internal static string BridgeRoot() =>
         Path.GetFullPath(Path.Combine(RuntimeEnvironment.GetRuntimeDirectory(), "..", "..", ".."));
@@ -102,6 +99,9 @@ internal sealed class RoslynLocator(
             && Directory.Exists(sdks)
             && Directory.EnumerateDirectories(sdks).Any();
     }
+
+    private static string Executable(string name) =>
+        OperatingSystem.IsWindows() ? $"{name}.exe" : name;
 
     private string? FindOnPath(string name)
     {
