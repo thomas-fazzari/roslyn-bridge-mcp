@@ -20,6 +20,7 @@
       "*.mdx": "markdown",
     },
     "files.exclude": {
+      ".rumdl_cache": true,
       "**/artifacts": true,
       "**/bin": true,
       "**/node_modules": true,
@@ -28,6 +29,7 @@
     },
     "files.watcherExclude": {
       "**/.git/**": true,
+      ".rumdl_cache/**": true,
       "**/artifacts/**": true,
       "**/bin/**": true,
       "**/node_modules/**": true,
@@ -37,6 +39,7 @@
       "docs/dist/**": true,
     },
     "search.exclude": {
+      ".rumdl_cache/**": true,
       "**/artifacts/**": true,
       "**/bin/**": true,
       "**/node_modules/**": true,
@@ -51,10 +54,11 @@
     "[csharp][xml]": {
       "editor.defaultFormatter": "csharpier.csharpier-vscode",
     },
-    "[javascript][typescript][markdown][mdx][json][jsonc][yaml]": {
+    "[javascript][typescript][json][jsonc][yaml]": {
       "editor.defaultFormatter": "oxc.oxc-vscode",
     },
     "[markdown][mdx]": {
+      "editor.defaultFormatter": "rvben.rumdl",
       "editor.wordWrap": "on",
     },
   },
@@ -63,10 +67,10 @@
       "ms-dotnettools.csharp",
       "csharpier.csharpier-vscode",
       "hverlin.mise-vscode",
-      "DavidAnson.vscode-markdownlint",
       "EditorConfig.EditorConfig",
       "redhat.vscode-yaml",
       "oxc.oxc-vscode",
+      "rvben.rumdl",
       "tamasfe.even-better-toml",
       "unifiedjs.vscode-mdx",
       "ms-vscode-remote.remote-containers",

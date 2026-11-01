@@ -1,0 +1,7 @@
+[global]
+disable = ["MD013"]
+exclude = ["docs/.astro", "docs/dist", "bench/results"]
+
+# The docs site serves docs/public at its root
+[MD057]
+search-paths = ["docs/public"]

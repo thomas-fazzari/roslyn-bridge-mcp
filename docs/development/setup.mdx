@@ -2,7 +2,7 @@
 title: "Setup"
 ---
 
-Prerequisites: Git, Bash and [mise](https://mise.jdx.dev). mise installs the .NET SDK, Bun, CSharpier, hk, ShellCheck and shfmt at the versions pinned in `mise.toml` and `mise.lock`. On Windows, use Git Bash. Run commands from the repository root.
+Prerequisites: Git, Bash and [mise](https://mise.jdx.dev). mise installs the .NET SDK, Bun, CSharpier, hk, rumdl, ShellCheck and shfmt at the versions pinned in `mise.toml` and `mise.lock`. On Windows, use Git Bash. Run commands from the repository root.
 
 ```sh
 mise install
@@ -20,10 +20,10 @@ mise run hooks:install
 
 ## Editor
 
-| Editor                | File                           | Holds                                                                                                                                      |
-| --------------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| VS Code               | `roslyn-bridge.code-workspace` | The editor settings, the recommended extensions and the tasks. Open it on the host or in the dev container                                 |
-| Neovim with lazy.nvim | `.lazy.lua`                    | The build folders to hide in nvim-tree and oil, the same as in VS Code. The first time it loads, Neovim asks you to trust it with `:trust` |
+| Editor                | File                           | Holds                                                                                                                                                                                           |
+| --------------------- | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| VS Code               | `roslyn-bridge.code-workspace` | The editor settings, the recommended extensions and the tasks. Open it on the host or in the dev container                                                                                      |
+| Neovim with lazy.nvim | `.lazy.lua`                    | The build folders to hide in nvim-tree and oil, the same as in VS Code, and rumdl as Markdown formatter and language server. The first time it loads, Neovim asks you to trust it with `:trust` |
 
 ## Dev container
 

@@ -3,7 +3,8 @@ import { spawnSync } from "node:child_process";
 
 const FILE_TOOLS = new Set(["edit", "write"]);
 const CSHARPIER_FILE = /\.(?:cs|csx|csproj|props|targets|slnx)$/u;
-const OXFMT_FILE = /\.(?:md|mdx|json|jsonc|ya?ml|toml|m?js|ts)$/u;
+const OXFMT_FILE = /\.(?:json|jsonc|ya?ml|toml|m?js|ts)$/u;
+const RUMDL_FILE = /\.mdx?$/u;
 
 function formatCommand(path: string): string[] | undefined {
   if (CSHARPIER_FILE.test(path)) {
@@ -11,6 +12,9 @@ function formatCommand(path: string): string[] | undefined {
   }
   if (OXFMT_FILE.test(path)) {
     return ["bunx", "--bun", "oxfmt", "--write", "--no-error-on-unmatched-pattern", path];
+  }
+  if (RUMDL_FILE.test(path)) {
+    return ["rumdl", "fmt", "--silent", path];
   }
   return undefined;
 }
