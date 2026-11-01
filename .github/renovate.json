@@ -16,6 +16,11 @@
       "description": "Releases several times a week",
       "matchPackageNames": ["Meziantou.Analyzer"],
       "enabled": false
+    },
+    {
+      "description": "The oxc repository prefixes the tags of each tool",
+      "matchDepNames": ["aqua:oxc-project/oxc/oxfmt"],
+      "extractVersion": "^oxfmt_v(?<version>.+)$"
     }
   ]
 }
