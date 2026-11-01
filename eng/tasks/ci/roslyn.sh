@@ -2,7 +2,7 @@
 #MISE description="Installs Roslyn for the integration tests and exports its path to the CI job"
 set -euo pipefail
 
-dotnet tool install roslyn-language-server --version 5.12.0-1.26426.8 \
+dotnet tool install roslyn-language-server --version 5.13.0-1.26514.10 \
   --tool-path "$RUNNER_TEMP/roslyn" --source https://api.nuget.org/v3/index.json
 
 server="$RUNNER_TEMP/roslyn/roslyn-language-server"
