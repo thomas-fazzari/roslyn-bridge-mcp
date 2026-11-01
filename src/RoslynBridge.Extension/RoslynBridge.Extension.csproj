@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>Roslyn extension that answers reference queries inside the language server.</Description>
+    <!-- Any runtime package carries the same managed assemblies -->
+    <RoslynServerPackage>roslyn-language-server.linux-x64</RoslynServerPackage>
+    <RoslynServerAssemblies>$(NuGetPackageRoot)$(RoslynServerPackage)/$(RoslynServerVersion)/tools/net10.0/linux-x64/</RoslynServerAssemblies>
+    <!-- The extension message handler API is experimental. This project exists to use it -->
+    <NoWarn>$(NoWarn);RSEXPERIMENTAL008</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageDownload Include="$(RoslynServerPackage)" Version="[$(RoslynServerVersion)]" />
+    <Reference Include="$(RoslynServerAssemblies)Microsoft.CodeAnalysis.dll" Private="false" />
+    <Reference
+      Include="$(RoslynServerAssemblies)Microsoft.CodeAnalysis.CSharp.dll"
+      Private="false"
+    />
+    <Reference
+      Include="$(RoslynServerAssemblies)Microsoft.CodeAnalysis.Workspaces.dll"
+      Private="false"
+    />
+  </ItemGroup>
+</Project>

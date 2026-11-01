@@ -327,6 +327,7 @@ internal sealed partial class RoslynSession(
         }
 
         _workspaceFiles = ScanWorkspace(cancellationToken);
+        await ActivateExtensionAsync(cancellationToken);
         LogWorkspaceLoaded(logger, _workspaceFiles.Count);
     }
 
@@ -402,6 +403,7 @@ internal sealed partial class RoslynSession(
     private void ClearWorkspace()
     {
         Capabilities = null;
+        _extensionActive = false;
         _initialized = NewCompletionSource();
         _documents.Clear();
         _openedOrder.Clear();

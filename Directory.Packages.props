@@ -1,6 +1,7 @@
 <Project>
   <PropertyGroup>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <RoslynServerVersion>5.13.0-1.26514.10</RoslynServerVersion>
   </PropertyGroup>
 
   <ItemGroup>

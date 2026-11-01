@@ -12,13 +12,35 @@ internal sealed partial class LspQueries
     private const int ReadHighlight = 2;
     private const int WriteHighlight = 3;
 
-    private async Task<Result<ToolResult>> AccessAsync(
-        LspRequest request,
-        JsonNode? references,
+    private async Task<FoundLocations> ReferencesAsync(
+        JsonObject parameters,
         CancellationToken cancellationToken
     )
     {
-        var found = references.FindLocations(paths, skipGenerated: true);
+        if (await session.FindReferencesAsync(parameters, cancellationToken) is { } references)
+        {
+            return references["locations"].FindLocations(paths, skipGenerated: true) with
+            {
+                Generated = references["generated"]!.GetValue<int>(),
+            };
+        }
+
+        // definition already gives the declaration, which would read as one more usage
+        parameters["context"] = new JsonObject { ["includeDeclaration"] = false };
+        var result = await session.RequestAsync(
+            LspMethods.TextDocumentReferences,
+            parameters,
+            cancellationToken
+        );
+        return result.FindLocations(paths, skipGenerated: true);
+    }
+
+    private async Task<Result<ToolResult>> AccessAsync(
+        LspRequest request,
+        FoundLocations found,
+        CancellationToken cancellationToken
+    )
+    {
         var highlighted = await HighlightedAsync(
             found.Positions,
             request.Action is LspAction.Writes,
