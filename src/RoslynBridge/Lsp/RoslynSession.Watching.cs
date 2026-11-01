@@ -189,7 +189,12 @@ internal sealed partial class RoslynSession
             {
                 await NotifyAsync(
                     LspMethods.WorkspaceDidChangeWatchedFiles,
-                    new JsonObject { ["changes"] = new JsonArray([.. batch.Select(ToFileEvent)]) },
+                    new JsonObject
+                    {
+                        ["changes"] = new JsonArray([
+                            .. WithProjectReloads(batch).Select(ToFileEvent),
+                        ]),
+                    },
                     cancellationToken
                 );
             }
@@ -210,6 +215,54 @@ internal sealed partial class RoslynSession
                 await SynchronizeClosedDocumentAsync(change.Path, cancellationToken);
             }
         }
+    }
+
+    // On Windows, Roslyn checks a created or deleted file against the project globs with a lowercase drive
+    // letter and a case-sensitive match, so the project never reloads. A project file change always does.
+    private IEnumerable<FileChange> WithProjectReloads(FileChange[] batch)
+    {
+        if (!OperatingSystem.IsWindows() || !Array.Exists(batch, IsSourceFileAddedOrRemoved))
+        {
+            return batch;
+        }
+
+        var projectsByDirectory = _workspaceFiles
+            .Keys.Where(path =>
+                string.Equals(
+                    Path.GetExtension(path),
+                    ".csproj",
+                    StringComparison.OrdinalIgnoreCase
+                )
+            )
+            .ToLookup(path => Path.GetDirectoryName(path) ?? string.Empty, StringComparer.Ordinal);
+        var reloads = batch
+            .Where(IsSourceFileAddedOrRemoved)
+            .SelectMany(change => NearestProjects(change.Path, projectsByDirectory))
+            .Distinct(StringComparer.Ordinal)
+            .Select(project => new FileChange(project, FileChanged));
+        return batch.Concat(reloads);
+    }
+
+    private static bool IsSourceFileAddedOrRemoved(FileChange change) =>
+        change.Type is FileCreated or FileDeleted && IsCSharpFile(change.Path);
+
+    private IEnumerable<string> NearestProjects(
+        string path,
+        ILookup<string, string> projectsByDirectory
+    )
+    {
+        var directory = Path.GetDirectoryName(path);
+        while (directory is not null && directory.Length >= paths.Root.Length)
+        {
+            if (projectsByDirectory.Contains(directory))
+            {
+                return projectsByDirectory[directory];
+            }
+
+            directory = Path.GetDirectoryName(directory);
+        }
+
+        return [];
     }
 
     private JsonNode ToFileEvent(FileChange change) =>

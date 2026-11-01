@@ -13,7 +13,7 @@ internal static class Setup
     internal const string PackageId = "ThomasFazzari.RoslynBridge";
 
     // The Roslyn version the CI tests the bridge against, in eng/tasks/ci/roslyn.sh
-    internal const string ServerVersion = "5.12.0-1.26426.8";
+    internal const string ServerVersion = "5.13.0-1.26514.10";
     private static readonly TimeSpan _versionTimeout = TimeSpan.FromSeconds(5);
 
     internal static readonly Agent[] Agents =
