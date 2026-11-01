@@ -30,7 +30,7 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           install_args: bun
       - uses: actions/configure-pages@v6.0.0
-      - run: bun install --frozen-lockfile
+      - run: bun install --cwd docs --frozen-lockfile
       - run: mise run docs:build
       - uses: actions/upload-pages-artifact@v5.0.0
         with:

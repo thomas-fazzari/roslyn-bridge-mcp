@@ -11,7 +11,7 @@ function formatCommand(path: string): string[] | undefined {
     return ["csharpier", "format", path];
   }
   if (OXFMT_FILE.test(path)) {
-    return ["bunx", "--bun", "oxfmt", "--write", "--no-error-on-unmatched-pattern", path];
+    return ["oxfmt", "--write", "--no-error-on-unmatched-pattern", path];
   }
   if (RUMDL_FILE.test(path)) {
     return ["rumdl", "fmt", "--silent", path];

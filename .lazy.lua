@@ -1,4 +1,4 @@
-local excluded_names = { ".rumdl_cache", "artifacts", "bin", "node_modules", "obj", "TestResults" }
+local excluded_names = { ".mise", ".rumdl_cache", "artifacts", "bin", "node_modules", "obj", "TestResults" }
 
 local excluded, tree_filters = {}, {}
 for _, name in ipairs(excluded_names) do

@@ -120,6 +120,12 @@ url = "https://github.com/jdx/hk/releases/download/v2.10.0/hk-x86_64-pc-windows-
 signer = "sigstore-oidc:https://github.com/jdx/hk/.github/workflows/release.yml"
 repository_ids = { repository = "922514152" }
 
+[[tools.oxfmt]]
+version = "0.75.0"
+aube = { path = ".mise/locks/oxfmt/0.75.0", digest = "sha256:1d4f470a5dbba272218132db6ff9ba1911075d29dcd3253a0e02b4a5037a8a23" }
+backend = "npm:oxfmt"
+specifiers = ["0.75.0"]
+
 [[tools.perl]]
 version = "5.44.0.0"
 backend = "aqua:skaji/relocatable-perl"

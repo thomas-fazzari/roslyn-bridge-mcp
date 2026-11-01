@@ -12,8 +12,8 @@ local linters = new Mapping<String, Step> {
   }
   ["oxfmt"] {
     glob = "**/*.{json,jsonc,yml,yaml,toml,js,mjs,ts}"
-    check = "bunx --bun oxfmt --check --no-error-on-unmatched-pattern {{files}}"
-    fix = "bunx --bun oxfmt --write --no-error-on-unmatched-pattern {{files}}"
+    check = "oxfmt --check --no-error-on-unmatched-pattern {{files}}"
+    fix = "oxfmt --write --no-error-on-unmatched-pattern {{files}}"
   }
   ["rumdl"] = (Builtins.rumdl) {
     glob = List("**/*.md", "**/*.mdx")

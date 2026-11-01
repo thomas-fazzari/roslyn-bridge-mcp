@@ -5,8 +5,7 @@
     "csharp.suppressBuildAssetsNotification": true,
     "dotnet.defaultSolution": "RoslynBridge.slnx",
     "oxc.enable.oxlint": false,
-    "oxc.useExecPath": true,
-    "oxc.path.oxfmt": "node_modules/oxfmt/bin/oxfmt",
+    "oxc.path.oxfmt": "${userHome}/.local/share/mise/shims/oxfmt",
     "editor.formatOnSave": true,
     "editor.formatOnSaveMode": "file",
     "files.associations": {
@@ -20,6 +19,7 @@
       "*.mdx": "markdown",
     },
     "files.exclude": {
+      ".mise": true,
       ".rumdl_cache": true,
       "**/artifacts": true,
       "**/bin": true,
@@ -29,6 +29,7 @@
     },
     "files.watcherExclude": {
       "**/.git/**": true,
+      ".mise/**": true,
       ".rumdl_cache/**": true,
       "**/artifacts/**": true,
       "**/bin/**": true,
@@ -39,6 +40,7 @@
       "docs/dist/**": true,
     },
     "search.exclude": {
+      ".mise/**": true,
       ".rumdl_cache/**": true,
       "**/artifacts/**": true,
       "**/bin/**": true,
