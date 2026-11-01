@@ -57,6 +57,27 @@ public sealed class TextPreviewTests
     }
 
     [Fact]
+    public void DistantChangesPastTheDiffLimitsHaveSeparateRanges()
+    {
+        var lines = Enumerable
+            .Range(1, TextPreview.MaximumDiffLines + 500)
+            .Select(index => string.Create(CultureInfo.InvariantCulture, $"line {index}"))
+            .ToArray();
+        var before = string.Join('\n', lines);
+        lines[9] = "renamed ten";
+        lines[^10] = "renamed near the end";
+
+        var preview = TextPreview.Create(before, string.Join('\n', lines));
+
+        preview.Truncated.Should().BeFalse();
+        preview.Changes.Should().HaveCount(2);
+        preview.Changes[0].BeforeStart.Line.Should().Be(10);
+        preview.Changes[0].After.Should().Contain("renamed ten");
+        preview.Changes[1].AfterStart.Line.Should().Be(lines.Length - 9);
+        preview.Changes[1].After.Should().Contain("renamed near the end");
+    }
+
+    [Fact]
     public void InsertionShiftsTheLaterAfterRange()
     {
         var preview = TextPreview.Create("one\nkeep\nold\nend", "inserted\none\nkeep\nnew\nend");

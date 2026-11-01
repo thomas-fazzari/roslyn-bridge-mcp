@@ -26,24 +26,17 @@ internal static class TextPreview
         var origin = PositionAt(before, window.Start);
         var remaining = EditedDocument.MaximumPreviewCharacters * 2;
 
-        if (!CanCompareLines(oldText, newText))
+        var blocks = CanCompareLines(oldText, newText)
+            ? DiffLines(oldText, newText)
+            : AlignedLines(oldText, newText);
+        if (blocks is null)
         {
             changes.Add(DescribeChange(oldText, newText, origin, origin, ref remaining).Change);
             return (changes, true);
         }
 
-        var diff = Differ.Instance.CreateCustomDiffs(
-            oldText,
-            newText,
-            ignoreWhiteSpace: false,
-            chunker: ChunkLines
-        );
-
-        var oldLines = TextEdits.GetLines(oldText);
-        var newLines = TextEdits.GetLines(newText);
         var truncated = false;
-
-        foreach (var block in diff.DiffBlocks)
+        foreach (var block in blocks)
         {
             if (remaining < 2)
             {
@@ -51,16 +44,12 @@ internal static class TextPreview
                 break;
             }
 
-            var oldStart = LineOffset(oldText, oldLines, block.DeleteStartA);
-            var oldEnd = LineOffset(oldText, oldLines, block.DeleteStartA + block.DeleteCountA);
-            var newStart = LineOffset(newText, newLines, block.InsertStartB);
-            var newEnd = LineOffset(newText, newLines, block.InsertStartB + block.InsertCountB);
             var available = remaining;
             var preview = DescribeChange(
-                oldText[oldStart..oldEnd],
-                newText[newStart..newEnd],
-                PositionAt(oldText, oldStart, origin),
-                PositionAt(newText, newStart, origin),
+                oldText[block.OldStart..block.OldEnd],
+                newText[block.NewStart..block.NewEnd],
+                PositionAt(oldText, block.OldStart, origin),
+                PositionAt(newText, block.NewStart, origin),
                 ref remaining
             );
 
@@ -83,17 +72,82 @@ internal static class TextPreview
 
     private static int CountLines(string text) => PositionAt(text, text.Length).Line;
 
+    private static List<LineBlock> DiffLines(string oldText, string newText)
+    {
+        var diff = Differ.Instance.CreateCustomDiffs(
+            oldText,
+            newText,
+            ignoreWhiteSpace: false,
+            chunker: ChunkLines
+        );
+        var oldLines = TextEdits.GetLines(oldText);
+        var newLines = TextEdits.GetLines(newText);
+        return
+        [
+            .. diff.DiffBlocks.Select(block => new LineBlock(
+                LineOffset(oldText, oldLines, block.DeleteStartA),
+                LineOffset(oldText, oldLines, block.DeleteStartA + block.DeleteCountA),
+                LineOffset(newText, newLines, block.InsertStartB),
+                LineOffset(newText, newLines, block.InsertStartB + block.InsertCountB)
+            )),
+        ];
+    }
+
+    // Too large to diff, but a line-by-line comparison is linear and holds when no line was added
+    private static List<LineBlock>? AlignedLines(string oldText, string newText)
+    {
+        var oldLines = TextEdits.GetLines(oldText);
+        var newLines = TextEdits.GetLines(newText);
+        if (oldLines.Count != newLines.Count)
+        {
+            return null;
+        }
+
+        var blocks = new List<LineBlock>();
+        int? changedFrom = null;
+        for (var line = 0; line <= oldLines.Count; line++)
+        {
+            if (
+                line < oldLines.Count
+                && !Line(oldText, oldLines, line).SequenceEqual(Line(newText, newLines, line))
+            )
+            {
+                changedFrom ??= line;
+                continue;
+            }
+
+            if (changedFrom is { } from)
+            {
+                blocks.Add(
+                    new LineBlock(
+                        LineOffset(oldText, oldLines, from),
+                        LineOffset(oldText, oldLines, line),
+                        LineOffset(newText, newLines, from),
+                        LineOffset(newText, newLines, line)
+                    )
+                );
+                changedFrom = null;
+            }
+        }
+
+        return blocks;
+    }
+
     private static string[] ChunkLines(string text)
     {
         var lines = TextEdits.GetLines(text);
         var chunks = new string[lines.Count];
         for (var index = 0; index < lines.Count; index++)
         {
-            chunks[index] = text[lines[index].Start..LineOffset(text, lines, index + 1)];
+            chunks[index] = Line(text, lines, index).ToString();
         }
 
         return chunks;
     }
+
+    // Keeps the line break, so a changed line ending counts as a changed line
+    private static ReadOnlySpan<char> Line(string text, List<LineSpan> lines, int line) =>
+        text.AsSpan()[lines[line].Start..LineOffset(text, lines, line + 1)];
 
     private static (TextChange Change, bool Truncated) DescribeChange(
         string before,
@@ -189,4 +243,6 @@ internal static class TextPreview
 
         return new SourcePosition(line, character);
     }
+
+    private readonly record struct LineBlock(int OldStart, int OldEnd, int NewStart, int NewEnd);
 }
