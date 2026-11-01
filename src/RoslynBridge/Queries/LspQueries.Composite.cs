@@ -267,12 +267,18 @@ internal sealed partial class LspQueries
                 cancellationToken
             ) as JsonArray
             ?? [];
-        var uri = parameters["textDocument"]!["uri"]!.GetValue<string>();
+        var file = paths.TryGetWorkspaceFile(
+            parameters["textDocument"]!["uri"]!.GetValue<string>()
+        );
         var position = parameters["position"].Read<LspPosition>();
+
+        // Roslyn can write the URI it received in another form, such as file:///c%3A/ for file:///C:/
         return items
             .Select(static item => item.Read<LspSymbol>())
             .Any(item =>
-                string.Equals(item.Uri, uri, StringComparison.Ordinal)
+                item.Uri is { } uri
+                && paths.TryGetWorkspaceFile(uri) is { } itemFile
+                && string.Equals(itemFile, file, StringComparison.Ordinal)
                 && item.SelectionRange is { } range
                 && range.Contains(position)
             );
