@@ -23,6 +23,12 @@
       "extractVersion": "^oxfmt_v(?<version>.+)$"
     },
     {
+      "description": "The mise manager skips dotnet, so the SDK and its mise.lock entry are updated manually until renovatebot/renovate#44650",
+      "matchManagers": ["nuget"],
+      "matchDepTypes": ["dotnet-sdk"],
+      "enabled": false
+    },
+    {
       "description": "Relocatable Perl versions have four parts, such as 5.44.0.0",
       "matchDepNames": ["aqua:skaji/relocatable-perl"],
       "versioning": "loose"
