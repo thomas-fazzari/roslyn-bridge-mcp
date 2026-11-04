@@ -36,6 +36,9 @@
 !/.pi/
 !/.pi/extensions/
 !/.pi/extensions/format.ts
+!/.pi/skills/
+!/.pi/skills/roslyn/
+!/.pi/skills/roslyn/SKILL.md
 
 !/src/
 !/src/**
