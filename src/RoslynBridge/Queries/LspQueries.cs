@@ -48,49 +48,16 @@ internal sealed partial class LspQueries(
             return error;
         }
 
-        var parameters = position.Value;
-        if (request.Action.IsHierarchy)
+        var result = await NavigateAtAsync(request, position.Value, cancellationToken);
+        if (
+            IsEmpty(result)
+            && await MissingSymbolAsync(position.Value, cancellationToken) is { } missing
+        )
         {
-            return await HierarchyAsync(request, parameters, cancellationToken);
+            return missing;
         }
 
-        if (request.Action is LspAction.References || request.Action.IsAccess)
-        {
-            var found = await ReferencesAsync(parameters, cancellationToken);
-            if (request.Action.IsAccess)
-            {
-                return await AccessAsync(request, found, cancellationToken);
-            }
-
-            var references = found.Locations.Page(request.Limit, request.Offset);
-            return request.Context ? SourceLines.Add(references, paths) : references;
-        }
-
-        var method = request.Action switch
-        {
-            LspAction.Definition => LspMethods.TextDocumentDefinition,
-            LspAction.TypeDefinition => LspMethods.TextDocumentTypeDefinition,
-            LspAction.Implementation => LspMethods.TextDocumentImplementation,
-            LspAction.Hover => LspMethods.TextDocumentHover,
-            _ => throw new InvalidOperationException(
-                $"Unsupported navigation action: {request.Action}."
-            ),
-        };
-
-        var result = await session.RequestAsync(method, parameters, cancellationToken);
-        if (request.Action is LspAction.Hover)
-        {
-            return new HoverText(result.ToHoverText());
-        }
-
-        // A generated partial, such as a regex generator's, lists its type a second time
-        var locations = result.ToLocations(
-            paths,
-            request.Limit,
-            skipGenerated: request.Action is LspAction.Implementation,
-            offset: request.Offset
-        );
-        return request.Context ? SourceLines.Add(locations, paths) : locations;
+        return result;
     }
 
     public async Task<SymbolList> SymbolsAsync(
@@ -172,6 +139,63 @@ internal sealed partial class LspQueries(
         var (file, position) = location.Value;
         return await PositionParametersAsync(file, position, cancellationToken);
     }
+
+    private async Task<Result<ToolResult>> NavigateAtAsync(
+        LspRequest request,
+        JsonObject parameters,
+        CancellationToken cancellationToken
+    )
+    {
+        if (request.Action.IsHierarchy)
+        {
+            return await HierarchyAsync(request, parameters, cancellationToken);
+        }
+
+        if (request.Action is LspAction.References || request.Action.IsAccess)
+        {
+            var found = await ReferencesAsync(parameters, cancellationToken);
+            if (request.Action.IsAccess)
+            {
+                return await AccessAsync(request, found, cancellationToken);
+            }
+
+            var references = found.Locations.Page(request.Limit, request.Offset);
+            return request.Context ? SourceLines.Add(references, paths) : references;
+        }
+
+        var method = request.Action switch
+        {
+            LspAction.Definition => LspMethods.TextDocumentDefinition,
+            LspAction.TypeDefinition => LspMethods.TextDocumentTypeDefinition,
+            LspAction.Implementation => LspMethods.TextDocumentImplementation,
+            LspAction.Hover => LspMethods.TextDocumentHover,
+            _ => throw new InvalidOperationException(
+                $"Unsupported navigation action: {request.Action}."
+            ),
+        };
+
+        var result = await session.RequestAsync(method, parameters, cancellationToken);
+        if (request.Action is LspAction.Hover)
+        {
+            return new HoverText(result.ToHoverText());
+        }
+
+        // A generated partial, such as a regex generator's, lists its type a second time
+        var locations = result.ToLocations(
+            paths,
+            request.Limit,
+            skipGenerated: request.Action is LspAction.Implementation,
+            offset: request.Offset
+        );
+        return request.Context ? SourceLines.Add(locations, paths) : locations;
+    }
+
+    private static bool IsEmpty(Result<ToolResult> result) =>
+        result.Error is null
+        && result.Value
+            is Locations { Total: 0, Generated: 0 }
+                or SymbolList { Total: 0 }
+                or HoverText { Text: "" };
 
     private async Task<SymbolList> HierarchyAsync(
         LspRequest request,

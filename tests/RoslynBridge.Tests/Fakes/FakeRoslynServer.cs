@@ -189,6 +189,16 @@ internal sealed class FakeRoslynServer : IRoslynServer
                 .WaitAsync(cancellationToken);
 
         [JsonRpcMethod(
+            LspMethods.TextDocumentHover,
+            UseSingleObjectParameterDeserialization = true
+        )]
+        public static JsonObject Hover(JsonNode? parameters)
+        {
+            _ = parameters;
+            return new JsonObject { ["contents"] = "symbol" };
+        }
+
+        [JsonRpcMethod(
             LspMethods.TextDocumentDocumentHighlight,
             UseSingleObjectParameterDeserialization = true
         )]
