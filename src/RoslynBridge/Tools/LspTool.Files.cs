@@ -25,7 +25,7 @@ internal sealed partial class LspTool
                 : [request.File]
         )
             .OfType<string>()
-            .Where(name => IsMissingFile(request.Action, name))
+            .Where(name => IsMissingFile(request, name))
             .Distinct(StringComparer.Ordinal)
             .ToList();
         if (names.Count == 0)
@@ -79,10 +79,13 @@ internal sealed partial class LspTool
     }
 
     // a glob selects files without naming one
-    private bool IsMissingFile(LspAction action, string name) =>
+    private bool IsMissingFile(LspRequest request, string name) =>
         !string.IsNullOrWhiteSpace(name)
-        && (action is not LspAction.Diagnostics || name.AsSpan().IndexOfAny(_globCharacters) < 0)
+        && (!AcceptsGlob(request) || name.AsSpan().IndexOfAny(_globCharacters) < 0)
         && !File.Exists(Path.Combine(paths.Root, name));
+
+    private static bool AcceptsGlob(LspRequest request) =>
+        request is { Action: LspAction.Diagnostics } or { Action: LspAction.Symbols, Unused: true };
 
     private static ToolError AmbiguousFile(string name, List<string> matches) =>
         new(

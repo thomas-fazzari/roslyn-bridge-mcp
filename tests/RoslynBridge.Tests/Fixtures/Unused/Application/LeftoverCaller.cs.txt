@@ -1,0 +1,6 @@
+namespace Sample.Application;
+
+public static class LeftoverCaller
+{
+    public static int Run() => "text".Shout();
+}

@@ -283,36 +283,38 @@ internal sealed partial class LspQueries(
         return (related, accesses, items is { Count: > 0 });
     }
 
-    /// <summary>
-    /// Items without a declaration in a workspace file keep Roslyn's name.
-    /// </summary>
     private async Task<SymbolList> NameSymbolsAsync(
         SymbolList symbols,
         CancellationToken cancellationToken
+    ) => symbols with { Items = await NameSymbolsAsync(symbols.Items, cancellationToken) };
+
+    /// <summary>
+    /// Items without a declaration in a workspace file keep Roslyn's name.
+    /// </summary>
+    private async Task<List<SymbolItem>> NameSymbolsAsync(
+        IReadOnlyList<SymbolItem> items,
+        CancellationToken cancellationToken
     )
     {
-        var keys = symbols.Items.Select(DeclarationKey).ToList();
+        var keys = items.Select(DeclarationKey).ToList();
         var names = await resolver.NamesAsync(
             keys.Where(key => key.HasValue).Select(key => key!.Value),
             cancellationToken
         );
-        return symbols with
-        {
-            Items =
-            [
-                .. symbols.Items.Zip(
-                    keys,
-                    (item, key) =>
-                        key is { } found && names.TryGetValue(found, out var name)
-                            ? item with
-                            {
-                                Name = name,
-                                Detail = null,
-                            }
-                            : item
-                ),
-            ],
-        };
+        return
+        [
+            .. items.Zip(
+                keys,
+                (item, key) =>
+                    key is { } found && names.TryGetValue(found, out var name)
+                        ? item with
+                        {
+                            Name = name,
+                            Detail = null,
+                        }
+                        : item
+            ),
+        ];
     }
 
     private static int MatchRank(string name, string query)

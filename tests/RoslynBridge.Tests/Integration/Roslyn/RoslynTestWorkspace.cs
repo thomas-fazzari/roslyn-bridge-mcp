@@ -28,10 +28,12 @@ internal sealed class RoslynTestWorkspace : IAsyncDisposable
     public McpClient Client =>
         _client ?? throw new InvalidOperationException("The MCP client is not connected.");
 
+    /// <param name="overlay">A fixture directory whose files replace or add to the workspace fixture.</param>
     public static async Task<RoslynTestWorkspace> CreateAsync(
         CancellationToken cancellationToken,
         int requestTimeoutSeconds = 30,
-        string? settings = null
+        string? settings = null,
+        string? overlay = null
     )
     {
         var workspace = new RoslynTestWorkspace(
@@ -40,7 +42,12 @@ internal sealed class RoslynTestWorkspace : IAsyncDisposable
         );
         try
         {
-            workspace.CopyFixture();
+            workspace.CopyFixture("Workspace");
+            if (overlay is not null)
+            {
+                workspace.CopyFixture(overlay);
+            }
+
             if (settings is not null)
             {
                 await workspace.WriteFileAsync(ProjectSettings.FileName, settings);
@@ -155,14 +162,14 @@ internal sealed class RoslynTestWorkspace : IAsyncDisposable
         }
     }
 
-    private void CopyFixture()
+    private void CopyFixture(string fixture)
     {
-        var source = Path.Combine(AppContext.BaseDirectory, "Fixtures", "Workspace");
+        var source = Path.Combine(AppContext.BaseDirectory, "Fixtures", fixture);
         foreach (var file in Directory.EnumerateFiles(source, "*.txt", SearchOption.AllDirectories))
         {
             var destination = FilePath(Path.GetRelativePath(source, file)[..^4]);
             Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
-            File.Copy(file, destination);
+            File.Copy(file, destination, overwrite: true);
         }
     }
 
@@ -177,7 +184,7 @@ internal sealed class RoslynTestWorkspace : IAsyncDisposable
                 DiagnosticsTool.Name,
                 ["file", "severity", "limit", "offset"]
             ),
-            LspAction.Symbols => (SymbolsTool.Name, ["file", "query", "limit", "offset"]),
+            LspAction.Symbols => (SymbolsTool.Name, ["file", "query", "unused", "limit", "offset"]),
             _ when request.Action.IsNavigation => (
                 NavigateTool.Name,
                 new[]
@@ -242,6 +249,7 @@ internal sealed class RoslynTestWorkspace : IAsyncDisposable
             ["all"] = request.All ? true : null,
             ["context"] = request.Context ? true : null,
             ["inherited"] = request.Inherited ? true : null,
+            ["unused"] = request.Unused ? true : null,
             ["limit"] = request.Limit,
             ["offset"] = request.Offset,
             ["queries"] = request.Queries.Count > 0 ? QueryArguments(request.Queries) : null,

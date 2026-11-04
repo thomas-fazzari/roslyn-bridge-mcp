@@ -32,6 +32,9 @@ public sealed partial class RoslynMcpTests
     private const string ProgramFileName = "Program.cs";
     private const string TotalTestSymbol = "Counter.Total";
     private const string StepTestSymbol = "Counter.Step";
+    private const string UnusedFixture = "Unused";
+    private const string LeftoversTestFile = "Application/Leftovers.cs";
+    private const string LeftoverChecksTestFile = "Checks/LeftoverChecks.cs";
 
     [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
     public async Task ReportsFreshDiagnosticsAndNavigatesAcrossProjectsAsync()
@@ -845,6 +848,75 @@ public sealed partial class RoslynMcpTests
 
         beside.Should().BeError(ErrorCodes.SymbolNotFound);
         dotted.Should().BeError(ErrorCodes.InvalidRequest);
+    }
+
+    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    public async Task ListsUnusedCodeWithTheUnusedCodeThatUsesItAsync()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        // Checks references an xunit assembly, so it is a test project
+        await using var workspace = await RoslynTestWorkspace.CreateAsync(
+            cancellationToken,
+            overlay: UnusedFixture
+        );
+
+        var unused = await workspace.CallAsync(
+            new LspRequest
+            {
+                Action = LspAction.Symbols,
+                File = $"{{{LeftoversTestFile},{LeftoverChecksTestFile}}}",
+                Unused = true,
+            }
+        );
+
+        // Shout keeps its static class alive, Orphan stands for its member, and a test helper used by a test stays
+        unused
+            .Should()
+            .Be(
+                $"""
+                {LeftoversTestFile}:5:23 method Sample.Application.Leftovers.Entry()
+                {LeftoversTestFile}:7:23 method Sample.Application.Leftovers.Live()
+                  via Sample.Application.Leftovers.Entry()
+                {LeftoversTestFile}:11:23 method Sample.Application.Leftovers.Tested()
+                  tests only
+                {LeftoversTestFile}:17:21 class Sample.Application.Orphan
+                2 files checked, 4 unused symbols, 4 skipped as framework code
+                reflection or code outside the workspace may still use a public symbol
+                """
+            );
+    }
+
+    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    public async Task PagesUnusedCodeWithTheNamesOfUsersOnOtherPagesAsync()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var workspace = await RoslynTestWorkspace.CreateAsync(
+            cancellationToken,
+            overlay: UnusedFixture
+        );
+
+        var page = await workspace.CallAsync(
+            new LspRequest
+            {
+                Action = LspAction.Symbols,
+                File = Path.GetFileName(LeftoversTestFile),
+                Unused = true,
+                Limit = 1,
+                Offset = 1,
+            }
+        );
+
+        page.Should()
+            .Be(
+                $"""
+                resolved file: {LeftoversTestFile}
+                {LeftoversTestFile}:7:23 method Sample.Application.Leftovers.Live()
+                  via Sample.Application.Leftovers.Entry()
+                1 file checked, 4 unused symbols, 2 skipped as framework code
+                truncated: 4 unused symbols in total, next offset: 2. Raise limit or narrow the query.
+                reflection or code outside the workspace may still use a public symbol
+                """
+            );
     }
 
     [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]

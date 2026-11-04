@@ -112,6 +112,11 @@ internal static class LspResultsExtensions
             ];
     }
 
+    extension(LspSymbol symbol)
+    {
+        public SymbolItem ToSymbolItem(WorkspacePaths paths) => Symbol(symbol, paths);
+    }
+
     extension(LspSymbol[] symbols)
     {
         public SymbolList ToSymbolList(WorkspacePaths paths, int limit, int offset = 0)

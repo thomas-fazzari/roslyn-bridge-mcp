@@ -1,0 +1,20 @@
+namespace Sample.Application;
+
+public static class Leftovers
+{
+    public static int Entry() => Live();
+
+    public static int Live() => 1;
+
+    public static int Shout(this string text) => text.Length;
+
+    public static int Tested() => 4;
+
+    [System.ComponentModel.Description("found by a framework")]
+    public static int Described() => 2;
+}
+
+public sealed class Orphan
+{
+    public int Value() => 3;
+}

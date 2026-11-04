@@ -410,7 +410,8 @@ internal sealed partial class RoslynSession(
     private void ClearWorkspace()
     {
         Capabilities = null;
-        _extensionActive = false;
+        _documentHandlersActive = false;
+        _workspaceHandlersActive = false;
         _initialized = NewCompletionSource();
         _documents.Clear();
         _openedOrder.Clear();

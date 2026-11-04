@@ -10,6 +10,9 @@ internal sealed partial class RoslynSession
 {
     private const string ReferencesMessage = "RoslynBridge.Extension.ReferencesHandler";
     private const string CallersMessage = "RoslynBridge.Extension.CallersHandler";
+    private const string UnusedMessage = "RoslynBridge.Extension.UnusedHandler";
+    private const int RequestCancelledCode = -32800;
+    private const int ServerCancelledCode = -32802;
 
     private static readonly string _extensionPath = Path.Combine(
         AppContext.BaseDirectory,
@@ -17,9 +20,11 @@ internal sealed partial class RoslynSession
         "RoslynBridge.Extension.dll"
     );
 
-    private static readonly string[] _extensionMessages = [ReferencesMessage, CallersMessage];
+    private static readonly string[] _documentMessages = [ReferencesMessage, CallersMessage];
+    private static readonly string[] _workspaceMessages = [UnusedMessage];
 
-    private bool _extensionActive;
+    private bool _documentHandlersActive;
+    private bool _workspaceHandlersActive;
 
     /// <summary>
     /// Finds references inside Roslyn, without the batching delay of textDocument/references.
@@ -32,7 +37,7 @@ internal sealed partial class RoslynSession
     public Task<JsonNode?> FindReferencesAsync(
         JsonObject parameters,
         CancellationToken cancellationToken
-    ) => DispatchExtensionAsync(ReferencesMessage, parameters, cancellationToken);
+    ) => DispatchDocumentMessageAsync(ReferencesMessage, parameters, cancellationToken);
 
     /// <summary>
     /// Finds callers inside Roslyn, with the calls through base and interface members.
@@ -45,16 +50,64 @@ internal sealed partial class RoslynSession
         JsonObject parameters,
         CancellationToken cancellationToken
     ) =>
-        (await DispatchExtensionAsync(CallersMessage, parameters, cancellationToken))?["calls"]
-        as JsonArray;
+        (await DispatchDocumentMessageAsync(CallersMessage, parameters, cancellationToken))?[
+            "calls"
+        ] as JsonArray;
 
-    private async Task<JsonNode?> DispatchExtensionAsync(
+    /// <summary>
+    /// Finds the declarations of some files that no live code uses.
+    /// </summary>
+    /// <param name="files">Full paths of C# files.</param>
+    public async Task<Result<JsonNode>> FindUnusedAsync(
+        IReadOnlyCollection<string> files,
+        CancellationToken cancellationToken
+    )
+    {
+        if (!_workspaceHandlersActive)
+        {
+            return ToolError.InvalidLspData(
+                "Listing unused symbols needs the Roslyn extension, which is unavailable in this session."
+            );
+        }
+
+        // A failure of this long search says nothing about the other handlers, so they stay active
+        JsonNode? result;
+        try
+        {
+            result = await RequestAsync(
+                LspMethods.WorkspaceDispatchExtensionMessage,
+                new JsonObject
+                {
+                    ["messageName"] = UnusedMessage,
+                    ["message"] = new JsonObject
+                    {
+                        ["files"] = new JsonArray([
+                            .. files.Select(file => JsonValue.Create(file)),
+                        ]),
+                    }.ToJsonString(),
+                },
+                cancellationToken
+            );
+        }
+        catch (RemoteRpcException exception)
+        {
+            return UnusedFailure(exception.Message);
+        }
+
+        return
+            result?["response"]?.GetValue<string>() is { } response
+            && JsonNode.Parse(response) is { } found
+            ? found
+            : UnusedFailure(ExtensionError(result));
+    }
+
+    private async Task<JsonNode?> DispatchDocumentMessageAsync(
         string messageName,
         JsonObject parameters,
         CancellationToken cancellationToken
     )
     {
-        if (!_extensionActive)
+        if (!_documentHandlersActive)
         {
             return null;
         }
@@ -73,15 +126,21 @@ internal sealed partial class RoslynSession
                 cancellationToken
             );
         }
+        // Roslyn cancels a request when the workspace changes, which says nothing about the extension
+        catch (RemoteInvocationException exception)
+            when (exception.ErrorCode is RequestCancelledCode or ServerCancelledCode)
+        {
+            return null;
+        }
         catch (RemoteRpcException exception)
         {
-            DisableExtension(exception.Message);
+            DisableDocumentHandlers(exception.Message);
             return null;
         }
 
         if (result?["response"]?.GetValue<string>() is not { } response)
         {
-            DisableExtension(ExtensionError(result));
+            DisableDocumentHandlers(ExtensionError(result));
             return null;
         }
 
@@ -113,25 +172,44 @@ internal sealed partial class RoslynSession
             return;
         }
 
-        _extensionActive =
-            result?["documentMessageHandlers"] is JsonArray handlers
-            && _extensionMessages.All(message =>
-                handlers.Any(handler =>
-                    string.Equals(handler?.GetValue<string>(), message, StringComparison.Ordinal)
-                )
-            );
-        if (!_extensionActive)
+        var unregistered = Unregistered(result?["documentMessageHandlers"], _documentMessages);
+        _documentHandlersActive = unregistered.Count == 0;
+        if (!_documentHandlersActive)
         {
-            LogExtensionUnavailable(logger, ExtensionError(result));
+            LogExtensionUnavailable(logger, ActivationError(result, unregistered));
+        }
+
+        unregistered = Unregistered(result?["workspaceMessageHandlers"], _workspaceMessages);
+        _workspaceHandlersActive = unregistered.Count == 0;
+        if (_documentHandlersActive && !_workspaceHandlersActive)
+        {
+            LogUnusedUnavailable(logger, ActivationError(result, unregistered));
         }
     }
 
-    // One warning per session is enough, and a broken extension would fail every request the same way
-    private void DisableExtension(string reason)
+    // One warning per session is enough, and a broken handler would fail every request the same way
+    private void DisableDocumentHandlers(string reason)
     {
-        _extensionActive = false;
+        _documentHandlersActive = false;
         LogExtensionFailed(logger, reason);
     }
+
+    private static ToolError UnusedFailure(string reason) =>
+        ToolError.InvalidLspData($"The Roslyn extension failed to list unused symbols: {reason}");
+
+    private static List<string> Unregistered(JsonNode? handlers, string[] messages) =>
+        [
+            .. messages.Where(message =>
+                handlers is not JsonArray registered
+                || !registered.Any(handler =>
+                    string.Equals(handler?.GetValue<string>(), message, StringComparison.Ordinal)
+                )
+            ),
+        ];
+
+    private static string ActivationError(JsonNode? result, List<string> unregistered) =>
+        result?["extensionException"]?["Message"]?.GetValue<string>()
+        ?? $"Roslyn registered no handler for {string.Join(", ", unregistered)}.";
 
     private static string ExtensionError(JsonNode? result) =>
         result?["extensionException"]?["Message"]?.GetValue<string>()
@@ -143,9 +221,15 @@ internal sealed partial class RoslynSession
 
     [LoggerMessage(
         Level = LogLevel.Warning,
-        Message = "The Roslyn extension is unavailable, references and callers will use the LSP requests: {Reason}"
+        Message = "The Roslyn extension is unavailable, references and callers will use the LSP requests and unused symbols cannot be listed: {Reason}"
     )]
     private static partial void LogExtensionUnavailable(ILogger logger, string reason);
+
+    [LoggerMessage(
+        Level = LogLevel.Warning,
+        Message = "The Roslyn extension cannot list unused symbols: {Reason}"
+    )]
+    private static partial void LogUnusedUnavailable(ILogger logger, string reason);
 
     [LoggerMessage(
         Level = LogLevel.Warning,

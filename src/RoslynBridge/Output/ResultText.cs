@@ -39,6 +39,9 @@ internal static partial class ResultText
             case SymbolList symbols:
                 AppendSymbols(text, symbols);
                 break;
+            case UnusedSymbols unused:
+                AppendUnused(text, unused);
+                break;
             case DiagnosticReport report:
                 AppendDiagnostics(text, report);
                 break;
@@ -307,6 +310,62 @@ internal static partial class ResultText
                 CultureInfo.InvariantCulture,
                 $"{symbols.Accesses} property, field or constant accesses omitted\n"
             );
+        }
+    }
+
+    private static void AppendUnused(StringBuilder text, UnusedSymbols unused)
+    {
+        foreach (var symbol in unused.Items)
+        {
+            AppendSymbol(text, symbol.Symbol, indent: string.Empty);
+            foreach (var user in symbol.Via)
+            {
+                text.Append(Indent).Append("via ").Append(user).Append('\n');
+            }
+
+            if (symbol.TestsOnly)
+            {
+                text.Append(Indent).Append("tests only\n");
+            }
+        }
+
+        text.Append(Count(unused.FilesChecked, "file", "files"))
+            .Append(" checked, ")
+            .Append(
+                unused.Total == 0
+                    ? "no unused symbols"
+                    : Count(unused.Total, "unused symbol", "unused symbols")
+            );
+        if (unused.Skipped > 0)
+        {
+            text.Append(
+                CultureInfo.InvariantCulture,
+                $", {unused.Skipped} skipped as framework code"
+            );
+        }
+
+        text.Append('\n');
+        if (unused.Total > 0)
+        {
+            AppendPageEnd(
+                text,
+                unused.Total,
+                unused.Items.Count == 0,
+                unused.NextOffset,
+                "unused symbols"
+            );
+        }
+
+        if (unused.Incomplete.Count > 0)
+        {
+            text.Append("incomplete: not in a project, not checked: ")
+                .AppendJoin(' ', unused.Incomplete)
+                .Append('\n');
+        }
+
+        if (unused.Total > 0)
+        {
+            text.Append("reflection or code outside the workspace may still use a public symbol\n");
         }
     }
 

@@ -61,6 +61,8 @@ internal static class LspMethods
     public const string ServerActivateExtension = "server/_vs_activateExtension";
     public const string TextDocumentDispatchExtensionMessage =
         "textDocument/_vs_dispatchExtensionMessage";
+    public const string WorkspaceDispatchExtensionMessage =
+        "workspace/_vs_dispatchExtensionMessage";
     public const string Shutdown = "shutdown";
     public const string Exit = "exit";
     public const string Progress = "$/progress";

@@ -23,7 +23,7 @@ The [agent reference](/roslyn-bridge-mcp/llms.txt) gives this reference in plain
 | `diagnostics`   | `file` path or glob, `severity`, `ids`, `summary`                                                                                                                                                                                  | Errors, warnings and suggestions                                              |
 | `navigate`      | `action` (`definition`, `type_definition`, `implementation`, `references`, `reads`, `writes`, `callers`, `callees`, `supertypes`, `subtypes`, `hover`, `source`, `members`, `impact`), and `symbol` or `file`, `line`, `character` | Locations, related symbols, hover text, source or members                     |
 | `bulk_navigate` | `queries` (1 to 16 items, each with the `action` and the `symbol` or `file`, `line`, `character` of `navigate`), `context`, `limit`, `offset`                                                                                      | One section per query                                                         |
-| `symbols`       | `file` or `query`                                                                                                                                                                                                                  | Document or workspace symbols                                                 |
+| `symbols`       | `file` or `query`, or `unused` with an optional `file` path or glob                                                                                                                                                                | Document, workspace or unused symbols                                         |
 | `edit`          | `action` (`rename`, `rename_file`, `code_actions`) and its inputs                                                                                                                                                                  | Edit previews, then applied changes                                           |
 | `lsp`           | `action` (`status`, `capabilities`, `reload`, `request`), `method`, `parameters`                                                                                                                                                   | Session state, a fresh session or a raw Language Server Protocol (LSP) result |
 
@@ -31,7 +31,12 @@ The [agent reference](/roslyn-bridge-mcp/llms.txt) gives this reference in plain
 Each tool takes flat arguments:
 
 ```json
-{ "action": "definition", "file": "src/Calculator.cs", "line": 12, "character": 9 }
+{
+  "action": "definition",
+  "file": "src/Calculator.cs",
+  "line": 12,
+  "character": 9
+}
 ```
 
 An unknown or missing argument returns the error `invalid_request`. For an unknown argument, the message lists the valid names.
@@ -62,7 +67,7 @@ For `rename`, a `newName` that Roslyn rejects, such as a name with a dot, return
 When no file has the given path, a `file` may be a file name or a path suffix, such as `Calculator.cs` or `Math/Calculator.cs`.
 It must match whole path segments and name exactly one workspace file. The response then starts with a `resolved file: path` line.
 When several files match, the error `ambiguous_file` lists up to 20 of them. In `bulk_navigate`, it fills the section of each query that names the file, and the other queries run.
-This applies to `file` of `navigate`, `bulk_navigate`, `symbols` and `edit`, and to `file` of `diagnostics` without glob characters. It does not apply to `newName`.
+This applies to `file` of `navigate`, `bulk_navigate`, `symbols` and `edit`, and to `file` of `diagnostics` and of `symbols` with `unused` when it has no glob characters. It does not apply to `newName`.
 
 ## Results
 
@@ -168,6 +173,47 @@ A line starting with `incomplete:` lists files not attached to a project, for ex
 These files get no semantic diagnostics. A newly created file gets a few seconds to join its project first.
 After a `truncated:` line, omitted files are not necessarily clean.
 `limit` defaults to 50 and accepts 1 to 250. Narrow the query if results are truncated or too large.
+
+## Unused code
+
+`symbols` with `unused` lists the types and members of `file` that nothing uses, or that only unused code or tests use. `file` takes a path or a glob, as for diagnostics. Omit it to check every `.cs` file.
+References count from the whole workspace. `unused` with `query` returns the error `invalid_request`, and so does a path without glob characters that is not a C# file of the workspace.
+
+```text
+src/Report.cs:12:17 method MyApp.Report.Format()
+src/Report.cs:30:24 method MyApp.Report.Pad(string)
+  via MyApp.Report.Format()
+src/Report.cs:41:24 method MyApp.Report.Trace()
+  tests only
+3 files checked, 3 unused symbols, 2 skipped as framework code
+reflection or code outside the workspace may still use a public symbol
+```
+
+| Line           | Meaning                                                                                                                       |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Symbol line    | The declaration, its kind and a name that `navigate` and `edit` accept, in file and position order.                           |
+| `via NAME`     | NAME is unused code that uses the symbol. Remove them together. One line per user, in file and position order.                |
+| `tests only`   | Only test projects use the symbol. It follows the `via` lines.                                                                |
+| Totals         | Files checked and unused symbols. The `skipped as framework code` count appears when it is above zero.                        |
+| `truncated:`   | Paging, as for other results. `limit` and `offset` count symbol lines. Each page runs the whole check again.                  |
+| `incomplete:`  | Selected files that no project compiles, such as a new file Roslyn has not attached yet. They were not checked.               |
+| Note           | Reflection or code outside the workspace may still use a public symbol. Absent when no symbol is unused.                      |
+
+A test project references an xUnit, NUnit, MSTest or TUnit assembly. A use from a test project counts for code in a test project, so a test helper that a test uses stays live.
+A use inside the symbol's own declaration, in a documentation comment or in a `using` directive does not count.
+An unused type stands for its members, which get no line of their own. A used member keeps its types, as an extension method keeps its static class.
+A partial type is checked only when every part outside generated code is selected.
+
+The check leaves out overrides, interface implementations, constructors, operators, entry points, enum members, locals, record positional properties and generated files, by name or by an `<auto-generated>` header.
+It counts as framework code, and leaves out:
+
+- declarations with an attribute outside a short list that no framework reads, such as `Obsolete` or `DebuggerDisplay`
+- concrete classes that derive from or implement a type of a library outside the .NET base class library, as hosted services, controllers and message handlers do, and the public members of these classes and of attributed types
+- public properties with a public setter, which serializers and object mappers write
+- the types that hold an attributed member or an entry point
+
+A selection of more than 1000 files returns `invalid_request`. The check searches the references of every declaration, so narrow `file` on a large workspace if the call times out.
+It needs the Roslyn extension of the bridge. Without it, or when it fails, the call returns the error `lsp_error`.
 
 ## Preview and apply
 
