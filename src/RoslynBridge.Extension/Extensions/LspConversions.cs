@@ -8,6 +8,15 @@ namespace RoslynBridge.Extension;
 
 internal static class LspConversions
 {
+    private static readonly SymbolDisplayFormat _memberFormat = new(
+        typeQualificationStyle: SymbolDisplayTypeQualificationStyle.NameAndContainingTypes,
+        genericsOptions: SymbolDisplayGenericsOptions.IncludeTypeParameters,
+        memberOptions: SymbolDisplayMemberOptions.IncludeContainingType
+            | SymbolDisplayMemberOptions.IncludeParameters,
+        parameterOptions: SymbolDisplayParameterOptions.IncludeType,
+        miscellaneousOptions: SymbolDisplayMiscellaneousOptions.UseSpecialTypes
+    );
+
     extension(Document document)
     {
         public async Task<int> GetPositionAsync(
@@ -39,6 +48,8 @@ internal static class LspConversions
 
     extension(ISymbol symbol)
     {
+        public string MemberName => symbol.ToDisplayString(_memberFormat);
+
         /// <summary>
         /// The LSP SymbolKind of a caller.
         /// </summary>

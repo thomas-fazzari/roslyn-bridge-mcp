@@ -21,12 +21,15 @@ internal sealed class SymbolsTool(LspTool lsp)
         OpenWorld = false
     )]
     [Description(
-        "List the symbols declared in a C# file, or search workspace symbols by name. Positions are one-based."
+        "List the symbols declared in a C# file, search workspace symbols by name, or list the types and members that no live code uses. Positions are one-based."
     )]
     public Task<CallToolResult> SymbolsAsync(
-        [Description("Workspace-relative file path. Omit it to search the workspace.")]
+        [Description(
+            "Workspace-relative file path. Omit it to search the workspace. With unused, a path or glob, or omit it for every C# file."
+        )]
             string? file = null,
         [Description("Symbol name to search when file is omitted.")] string? query = null,
+        [Description(ToolDescriptions.Unused)] bool unused = false,
         [Description(ToolDescriptions.Limit)] int limit = LspRequest.DefaultResultLimit,
         [Description(ToolDescriptions.Offset)] int offset = 0,
         CancellationToken cancellationToken = default
@@ -39,6 +42,7 @@ internal sealed class SymbolsTool(LspTool lsp)
                 Action = LspAction.Symbols,
                 File = file,
                 Query = query,
+                Unused = unused,
             },
             cancellationToken
         );

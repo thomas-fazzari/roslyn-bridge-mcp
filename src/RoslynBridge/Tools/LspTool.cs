@@ -333,6 +333,10 @@ internal sealed partial class LspTool(
             LspAction.Diagnostics => (
                 await queries.DiagnosticsAsync(request, cancellationToken)
             ).AsToolResult(),
+            LspAction.Symbols when request.Unused => await queries.UnusedAsync(
+                request,
+                cancellationToken
+            ),
             LspAction.Symbols => await queries.SymbolsAsync(request, cancellationToken),
             LspAction.Bulk => await queries.BulkAsync(request, fileErrors, cancellationToken),
             _ when request.Action.IsNavigation => await queries.NavigationAsync(

@@ -20,6 +20,8 @@ internal static class ToolDescriptions
         "Show the trimmed source line of each result position. Uses more tokens.";
     public const string Inherited =
         "For members, also list the members that base classes in the workspace pass on, after the type's own.";
+    public const string Unused =
+        "List the types and members of file that nothing uses, or that only unused code or tests use. Slow on many files.";
     public const string Limit = "Maximum returned results, from 1 to 250. Truncation is explicit.";
     public const string Offset = "Results to skip, for paging.";
 }

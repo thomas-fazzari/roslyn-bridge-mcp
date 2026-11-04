@@ -65,6 +65,8 @@ The extension matches that handler's results by calling internal Roslyn members 
 
 The extension also answers `callers`. The `callHierarchy/incomingCalls` handler keeps only direct calls, so it misses every call made through an interface or base member. The extension lists those too, and names the member they go through. Without the extension, `callers` falls back to that handler and lists direct calls only.
 
+The extension alone answers `symbols` with `unused`, through a workspace message that takes the selected files. LSP has no request for unused code, and a reference search over LSP would cost one round trip per declaration. The handler searches the references of every candidate declaration in parallel, then marks as dead the greatest set of candidates that only dead code or test projects use, so code that only uses itself stays dead. A failed search keeps its candidate, since deleting live code costs more than keeping dead code. A failure of the whole message returns `lsp_error` and leaves the reference and caller handlers active.
+
 `RoslynServerVersion` in `Directory.Packages.props` sets the server that `setup` installs, that the CI tests against and that the extension compiles against. After changing it, run `mise run test-integration` on every platform the CI covers, since Roslyn changes its path handling between versions.
 
 ## Common changes

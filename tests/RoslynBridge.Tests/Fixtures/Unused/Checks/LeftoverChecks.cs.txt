@@ -1,0 +1,9 @@
+namespace Sample.Checks;
+
+public static class LeftoverChecks
+{
+    [System.ComponentModel.Description("found by a test runner")]
+    public static int Check() => Sample.Application.Leftovers.Tested() + Helper();
+
+    private static int Helper() => 5;
+}

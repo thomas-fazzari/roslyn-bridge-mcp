@@ -35,6 +35,28 @@ internal sealed record IncomingCall(
     [property: JsonPropertyName("through")] string? Through
 );
 
+/// <param name="Files">Full paths of the C# files whose declarations to check.</param>
+internal sealed record UnusedRequest(
+    [property: JsonPropertyName("files")] IReadOnlyList<string> Files
+);
+
+/// <param name="Symbols">In file and position order.</param>
+/// <param name="Skipped">Declarations left out because a framework may reach them by reflection.</param>
+/// <param name="Unmatched">Requested files that no project compiles.</param>
+internal sealed record UnusedResponse(
+    [property: JsonPropertyName("symbols")] IReadOnlyList<UnusedSymbol> Symbols,
+    [property: JsonPropertyName("skipped")] int Skipped,
+    [property: JsonPropertyName("unmatched")] IReadOnlyList<string> Unmatched
+);
+
+/// <param name="Via">Indexes of the unused symbols that reference this one, in ascending order.</param>
+/// <param name="TestsOnly">True when test projects reference it.</param>
+internal sealed record UnusedSymbol(
+    [property: JsonPropertyName("symbol")] CallItem Symbol,
+    [property: JsonPropertyName("via")] IReadOnlyList<int> Via,
+    [property: JsonPropertyName("testsOnly")] bool TestsOnly
+);
+
 /// <param name="Kind">An LSP SymbolKind.</param>
 internal sealed record CallItem(
     [property: JsonPropertyName("name")] string Name,

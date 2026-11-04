@@ -34,6 +34,21 @@ internal sealed record SymbolList(
 
 internal sealed record HoverText(string Text) : ToolResult;
 
+/// <param name="Via">The names of the unused symbols that reference it.</param>
+/// <param name="TestsOnly">True when test projects reference it.</param>
+internal sealed record UnusedSymbol(SymbolItem Symbol, IReadOnlyList<string> Via, bool TestsOnly);
+
+/// <param name="Skipped">Declarations left out because a framework may reach them by reflection.</param>
+/// <param name="Incomplete">Selected files that no project compiles, so they were not checked.</param>
+internal sealed record UnusedSymbols(
+    IReadOnlyList<UnusedSymbol> Items,
+    int Total,
+    int? NextOffset,
+    int FilesChecked,
+    int Skipped,
+    IReadOnlyList<string> Incomplete
+) : ToolResult;
+
 internal sealed record Diagnostic(
     SourcePosition Start,
     DiagnosticSeverity Severity,

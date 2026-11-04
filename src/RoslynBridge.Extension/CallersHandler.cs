@@ -19,16 +19,6 @@ internal sealed class CallersHandler
 {
     private static readonly CallersResponse _notFound = new(Found: false, []);
 
-    // The form the symbol argument accepts, such as IGreeter.Greet(string)
-    private static readonly SymbolDisplayFormat _memberFormat = new(
-        typeQualificationStyle: SymbolDisplayTypeQualificationStyle.NameAndContainingTypes,
-        genericsOptions: SymbolDisplayGenericsOptions.IncludeTypeParameters,
-        memberOptions: SymbolDisplayMemberOptions.IncludeContainingType
-            | SymbolDisplayMemberOptions.IncludeParameters,
-        parameterOptions: SymbolDisplayParameterOptions.IncludeType,
-        miscellaneousOptions: SymbolDisplayMiscellaneousOptions.UseSpecialTypes
-    );
-
     public async Task<CallersResponse> ExecuteAsync(
         PositionRequest message,
         ExtensionDocumentMessageContext context,
@@ -79,7 +69,7 @@ internal sealed class CallersHandler
                 new IncomingCall(
                     item,
                     [.. sites.Select(site => site.ToLspRange())],
-                    caller.IsDirect ? null : caller.CalledSymbol.ToDisplayString(_memberFormat)
+                    caller.IsDirect ? null : caller.CalledSymbol.MemberName
                 )
             );
         }
@@ -116,7 +106,7 @@ internal sealed class CallersHandler
             && declaration.Span.Contains(location.SourceSpan)
         );
         return new CallItem(
-            declared.ToDisplayString(_memberFormat),
+            declared.MemberName,
             declared.LspKind,
             path.ToLspUri(),
             declaration.GetLocation().ToLspRange(),
