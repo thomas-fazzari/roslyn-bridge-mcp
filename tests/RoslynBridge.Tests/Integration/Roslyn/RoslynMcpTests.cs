@@ -781,6 +781,73 @@ public sealed partial class RoslynMcpTests
     }
 
     [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    public async Task ReportsAPositionBesideANameInsteadOfAnEmptyResultAsync()
+    {
+        // In `    string Greet(string name);`, 25 is on name and 30 on the semicolon
+        const int greetLine = 5;
+        const int nameCharacter = 25;
+        const int semicolonCharacter = 30;
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var workspace = await RoslynTestWorkspace.CreateAsync(cancellationToken);
+
+        var beside = await workspace.CallRawAsync(
+            new LspRequest
+            {
+                Action = LspAction.References,
+                File = ContractTestFile,
+                Line = greetLine,
+                Character = semicolonCharacter,
+            }
+        );
+        var unused = await workspace.CallRawAsync(
+            new LspRequest
+            {
+                Action = LspAction.References,
+                File = ContractTestFile,
+                Line = greetLine,
+                Character = nameCharacter,
+            }
+        );
+
+        beside.Should().BeError(ErrorCodes.SymbolNotFound);
+        unused.Should().BeSuccessful();
+    }
+
+    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    public async Task TellsAMissedSymbolFromARejectedNameOnRenameAsync()
+    {
+        // In `namespace Sample.Contracts;`, 18 is on Contracts and 28 past the semicolon
+        const int namespaceCharacter = 18;
+        const int lineEndCharacter = 28;
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var workspace = await RoslynTestWorkspace.CreateAsync(cancellationToken);
+
+        var beside = await workspace.CallRawAsync(
+            new LspRequest
+            {
+                Action = LspAction.Rename,
+                File = ContractTestFile,
+                Line = 1,
+                Character = lineEndCharacter,
+                NewName = "Other",
+            }
+        );
+        var dotted = await workspace.CallRawAsync(
+            new LspRequest
+            {
+                Action = LspAction.Rename,
+                File = ContractTestFile,
+                Line = 1,
+                Character = namespaceCharacter,
+                NewName = "Other.Contracts",
+            }
+        );
+
+        beside.Should().BeError(ErrorCodes.SymbolNotFound);
+        dotted.Should().BeError(ErrorCodes.InvalidRequest);
+    }
+
+    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
     public async Task ResolvesExtensionBlockMembersByTheirClassAsync()
     {
         const string extensionsFile = "Application/GreetingExtensions.cs";

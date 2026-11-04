@@ -55,6 +55,10 @@ An unknown name returns the error `symbol_not_found`. When symbols with a simila
 Paths are relative to the workspace. Input coordinates start at 1, with characters counted as UTF-16 code units.
 Only raw requests keep zero-based LSP positions.
 
+A position that touches no symbol, such as the space or punctuation beside a name, returns the error `symbol_not_found` instead of an empty result.
+When a symbol lies near it on the line, the message names that symbol and its position. This applies to `navigate`, `bulk_navigate` and the `rename` of `edit`.
+For `rename`, a `newName` that Roslyn rejects, such as a name with a dot, returns the error `invalid_request`.
+
 When no file has the given path, a `file` may be a file name or a path suffix, such as `Calculator.cs` or `Math/Calculator.cs`.
 It must match whole path segments and name exactly one workspace file. The response then starts with a `resolved file: path` line.
 When several files match, the error `ambiguous_file` lists up to 20 of them. In `bulk_navigate`, it fills the section of each query that names the file, and the other queries run.

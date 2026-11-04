@@ -188,7 +188,7 @@ internal sealed partial class LspChanges(
             is not JsonObject edit
         )
         {
-            return ToolError.InvalidLspData("Roslyn cannot rename the selected symbol.");
+            return await RenameRefusalAsync(parameters, request.NewName, cancellationToken);
         }
 
         return await CompleteAsync(
@@ -196,6 +196,37 @@ internal sealed partial class LspChanges(
             request.Apply,
             cancellationToken
         );
+    }
+
+    // Roslyn returns no edit both for a position without a symbol and for a name it rejects
+    private async Task<ToolError> RenameRefusalAsync(
+        JsonObject parameters,
+        string newName,
+        CancellationToken cancellationToken
+    )
+    {
+        var position = new JsonObject
+        {
+            ["textDocument"] = parameters["textDocument"]!.DeepClone(),
+            ["position"] = parameters["position"]!.DeepClone(),
+        };
+        if (
+            await session.RequestAsync(
+                LspMethods.TextDocumentPrepareRename,
+                position,
+                cancellationToken
+            ) is JsonObject
+        )
+        {
+            return ToolError.InvalidRequest(
+                $"Roslyn rejects '{newName}' as the new name. Pass one valid C# identifier, without dots."
+            );
+        }
+
+        return await queries.MissingSymbolAsync(position, cancellationToken)
+            ?? ToolError.InvalidRequest(
+                "Roslyn cannot rename this symbol. It may be declared outside the workspace."
+            );
     }
 
     private async Task<Result<ToolResult>> RenameFileAsync(

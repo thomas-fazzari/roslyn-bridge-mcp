@@ -165,6 +165,11 @@ By position (file is workspace-relative, line and character are one-based,
 character counts UTF-16 code units):
 navigate {"action":"definition","file":"src/Calculator.cs","line":12,"character":9}
 
+A position that touches no symbol, such as the space or punctuation beside a
+name, returns symbol_not_found instead of an empty result. When a symbol lies
+near it on the line, the message names that symbol and its position. Send that
+position back.
+
 Replace action with:
 type_definition - Find the symbol's type definition.
 implementation - Find implementations of an interface or abstract member.
@@ -343,6 +348,10 @@ edit {"action":"rename","proposalId":"ID_FROM_PREVIEW","apply":true}
 
 When the user already authorized the change, apply in one call without a preview:
 edit {"action":"rename","symbol":"Calculator.Add","newName":"Compute","apply":true}
+
+A position without a symbol returns symbol_not_found, as for navigate.
+A newName that Roslyn rejects, such as a name with a dot, returns
+invalid_request.
 
 RENAME A FILE
 -------------
