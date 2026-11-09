@@ -3,10 +3,10 @@
   "private": true,
   "type": "module",
   "devDependencies": {
-    "@astrojs/markdown-satteri": "0.4.6",
-    "@astrojs/starlight": "0.42.7",
+    "@astrojs/markdown-satteri": "0.4.7",
+    "@astrojs/starlight": "0.42.9",
     "@fontsource/onest": "5.3.1",
-    "astro": "7.4.4",
+    "astro": "7.4.7",
     "starlight-theme-black": "0.7.1"
   },
   "packageManager": "bun@1.4.4"
