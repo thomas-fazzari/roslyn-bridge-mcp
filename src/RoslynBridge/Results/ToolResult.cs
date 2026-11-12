@@ -3,6 +3,6 @@
 
 namespace RoslynBridge.Results;
 
-internal abstract record ToolResult;
+internal closed record ToolResult;
 
 internal sealed record JsonResult(JsonNode? Value) : ToolResult;
