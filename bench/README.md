@@ -1,8 +1,8 @@
----
-title: "Benchmarks"
----
+# Benchmarks
 
 The benchmarks in `bench/RoslynBridge.Benchmarks` measure tool calls end to end over MCP with [BenchmarkDotNet](https://benchmarkdotnet.org). They compare two builds of the bridge on real repositories, to prove a gain or catch a regression. They run on a local machine only, because shared CI runners are too noisy to detect a 10% change.
+
+The results of each release that changed performance are in [results](results).
 
 ## Running
 
@@ -17,8 +17,6 @@ BENCH_BASELINE=v2.1.0 mise run bench:run -- --filter '*Navigation*'
 ```
 
 A full run takes a while. Filter on the area a change touches to get a faster answer.
-
-Before a run, close the apps that compete for the CPU, such as an IDE with its own Roslyn server, a browser or a virtual machine. Run nothing else on the machine until it ends. Never run it with `sudo`, because the files it writes would then belong to root and fail the next run.
 
 ## Methodology
 
@@ -45,7 +43,7 @@ BenchmarkDotNet writes a Markdown table and a JSON file per class to `artifacts/
 
 Trust the `MannWhitney(10%)` verdict over the ratio. Two identical builds can differ by more than 10% in median, and the test then still says `Same`. A ratio far from 1 next to `Same` is noise.
 
-A benchmark shows `NA` when a call failed. The BenchmarkDotNet log in `artifacts/bench/results` holds the exception. Each bridge also writes its log to `artifacts/bench/logs`, in a file named after the benchmark and the job.
+A benchmark shows `NA` when a call failed. The exception is in the BenchmarkDotNet log, in `artifacts/bench/results`. Each bridge also writes its log to `artifacts/bench/logs`, in a file named after the benchmark and the job.
 
 ## Release results
 
@@ -55,16 +53,4 @@ When a published release changes performance, run its benchmarks against the pre
 mise run bench:release v2.2.0
 ```
 
-The task builds both tags, runs every benchmark and writes `bench/results/v2.2.0`. Its `README.md` names the baseline, the Roslyn server version and the repository tags, followed by the joined table and the machine description. `results.json` holds the raw measurements. Set `BENCH_BASELINE` to compare against another tag. Commit the folder in its own pull request. The release never waits for it.
-
-## Adding a benchmark
-
-Benchmarks are grouped by repository, then by area. The namespace names the repository and the class names the area, such as `RoslynBridge.Benchmarks.Jellyfin.NavigationBenchmarks`. Committed results identify a benchmark by this full name, so never rename one after its results are committed.
-
-Put each input symbol in the repository's `Symbols` class, with a comment that gives the rule it follows and its size. Most rules pick the heaviest case of a central type, such as its most referenced member. Use `Session.CallAsync` for a call that must succeed and `Session.FailAsync` for an error path, so a broken call fails the benchmark instead of timing an error.
-
-## Adding a repository
-
-A new repository must add a dimension the others lack, such as a small solution, a very large one or source generators. It must build with the .NET SDK the bridge uses and restore without private feeds.
-
-Add a line to `bench/fixtures.tsv` with its name, git URL, tag and solution path. Pin a release tag so every run measures the same code. Then add a folder with a base class that names the repository, and the benchmark classes of each area.
+The task builds both tags, runs every benchmark and writes `bench/results/v2.2.0`. Its `README.md` names the baseline, the Roslyn server version and the repository tags, followed by the joined table and the machine description. The raw measurements are in `results.json`. Set `BENCH_BASELINE` to compare against another tag. Commit the folder in its own pull request. The release never waits for it.
