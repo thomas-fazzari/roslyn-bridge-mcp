@@ -24,54 +24,25 @@ internal static partial class ResultText
     };
 
     /// <param name="budget">Characters a preview or receipt may use. They drop trailing files to fit.</param>
-    public static string Render(ToolResult? result, int budget)
-    {
-        var text = new StringBuilder();
-        switch (result)
+    public static string Render(ToolResult result, int budget) =>
+        result switch
         {
-            case HoverText hover:
-                return hover.Text;
-            case JsonResult json:
-                return Json(json.Value);
-            case Locations locations:
-                AppendLocations(text, locations);
-                break;
-            case SymbolList symbols:
-                AppendSymbols(text, symbols);
-                break;
-            case UnusedSymbols unused:
-                AppendUnused(text, unused);
-                break;
-            case DiagnosticReport report:
-                AppendDiagnostics(text, report);
-                break;
-            case SourceParts source:
-                AppendSource(text, source);
-                break;
-            case TypeMembers members:
-                AppendMembers(text, members);
-                break;
-            case SectionsReport report:
-                AppendSections(text, report, budget, heading: "##");
-                break;
-            case SessionStatus status:
-                AppendStatus(text, status);
-                break;
-            case ActionListing listing:
-                AppendActions(text, listing);
-                break;
-            case ProposalPreview preview:
-                AppendPreview(text, preview, budget);
-                break;
-            case EditReceipt receipt:
-                AppendReceipt(text, receipt, budget);
-                break;
-            default:
-                throw new InvalidOperationException($"No renderer for {result?.GetType().Name}.");
-        }
-
-        return Finish(text);
-    }
+            HoverText hover => hover.Text,
+            JsonResult json => Json(json.Value),
+            Locations locations => Rendered(text => AppendLocations(text, locations)),
+            SymbolList symbols => Rendered(text => AppendSymbols(text, symbols)),
+            UnusedSymbols unused => Rendered(text => AppendUnused(text, unused)),
+            DiagnosticReport report => Rendered(text => AppendDiagnostics(text, report)),
+            SourceParts source => Rendered(text => AppendSource(text, source)),
+            TypeMembers members => Rendered(text => AppendMembers(text, members)),
+            SectionsReport report => Rendered(text =>
+                AppendSections(text, report, budget, heading: "##")
+            ),
+            SessionStatus status => Rendered(text => AppendStatus(text, status)),
+            ActionListing listing => Rendered(text => AppendActions(text, listing)),
+            ProposalPreview preview => Rendered(text => AppendPreview(text, preview, budget)),
+            EditReceipt receipt => Rendered(text => AppendReceipt(text, receipt, budget)),
+        };
 
     public static string ResolvedFiles(IEnumerable<string> files) =>
         string.Concat(files.Select(file => $"{ResolvedFilePrefix}{file}\n"));
@@ -645,6 +616,13 @@ internal static partial class ResultText
         string.Create(CultureInfo.InvariantCulture, $"{count} {(count == 1 ? singular : plural)}");
 
     private static string OneLine(string text) => text.ReplaceLineEndings(" ").Trim();
+
+    private static string Rendered(Action<StringBuilder> append)
+    {
+        var text = new StringBuilder();
+        append(text);
+        return Finish(text);
+    }
 
     private static string Finish(StringBuilder text) => text.ToString().TrimEnd('\n');
 }

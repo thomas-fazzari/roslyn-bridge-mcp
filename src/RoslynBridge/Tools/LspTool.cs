@@ -145,7 +145,7 @@ internal sealed partial class LspTool(
     public void Dispose() => _gate.Dispose();
 
     internal static CallToolResult Response(
-        ToolResult? result,
+        ToolResult result,
         IReadOnlyList<string>? resolvedFiles = null
     )
     {
