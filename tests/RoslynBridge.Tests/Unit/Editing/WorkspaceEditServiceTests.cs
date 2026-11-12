@@ -13,6 +13,10 @@ public sealed class WorkspaceEditServiceTests : IDisposable
 {
     private readonly string _root = Directory.CreateTempSubdirectory("roslyn-edit-tests-").FullName;
 
+    private readonly string _outside = Directory
+        .CreateTempSubdirectory("roslyn-edit-outside-")
+        .FullName;
+
     [Theory]
     [InlineData("\u2028")]
     [InlineData("\u2029")]
@@ -342,6 +346,27 @@ public sealed class WorkspaceEditServiceTests : IDisposable
     }
 
     [Theory]
+    [InlineData(FileOperation.Create)]
+    [InlineData(FileOperation.Rename)]
+    public async Task EditTargetMustBeInsideTheWorkspaceAsync(string kind)
+    {
+        var source = await WriteFileAsync(_root, "Source.cs", "class Source {}");
+        var target = Path.Combine(_outside, "Target.cs");
+        var service = CreateService();
+        var snapshot = Snapshot(_root);
+        var operation = string.Equals(kind, FileOperation.Create, StringComparison.Ordinal)
+            ? CreateFile(target)
+            : RenameFile(source, target);
+
+        await AssertErrorAsync(Apply, ErrorCodes.InvalidRequest);
+        File.Exists(target).Should().BeFalse();
+        await AssertFileTextAsync(source, "class Source {}");
+        return;
+
+        Task Apply() => service.ApplyAsync(DocumentChanges(operation), snapshot, TestCt);
+    }
+
+    [Theory]
     [InlineData("https://example.com{0}")]
     [InlineData("file://server{0}")]
     [InlineData("file://{0}?query")]
@@ -388,7 +413,11 @@ public sealed class WorkspaceEditServiceTests : IDisposable
         Task Apply() => service.ApplyAsync(DocumentChanges(operation), snapshot, TestCt);
     }
 
-    public void Dispose() => Directory.Delete(_root, recursive: true);
+    public void Dispose()
+    {
+        Directory.Delete(_root, recursive: true);
+        Directory.Delete(_outside, recursive: true);
+    }
 
     private WorkspaceEditService CreateService() => new(new WorkspacePaths(_root));
 

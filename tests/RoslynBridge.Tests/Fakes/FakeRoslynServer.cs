@@ -46,7 +46,7 @@ internal sealed class FakeRoslynServer : IRoslynServer
     public Task ProjectLoad { get; set; } = Task.CompletedTask;
 
     /// <summary>
-    /// Only didOpen, didChange, solution/open and project/open, in arrival order.
+    /// Only didOpen, didChange, didClose, didChangeWatchedFiles, solution/open and project/open, in arrival order.
     /// </summary>
     public IReadOnlyCollection<(string Method, JsonNode? Parameters)> Notifications =>
         _notifications;
@@ -143,6 +143,20 @@ internal sealed class FakeRoslynServer : IRoslynServer
         [JsonRpcMethod(LspMethods.ProjectOpen, UseSingleObjectParameterDeserialization = true)]
         public void ProjectOpen(JsonNode? parameters) =>
             server._notifications.Enqueue((LspMethods.ProjectOpen, parameters));
+
+        [JsonRpcMethod(
+            LspMethods.TextDocumentDidClose,
+            UseSingleObjectParameterDeserialization = true
+        )]
+        public void DidClose(JsonNode? parameters) =>
+            server._notifications.Enqueue((LspMethods.TextDocumentDidClose, parameters));
+
+        [JsonRpcMethod(
+            LspMethods.WorkspaceDidChangeWatchedFiles,
+            UseSingleObjectParameterDeserialization = true
+        )]
+        public void DidChangeWatchedFiles(JsonNode? parameters) =>
+            server._notifications.Enqueue((LspMethods.WorkspaceDidChangeWatchedFiles, parameters));
 
         [JsonRpcMethod(
             LspMethods.TextDocumentDidOpen,
