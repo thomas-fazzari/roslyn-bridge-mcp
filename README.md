@@ -10,7 +10,7 @@ C# diagnostics, navigation and refactoring for coding agents, backed by the offi
 Find definitions, implementations and references. Preview and apply renames, fixes and refactorings.
 The bridge reads saved files and works independently of your editor.
 
-[Get started](https://thomas-fazzari.github.io/roslyn-bridge-mcp/getting-started/) · [Usage](https://thomas-fazzari.github.io/roslyn-bridge-mcp/usage/) · [Development](https://thomas-fazzari.github.io/roslyn-bridge-mcp/development/)
+[Get started](https://thomas-fazzari.github.io/roslyn-bridge-mcp/getting-started/) · [Usage](https://thomas-fazzari.github.io/roslyn-bridge-mcp/usage/) · [Contributing](https://github.com/thomas-fazzari/roslyn-bridge-mcp/blob/master/CONTRIBUTING.md)
 
 ## Install
 
@@ -39,7 +39,7 @@ The snippet is all the agent needs. Do not describe the tools, their parameters 
 
 ## Benchmarks
 
-Releases that change performance are benchmarked against the previous one on real repositories. Results are in [bench/results](bench/results), and the [methodology](https://thomas-fazzari.github.io/roslyn-bridge-mcp/development/benchmarks/) explains how to read them.
+Releases that change performance are benchmarked against the previous one on real repositories. Results are in [bench/results](bench/results), and the [methodology](https://github.com/thomas-fazzari/roslyn-bridge-mcp/blob/master/bench/README.md) explains how to read them.
 
 ## License
 

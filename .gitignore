@@ -8,6 +8,7 @@
 !/.oxfmtrc.json
 !/.rumdl.toml
 !/AGENTS.md
+!/ARCHITECTURE.md
 !/CONTRIBUTING.md
 !/README.md
 !/LICENSE
@@ -49,6 +50,7 @@
 !/docs/
 !/docs/**
 !/bench/
+!/bench/README.md
 !/bench/fixtures.tsv
 !/bench/results/
 !/bench/results/**

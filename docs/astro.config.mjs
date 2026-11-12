@@ -64,25 +64,7 @@ export default defineConfig({
           href: "https://github.com/thomas-fazzari/roslyn-bridge-mcp",
         },
       ],
-      sidebar: [
-        { label: "Overview", link: "/" },
-        "getting-started",
-        "settings",
-        "usage",
-        {
-          label: "Development",
-          items: [
-            { label: "Developer guide", slug: "development" },
-            "development/setup",
-            "development/validation",
-            "development/benchmarks",
-            "development/contributing",
-            "development/releases",
-            { label: "C# conventions", slug: "development/conventions/csharp" },
-            { label: "Testing conventions", slug: "development/conventions/testing" },
-          ],
-        },
-      ],
+      sidebar: [{ label: "Overview", link: "/" }, "getting-started", "settings", "usage"],
     }),
   ],
 });
