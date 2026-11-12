@@ -175,13 +175,13 @@ public sealed class LspAccessTests : TempWorkspaceTests
         );
 
     private JsonArray References() =>
-        new([
+        [
             .. _referencedFiles.SelectMany(file =>
                 Enumerable
                     .Range(0, file is "A.cs" ? 3 : 4)
                     .Select(line => Location(Path.Combine(Root, file), line))
             ),
-        ]);
+        ];
 
     private JsonArray Highlights(JsonNode parameters)
     {
@@ -189,13 +189,14 @@ public sealed class LspAccessTests : TempWorkspaceTests
             new Uri(parameters["textDocument"]!["uri"]!.GetValue<string>()).LocalPath
         );
         _highlightRequests.Enqueue((file, parameters["position"]!["line"]!.GetValue<int>()));
-        return new JsonArray([
+        return
+        [
             .. _highlights[file]
                 .Select(highlight => new JsonObject
                 {
                     ["range"] = Range(highlight.Line, 0),
                     ["kind"] = highlight.Kind,
                 }),
-        ]);
+        ];
     }
 }

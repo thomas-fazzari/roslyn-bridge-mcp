@@ -274,7 +274,7 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
             );
         }
 
-        foreach (var (uri, edits) in workspaceEdit.Changes ?? [])
+        foreach (var (uri, edits) in workspaceEdit.Changes ?? [with(StringComparer.Ordinal)])
         {
             var document = await GetDocumentAsync(uri, documents, snapshot, cancellationToken);
             document.Apply(
@@ -362,8 +362,7 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
         CancellationToken cancellationToken
     )
     {
-        var identifier =
-            operation.TextDocument
+        var identifier = operation.TextDocument
             ?? throw new ToolErrorException(
                 ToolError.InvalidLspData("A document edit needs textDocument.")
             );

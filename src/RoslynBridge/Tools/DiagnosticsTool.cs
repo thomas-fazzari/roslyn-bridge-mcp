@@ -44,8 +44,7 @@ internal sealed class DiagnosticsTool(LspTool lsp, SettingsMonitor settings)
             {
                 Action = LspAction.Diagnostics,
                 File = file,
-                Severity =
-                    severity
+                Severity = severity
                     ?? settings.CurrentValue.DiagnosticsSeverity
                     ?? DiagnosticSeverity.Warning,
                 Ids = ids,

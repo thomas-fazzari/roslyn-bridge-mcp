@@ -1374,9 +1374,8 @@ public sealed partial class RoslynMcpTests
         var listing = await workspace.CallAsync(request);
         request = request with
         {
-            ActionIndex = ActionIndex(
-                listing,
-                line => line.EndsWith(" " + title, StringComparison.Ordinal)
+            ActionIndex = ActionIndex(listing, line =>
+                line.EndsWith(" " + title, StringComparison.Ordinal)
             ),
         };
 
@@ -1462,11 +1461,9 @@ public sealed partial class RoslynMcpTests
         var applied = await workspace.CallAsync(
             ApplyProposal(LspAction.CodeActions, listing) with
             {
-                ActionIndex = ActionIndex(
-                    listing,
-                    line =>
-                        line.Contains("Fix All", StringComparison.Ordinal)
-                        && line.EndsWith(" (Document)", StringComparison.Ordinal)
+                ActionIndex = ActionIndex(listing, line =>
+                    line.Contains("Fix All", StringComparison.Ordinal)
+                    && line.EndsWith(" (Document)", StringComparison.Ordinal)
                 ),
             }
         );

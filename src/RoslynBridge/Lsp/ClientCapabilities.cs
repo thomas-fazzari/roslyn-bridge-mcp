@@ -7,11 +7,10 @@ internal static class ClientCapabilities
 {
     public static JsonObject Create(WorkspacePaths paths)
     {
-        using var file =
-            typeof(ClientCapabilities).Assembly.GetManifestResourceStream(
-                typeof(ClientCapabilities),
-                "ClientCapabilities.json"
-            )
+        using var file = typeof(ClientCapabilities).Assembly.GetManifestResourceStream(
+            typeof(ClientCapabilities),
+            "ClientCapabilities.json"
+        )
             ?? throw new InvalidOperationException(
                 "The bridge assembly lacks ClientCapabilities.json."
             );

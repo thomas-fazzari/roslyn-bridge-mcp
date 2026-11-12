@@ -29,9 +29,8 @@ public sealed class LspToolTests : TempWorkspaceTests
     [Fact]
     public async Task BridgeBugIsNotReportedAsAnInvalidRequestAsync()
     {
-        await using var session = CreateSession(
-            Root,
-            (_, _) => throw new InvalidOperationException("Bridge invariant failed.")
+        await using var session = CreateSession(Root, (_, _) =>
+            throw new InvalidOperationException("Bridge invariant failed.")
         );
         using var tool = CreateTool(session);
 
@@ -1419,11 +1418,7 @@ public sealed class LspToolTests : TempWorkspaceTests
         );
 
     private JsonArray FiveReferences() =>
-        new([
-            .. Enumerable
-                .Range(0, 5)
-                .Select(line => Location(Path.Combine(Root, "Found.cs"), line)),
-        ]);
+        [.. Enumerable.Range(0, 5).Select(line => Location(Path.Combine(Root, "Found.cs"), line))];
 
     private JsonObject GreeterSymbol(string file, int line) =>
         new()
@@ -1454,11 +1449,11 @@ public sealed class LspToolTests : TempWorkspaceTests
     private static int LineOf(JsonNode? parameters) =>
         parameters!["position"]!["line"]!.GetValue<int>() + 1;
 
-    private JsonArray Found(string file) => new(Location(Path.Combine(Root, file)));
+    private JsonArray Found(string file) => [Location(Path.Combine(Root, file))];
 
     // Each file name is long enough that two of these sections cannot share a response
     private JsonArray LargeFound() =>
-        new([
+        [
             .. Enumerable
                 .Range(0, LspRequest.MaximumResultLimit)
                 .Select(index =>
@@ -1470,10 +1465,10 @@ public sealed class LspToolTests : TempWorkspaceTests
                         )
                     )
                 ),
-        ]);
+        ];
 
     private static JsonArray PreparedItem() =>
-        new(new JsonObject { ["name"] = "A.Run()", ["kind"] = LspSymbolKinds.Method });
+        [new JsonObject { ["name"] = "A.Run()", ["kind"] = LspSymbolKinds.Method }];
 
     private static JsonObject OutgoingCall(string name, string path, int line, int character) =>
         new()

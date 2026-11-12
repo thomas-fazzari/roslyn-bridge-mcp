@@ -18,14 +18,14 @@ internal sealed partial class RoslynSession
     // Held for document state and its notifications, never across a Roslyn request or wait
     private readonly SemaphoreSlim _documentLock = new(1, 1);
 
-    private readonly Dictionary<string, OpenDocument> _documents = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, OpenDocument> _documents = [with(StringComparer.Ordinal)];
     private readonly LinkedList<string> _openedOrder = [];
     private readonly ConcurrentDictionary<string, byte> _watchRegistrations = new(
         StringComparer.Ordinal
     );
     private readonly ConcurrentDictionary<string, byte> _pendingFiles = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, byte> _createdFiles = new(StringComparer.Ordinal);
-    private Dictionary<string, FileStamp> _workspaceFiles = new(StringComparer.Ordinal);
+    private Dictionary<string, FileStamp> _workspaceFiles = [with(StringComparer.Ordinal)];
 
     private FileSystemWatcher? _watcher;
     private int _scanRequested;
@@ -187,8 +187,7 @@ internal sealed partial class RoslynSession
 
         if (_documents.Count >= MaximumOpenDocuments)
         {
-            var oldest =
-                _openedOrder.First
+            var oldest = _openedOrder.First
                 ?? throw new InvalidOperationException("The open document order is empty.");
             await CloseDocumentAsync(oldest.Value, cancellationToken);
         }

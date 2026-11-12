@@ -53,7 +53,7 @@ internal static class ToolArguments
                     property => property.Value,
                     StringComparer.Ordinal
                 )
-            : new Dictionary<string, JsonElement>(StringComparer.Ordinal);
+            : [with(StringComparer.Ordinal)];
         foreach (var (name, value) in arguments.ToArray())
         {
             if (!known.TryGetValue(name, out var property))

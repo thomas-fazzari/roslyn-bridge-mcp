@@ -26,29 +26,24 @@ internal sealed class ReferencesHandler
     public ReferencesHandler()
     {
         // Public SymbolFinder searches cascade to sibling overrides, unlike the textDocument/references handler
-        var options =
-            typeof(SymbolFinder).Assembly.GetType(
-                "Microsoft.CodeAnalysis.FindSymbols.FindReferencesSearchOptions"
-            ) ?? throw new MissingMemberException("FindReferencesSearchOptions");
-        _featureOptions =
-            options.GetMethod(
-                "GetFeatureOptionsForStartingSymbol",
-                BindingFlags.Public | BindingFlags.Static,
-                [typeof(ISymbol)]
-            )
-            ?? throw new MissingMethodException(options.Name, "GetFeatureOptionsForStartingSymbol");
-        _findReferences =
-            typeof(SymbolFinder).GetMethod(
-                nameof(SymbolFinder.FindReferencesAsync),
-                BindingFlags.NonPublic | BindingFlags.Static,
-                [typeof(ISymbol), typeof(Solution), options, typeof(CancellationToken)]
-            ) ?? throw new MissingMethodException(nameof(SymbolFinder), "FindReferencesAsync");
+        var options = typeof(SymbolFinder).Assembly.GetType(
+            "Microsoft.CodeAnalysis.FindSymbols.FindReferencesSearchOptions"
+        ) ?? throw new MissingMemberException("FindReferencesSearchOptions");
+        _featureOptions = options.GetMethod(
+            "GetFeatureOptionsForStartingSymbol",
+            BindingFlags.Public | BindingFlags.Static,
+            [typeof(ISymbol)]
+        ) ?? throw new MissingMethodException(options.Name, "GetFeatureOptionsForStartingSymbol");
+        _findReferences = typeof(SymbolFinder).GetMethod(
+            nameof(SymbolFinder.FindReferencesAsync),
+            BindingFlags.NonPublic | BindingFlags.Static,
+            [typeof(ISymbol), typeof(Solution), options, typeof(CancellationToken)]
+        ) ?? throw new MissingMethodException(nameof(SymbolFinder), "FindReferencesAsync");
         // documentHighlight tells reads from writes with this internal property
-        _isWrittenTo =
-            typeof(ReferenceLocation).GetProperty(
-                "IsWrittenTo",
-                BindingFlags.NonPublic | BindingFlags.Instance
-            ) ?? throw new MissingMemberException(nameof(ReferenceLocation), "IsWrittenTo");
+        _isWrittenTo = typeof(ReferenceLocation).GetProperty(
+            "IsWrittenTo",
+            BindingFlags.NonPublic | BindingFlags.Instance
+        ) ?? throw new MissingMemberException(nameof(ReferenceLocation), "IsWrittenTo");
     }
 
     public async Task<ReferencesResponse> ExecuteAsync(

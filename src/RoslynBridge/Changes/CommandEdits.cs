@@ -19,7 +19,7 @@ internal sealed class CommandEdits(
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly Lock _admission = new();
     private readonly List<EditReceipt> _receipts = [];
-    private readonly HashSet<string> _paths = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _paths = [with(StringComparer.Ordinal)];
 
     // Roslyn's edit callbacks arrive outside the tool call, so their traces join the call that ran the command
     private readonly ActivityContext _call = Activity.Current?.Context ?? default;

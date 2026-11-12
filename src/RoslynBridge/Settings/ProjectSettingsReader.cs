@@ -29,8 +29,7 @@ internal static class ProjectSettingsReader
         try
         {
             using var file = File.OpenRead(path);
-            settings =
-                JsonSerializer.Deserialize<ProjectSettings>(file, _options)
+            settings = JsonSerializer.Deserialize<ProjectSettings>(file, _options)
                 ?? new ProjectSettings();
         }
         catch (Exception exception)

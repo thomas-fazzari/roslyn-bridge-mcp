@@ -96,7 +96,7 @@ internal sealed class RoslynTestWorkspace : IAsyncDisposable
             Action = action,
             File = file,
             Line = prefix.Count(character => character == '\n') + 1,
-            Character = offset - prefix.LastIndexOf('\n'),
+            Character = offset - prefix.LastIndexOf('\n', StringComparison.Ordinal),
         };
     }
 
@@ -108,8 +108,8 @@ internal sealed class RoslynTestWorkspace : IAsyncDisposable
             _client = null;
         }
 
-        var process =
-            _process ?? throw new InvalidOperationException("The MCP host is not started.");
+        var process = _process
+            ?? throw new InvalidOperationException("The MCP host is not started.");
         process.StandardInput.Close();
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
         try

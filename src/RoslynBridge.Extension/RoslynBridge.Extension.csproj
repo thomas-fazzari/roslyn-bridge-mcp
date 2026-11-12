@@ -1,5 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
+    <!-- Roslyn loads the extension into its own process, which targets net10.0 -->
+    <TargetFramework>net10.0</TargetFramework>
     <Description>Roslyn extension that answers reference queries inside the language server.</Description>
     <!-- Any runtime package carries the same managed assemblies -->
     <RoslynServerPackage>roslyn-language-server.linux-x64</RoslynServerPackage>

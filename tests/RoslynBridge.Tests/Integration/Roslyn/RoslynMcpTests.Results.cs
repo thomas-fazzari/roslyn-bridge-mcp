@@ -85,7 +85,10 @@ public sealed partial class RoslynMcpTests
         }
 
         var start = line.IndexOf(marker, StringComparison.Ordinal) + marker.Length;
-        return int.Parse(line[start..line.IndexOf('.', start)], CultureInfo.InvariantCulture);
+        return int.Parse(
+            line[start..line.IndexOf('.', start, StringComparison.Ordinal)],
+            CultureInfo.InvariantCulture
+        );
     }
 
     private static string[] PreviewFiles(string preview) =>

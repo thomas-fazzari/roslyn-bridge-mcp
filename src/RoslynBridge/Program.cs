@@ -23,7 +23,7 @@ internal static class Program
     {
         if (args is ["--help"] or ["-h"])
         {
-            await Console.Error.WriteLineAsync(Usage);
+            await Console.Error.WriteLineAsync(Usage, CancellationToken.None);
             return;
         }
 
@@ -80,7 +80,7 @@ internal static class Program
 
     private static async Task FailAsync(string message)
     {
-        await Console.Error.WriteLineAsync(message);
+        await Console.Error.WriteLineAsync(message, CancellationToken.None);
         Environment.ExitCode = 1;
     }
 }
