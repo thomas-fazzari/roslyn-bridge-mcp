@@ -62,7 +62,11 @@ internal sealed class ReferencesHandler
             return _notFound;
         }
 
-        var position = await document.GetPositionAsync(message, cancellationToken);
+        if (await document.GetPositionAsync(message, cancellationToken) is not { } position)
+        {
+            return _notFound;
+        }
+
         // On a literal, Roslyn lists its occurrences instead of references
         if (await TouchesLiteralAsync(document, position, cancellationToken))
         {

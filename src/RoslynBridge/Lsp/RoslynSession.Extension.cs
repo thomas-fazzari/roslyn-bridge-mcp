@@ -94,9 +94,7 @@ internal sealed partial class RoslynSession
             return UnusedFailure(exception.Message);
         }
 
-        return
-            result?["response"]?.GetValue<string>() is { } response
-            && JsonNode.Parse(response) is { } found
+        return ExtensionResponse(result) is { } response && JsonNode.Parse(response) is { } found
             ? found
             : UnusedFailure(ExtensionError(result));
     }
@@ -138,7 +136,7 @@ internal sealed partial class RoslynSession
             return null;
         }
 
-        if (result?["response"]?.GetValue<string>() is not { } response)
+        if (ExtensionResponse(result) is not { } response)
         {
             DisableDocumentHandlers(ExtensionError(result));
             return null;
@@ -210,6 +208,13 @@ internal sealed partial class RoslynSession
     private static string ActivationError(JsonNode? result, List<string> unregistered) =>
         result?["extensionException"]?["Message"]?.GetValue<string>()
         ?? $"Roslyn registered no handler for {string.Join(", ", unregistered)}.";
+
+    // A handler that throws leaves an empty response
+    private static string? ExtensionResponse(JsonNode? result) =>
+        result?["response"]?.GetValue<string>() is { } response
+        && !string.IsNullOrWhiteSpace(response)
+            ? response
+            : null;
 
     private static string ExtensionError(JsonNode? result) =>
         result?["extensionException"]?["Message"]?.GetValue<string>()
