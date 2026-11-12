@@ -17,9 +17,8 @@ using static RoslynBridge.Tests.Unit.TestHelpers;
 
 namespace RoslynBridge.Tests.Unit.Tools;
 
-public sealed class LspToolTests : IDisposable
+public sealed class LspToolTests : TempWorkspaceTests
 {
-    private const string SourceFile = "Source.cs";
     private const string SourceText = "class A {}\nclass B {}\nclass C {}\nclass D {}\n";
 
     private const int Error = (int)DiagnosticSeverity.Error;
@@ -27,13 +26,11 @@ public sealed class LspToolTests : IDisposable
     private const int Hint = (int)DiagnosticSeverity.Hint;
     private const string ReportedCode = "CS0168";
 
-    private readonly string _root = Directory.CreateTempSubdirectory("roslyn-lsp-tool-").FullName;
-
     [Fact]
     public async Task BridgeBugIsNotReportedAsAnInvalidRequestAsync()
     {
         await using var session = CreateSession(
-            _root,
+            Root,
             (_, _) => throw new InvalidOperationException("Bridge invariant failed.")
         );
         using var tool = CreateTool(session);
@@ -51,7 +48,7 @@ public sealed class LspToolTests : IDisposable
     [InlineData(LspMethods.WorkspaceApplyEdit)]
     public async Task RawRequestRefusesMethodsTheBridgeOwnsAsync(string method)
     {
-        await using var session = CreateSession(_root, FakeServer());
+        await using var session = CreateSession(Root, FakeServer());
         using var tool = CreateTool(session);
 
         var response = await tool.ExecuteAsync(
@@ -72,7 +69,7 @@ public sealed class LspToolTests : IDisposable
     [InlineData("custom/unlistedMethod")]
     public async Task RawRequestOutsideTheReadOnlyMethodsRequiresApplyAsync(string method)
     {
-        await using var session = CreateSession(_root, FakeServer());
+        await using var session = CreateSession(Root, FakeServer());
         using var tool = CreateTool(session);
 
         var response = await tool.ExecuteAsync(
@@ -91,9 +88,9 @@ public sealed class LspToolTests : IDisposable
     [Fact]
     public async Task CommandFailureAfterAWriteReportsTheAppliedFilesAsync()
     {
-        var source = await WriteFileAsync(_root, "Source.cs", "class A {}");
+        var source = await WriteFileAsync(Root, SourceFile, "class A {}");
         await using var session = CreateSession(
-            _root,
+            Root,
             FakeServer(server =>
                 server.Handle = async (_, _) =>
                 {
@@ -136,10 +133,10 @@ public sealed class LspToolTests : IDisposable
     {
         var options = new BridgeOptions
         {
-            WorkspaceRoot = _root,
-            ServerPath = Path.Combine(_root, "missing-server"),
+            WorkspaceRoot = Root,
+            ServerPath = Path.Combine(Root, "missing-server"),
         };
-        await using var session = CreateSession(_root, RoslynProcess.Start, options);
+        await using var session = CreateSession(Root, RoslynProcess.Start, options);
         using var tool = CreateTool(session, options);
 
         var response = await tool.ExecuteAsync(SymbolQuery(), TestCt);
@@ -153,11 +150,11 @@ public sealed class LspToolTests : IDisposable
         var load = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var options = new BridgeOptions
         {
-            WorkspaceRoot = _root,
+            WorkspaceRoot = Root,
             StartupTimeout = TimeSpan.FromMilliseconds(50),
         };
         await using var session = CreateSession(
-            _root,
+            Root,
             FakeServer(server => server.ProjectLoad = load.Task),
             options
         );
@@ -176,7 +173,7 @@ public sealed class LspToolTests : IDisposable
         var launched = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var launches = 0;
         await using var session = CreateSession(
-            _root,
+            Root,
             FakeServer(server =>
             {
                 launches++;
@@ -208,7 +205,7 @@ public sealed class LspToolTests : IDisposable
         var load = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var launched = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         await using var session = CreateSession(
-            _root,
+            Root,
             FakeServer(server =>
             {
                 server.ProjectLoad = load.Task;
@@ -235,7 +232,7 @@ public sealed class LspToolTests : IDisposable
         var load = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var launches = 0;
         await using var session = CreateSession(
-            _root,
+            Root,
             FakeServer(server =>
             {
                 launches++;
@@ -256,10 +253,10 @@ public sealed class LspToolTests : IDisposable
     [Fact]
     public async Task FileOutsideEveryProjectSinceTheLoadIsReportedWithoutWaitingAsync()
     {
-        await WriteFileAsync(_root, "Loose.cs", "class Loose {}");
+        await WriteFileAsync(Root, "Loose.cs", "class Loose {}");
         var contextRequests = 0;
         await using var session = CreateSession(
-            _root,
+            Root,
             FakeServer(server =>
                 server.Handle = (method, _) =>
                 {
@@ -296,9 +293,9 @@ public sealed class LspToolTests : IDisposable
     [Fact]
     public async Task DiagnosticWithoutARangeIsReportedAsInvalidLspDataAsync()
     {
-        await WriteFileAsync(_root, "A.cs", "class A {}");
+        await WriteFileAsync(Root, "A.cs", "class A {}");
         await using var session = CreateSession(
-            _root,
+            Root,
             FakeServer(server =>
                 server.Handle = (_, _) =>
                     Task.FromResult<JsonNode?>(
@@ -321,12 +318,12 @@ public sealed class LspToolTests : IDisposable
     [InlineData("{A.cs,Sub/*.cs}")]
     public async Task DiagnosticsExpandBraceAlternativesAsync(string file)
     {
-        await WriteFileAsync(_root, "A.cs", "class A {}");
-        await WriteFileAsync(_root, "B.cs", "class B {}");
-        await WriteFileAsync(_root, "Sub/B.cs", "class C {}");
-        await WriteFileAsync(_root, "Other.cs", "class D {}");
+        await WriteFileAsync(Root, "A.cs", "class A {}");
+        await WriteFileAsync(Root, "B.cs", "class B {}");
+        await WriteFileAsync(Root, "Sub/B.cs", "class C {}");
+        await WriteFileAsync(Root, "Other.cs", "class D {}");
         await using var session = CreateSession(
-            _root,
+            Root,
             FakeServer(server =>
                 server.Handle = (_, _) =>
                     Task.FromResult<JsonNode?>(FakeDiagnosticServer.FullReport([]))
@@ -345,10 +342,10 @@ public sealed class LspToolTests : IDisposable
     [Fact]
     public async Task RepeatedDiagnosticsReuseTheReportThatRoslynKeepsUnchangedAsync()
     {
-        await WriteFileAsync(_root, "A.cs", "class A {}");
+        await WriteFileAsync(Root, "A.cs", "class A {}");
         var sent = new ConcurrentQueue<string?>();
         await using var session = CreateSession(
-            _root,
+            Root,
             FakeDiagnosticServer.WithResultIds(ReportedCode, sent)
         );
         using var tool = CreateTool(session);
@@ -365,10 +362,10 @@ public sealed class LspToolTests : IDisposable
     [Fact]
     public async Task ReloadForgetsTheResultIdsOfTheStoppedServerAsync()
     {
-        await WriteFileAsync(_root, "A.cs", "class A {}");
+        await WriteFileAsync(Root, "A.cs", "class A {}");
         var sent = new ConcurrentQueue<string?>();
         await using var session = CreateSession(
-            _root,
+            Root,
             FakeDiagnosticServer.WithResultIds(ReportedCode, sent)
         );
         using var tool = CreateTool(session);
@@ -385,9 +382,9 @@ public sealed class LspToolTests : IDisposable
     [Fact]
     public async Task DiagnosticsKeepOnlyTheRequestedIdsAndSayThatTheFilterAppliedAsync()
     {
-        await WriteFileAsync(_root, "A.cs", "class A {}");
+        await WriteFileAsync(Root, "A.cs", "class A {}");
         await using var session = CreateSession(
-            _root,
+            Root,
             DiagnosticServer(("A.cs", 0, 0, Error, "CS0246"), ("A.cs", 1, 0, Warning, "CS8618"))
         );
         using var tool = CreateTool(session);
@@ -425,10 +422,10 @@ public sealed class LspToolTests : IDisposable
     [Fact]
     public async Task DiagnosticSummaryListsEachCodeByCountThenCodeAsync()
     {
-        await WriteFileAsync(_root, "A.cs", "class A {}");
-        await WriteFileAsync(_root, "B.cs", "class B {}");
+        await WriteFileAsync(Root, "A.cs", "class A {}");
+        await WriteFileAsync(Root, "B.cs", "class B {}");
         await using var session = CreateSession(
-            _root,
+            Root,
             DiagnosticServer(
                 ("A.cs", 0, 2, Warning, "CS8618"),
                 ("A.cs", 1, 0, Error, "CS0246"),
@@ -468,10 +465,10 @@ public sealed class LspToolTests : IDisposable
     [Fact]
     public async Task DiagnosticOffsetCrossesFilesInPositionOrderAndKeepsTheTotalsAsync()
     {
-        await WriteFileAsync(_root, "A.cs", "class A {}");
-        await WriteFileAsync(_root, "B.cs", "class B {}");
+        await WriteFileAsync(Root, "A.cs", "class A {}");
+        await WriteFileAsync(Root, "B.cs", "class B {}");
         await using var session = CreateSession(
-            _root,
+            Root,
             DiagnosticServer(
                 ("A.cs", 4, 0, Error, "CS0001"),
                 ("A.cs", 1, 0, Error, "CS0002"),
@@ -501,9 +498,9 @@ public sealed class LspToolTests : IDisposable
     [Fact]
     public async Task OffsetReadsTheNextPageAndTheTruncationNamesTheNextOffsetAsync()
     {
-        await WriteFileAsync(_root, SourceFile, SourceText);
+        await WriteFileAsync(Root, SourceFile, SourceText);
         await using var session = CreateSession(
-            _root,
+            Root,
             FakeServer(server =>
                 server.Handle = (_, _) => Task.FromResult<JsonNode?>(FiveReferences())
             )
@@ -529,9 +526,9 @@ public sealed class LspToolTests : IDisposable
     [Fact]
     public async Task BulkAppliesItsOffsetToEveryQueryAsync()
     {
-        await WriteFileAsync(_root, SourceFile, SourceText);
+        await WriteFileAsync(Root, SourceFile, SourceText);
         await using var session = CreateSession(
-            _root,
+            Root,
             FakeServer(server =>
                 server.Handle = (_, _) => Task.FromResult<JsonNode?>(FiveReferences())
             )
@@ -560,7 +557,7 @@ public sealed class LspToolTests : IDisposable
     [Fact]
     public async Task NegativeOffsetIsRejectedAsAnInvalidRequestAsync()
     {
-        await using var session = CreateSession(_root, FakeServer());
+        await using var session = CreateSession(Root, FakeServer());
         using var tool = CreateTool(session);
 
         var response = await tool.ExecuteAsync(SymbolQuery() with { Offset = -1 }, TestCt);
@@ -572,7 +569,7 @@ public sealed class LspToolTests : IDisposable
     public async Task WorkspaceSymbolsOfTheSameRankAreOrderedByLocationAsync()
     {
         await using var session = CreateSession(
-            _root,
+            Root,
             FakeServer(server =>
                 server.Handle = (_, _) =>
                     Task.FromResult<JsonNode?>(
@@ -598,13 +595,13 @@ public sealed class LspToolTests : IDisposable
     public async Task BulkReportsEachQueryInRequestOrderAsync()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        await WriteFileAsync(_root, SourceFile, SourceText);
+        await WriteFileAsync(Root, SourceFile, SourceText);
         var othersAnswered = new TaskCompletionSource(
             TaskCreationOptions.RunContinuationsAsynchronously
         );
         var answered = 0;
         await using var session = CreateSession(
-            _root,
+            Root,
             FakeServer(server =>
                 server.Handle = async (_, parameters) =>
                 {
@@ -642,9 +639,9 @@ public sealed class LspToolTests : IDisposable
     [Fact]
     public async Task BulkReportsAFailedQueryInItsSectionAndRunsTheOthersAsync()
     {
-        await WriteFileAsync(_root, SourceFile, SourceText);
+        await WriteFileAsync(Root, SourceFile, SourceText);
         await using var session = CreateSession(
-            _root,
+            Root,
             FakeServer(server =>
                 server.Handle = (_, parameters) =>
                     Task.FromResult<JsonNode?>(
@@ -676,7 +673,7 @@ public sealed class LspToolTests : IDisposable
     {
         var symbolRequests = 0;
         await using var session = CreateSession(
-            _root,
+            Root,
             FakeServer(server =>
                 server.Handle = (method, _) =>
                 {
@@ -714,7 +711,7 @@ public sealed class LspToolTests : IDisposable
     [InlineData(LspRequest.MaximumBulkQueries + 1)]
     public async Task BulkRejectsAnEmptyOrOversizedBatchAsync(int count)
     {
-        await using var session = CreateSession(_root, FakeServer());
+        await using var session = CreateSession(Root, FakeServer());
         using var tool = CreateTool(session);
 
         var response = await tool.ExecuteAsync(
@@ -728,9 +725,9 @@ public sealed class LspToolTests : IDisposable
     [Fact]
     public async Task BulkOmitsTheSectionsThatDoNotFitAndListsTheirSizesAsync()
     {
-        await WriteFileAsync(_root, SourceFile, SourceText);
+        await WriteFileAsync(Root, SourceFile, SourceText);
         await using var session = CreateSession(
-            _root,
+            Root,
             FakeServer(server =>
                 server.Handle = (_, parameters) =>
                     Task.FromResult<JsonNode?>(
@@ -771,14 +768,14 @@ public sealed class LspToolTests : IDisposable
     public async Task BulkKeepsFinishedSectionsWhenTheTimeoutEndsTheCallAsync()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        await WriteFileAsync(_root, SourceFile, SourceText);
+        await WriteFileAsync(Root, SourceFile, SourceText);
         var options = new BridgeOptions
         {
-            WorkspaceRoot = _root,
+            WorkspaceRoot = Root,
             RequestTimeout = TimeSpan.FromSeconds(1),
         };
         await using var session = CreateSession(
-            _root,
+            Root,
             FakeServer(server =>
                 server.Handle = (_, parameters) =>
                     LineOf(parameters) == 2
@@ -806,9 +803,9 @@ public sealed class LspToolTests : IDisposable
     [Fact]
     public async Task UnknownSymbolListsSimilarSymbolsThatResolveWhenSentBackAsync()
     {
-        var path = await WriteFileAsync(_root, "Calculator.cs", "class Calculator\n{\n}\n");
+        var path = await WriteFileAsync(Root, "Calculator.cs", "class Calculator\n{\n}\n");
         await using var session = CreateSession(
-            _root,
+            Root,
             FakeSymbolServer.With(
                 workspace: new(StringComparer.Ordinal)
                 {
@@ -816,7 +813,7 @@ public sealed class LspToolTests : IDisposable
                     ["Calculater"] =
                     [
                         WorkspaceSymbol("Calculator", path),
-                        WorkspaceSymbol("Zebra", Path.Combine(_root, "Zebra.cs")),
+                        WorkspaceSymbol("Zebra", Path.Combine(Root, "Zebra.cs")),
                     ],
                 },
                 documents: new(StringComparer.Ordinal)
@@ -842,7 +839,7 @@ public sealed class LspToolTests : IDisposable
         var server = FakeSymbolServer.With(
             workspace: new(StringComparer.Ordinal)
             {
-                ["Calculater"] = [WorkspaceSymbol("Calculator", Path.Combine(_root, "Gone.cs"))],
+                ["Calculater"] = [WorkspaceSymbol("Calculator", Path.Combine(Root, "Gone.cs"))],
             }
         );
 
@@ -855,7 +852,7 @@ public sealed class LspToolTests : IDisposable
     [Fact]
     public async Task QualifiedNameWithAnUnknownContainerNamesSimilarTypesWithoutCandidatesAsync()
     {
-        var path = await WriteFileAsync(_root, "Nopes.cs", "class Nopes\n{\n}\n");
+        var path = await WriteFileAsync(Root, "Nopes.cs", "class Nopes\n{\n}\n");
         var server = FakeSymbolServer.With(
             workspace: new(StringComparer.Ordinal)
             {
@@ -884,7 +881,7 @@ public sealed class LspToolTests : IDisposable
     public async Task ConstructorsHaveTheConstructorKindInSymbolsMembersAndSourceAsync()
     {
         var box = await WriteFileAsync(
-            _root,
+            Root,
             "Box.cs",
             """
             class Box
@@ -902,7 +899,7 @@ public sealed class LspToolTests : IDisposable
         );
         constructor["containerName"] = "in Box (project App)";
         await using var session = CreateSession(
-            _root,
+            Root,
             FakeServer(server =>
                 server.Handle = (method, _) =>
                     Task.FromResult<JsonNode?>(
@@ -948,8 +945,8 @@ public sealed class LspToolTests : IDisposable
     [Fact]
     public async Task QualifiedNameWithAKnownContainerListsOnlyItsMembersAsync()
     {
-        var calculator = await WriteFileAsync(_root, "Calculator.cs", "class Calculator {}\n");
-        var other = await WriteFileAsync(_root, "Other.cs", "class Other {}\n");
+        var calculator = await WriteFileAsync(Root, "Calculator.cs", "class Calculator {}\n");
+        var other = await WriteFileAsync(Root, "Other.cs", "class Other {}\n");
         var server = FakeSymbolServer.With(
             workspace: new(StringComparer.Ordinal)
             {
@@ -979,7 +976,7 @@ public sealed class LspToolTests : IDisposable
     [Fact]
     public async Task QualifiedNameWithAKnownContainerAndNoSimilarMemberPointsToMembersAsync()
     {
-        var calculator = await WriteFileAsync(_root, "Calculator.cs", "class Calculator {}\n");
+        var calculator = await WriteFileAsync(Root, "Calculator.cs", "class Calculator {}\n");
         var server = FakeSymbolServer.With(
             workspace: new(StringComparer.Ordinal)
             {
@@ -1004,8 +1001,8 @@ public sealed class LspToolTests : IDisposable
     [Fact]
     public async Task SimilarTypesDeclaredInSeveralFilesAreNamedOnceAsync()
     {
-        var first = await WriteFileAsync(_root, "Nopes.One.cs", "partial class Nopes {}\n");
-        var second = await WriteFileAsync(_root, "Nopes.Two.cs", "partial class Nopes {}\n");
+        var first = await WriteFileAsync(Root, "Nopes.One.cs", "partial class Nopes {}\n");
+        var second = await WriteFileAsync(Root, "Nopes.Two.cs", "partial class Nopes {}\n");
         var part = DocumentSymbol("Nopes", DocumentMethod("MissingFile()"));
         var server = FakeSymbolServer.With(
             workspace: new(StringComparer.Ordinal)
@@ -1029,7 +1026,7 @@ public sealed class LspToolTests : IDisposable
     [Fact]
     public async Task QualifiedNameInANamespaceStillListsTheSimilarTypeAsync()
     {
-        var path = await WriteFileAsync(_root, "Calculator.cs", "class Calculator {}\n");
+        var path = await WriteFileAsync(Root, "Calculator.cs", "class Calculator {}\n");
         var server = FakeSymbolServer.With(
             workspace: new(StringComparer.Ordinal)
             {
@@ -1050,11 +1047,11 @@ public sealed class LspToolTests : IDisposable
     [Fact]
     public async Task CalleesListConstructorsWithTheConstructorKindAsync()
     {
-        await WriteFileAsync(_root, SourceFile, SourceText);
-        var box = await WriteFileAsync(_root, "Box.cs", "class Box\n{\n    public Box() {}\n}\n");
-        var greeter = await WriteFileAsync(_root, "Greeter.cs", "class Greeter(string name);\n");
+        await WriteFileAsync(Root, SourceFile, SourceText);
+        var box = await WriteFileAsync(Root, "Box.cs", "class Box\n{\n    public Box() {}\n}\n");
+        var greeter = await WriteFileAsync(Root, "Greeter.cs", "class Greeter(string name);\n");
         await using var session = CreateSession(
-            _root,
+            Root,
             FakeServer(server =>
                 server.Handle = (method, parameters) =>
                     Task.FromResult<JsonNode?>(
@@ -1104,9 +1101,9 @@ public sealed class LspToolTests : IDisposable
     [InlineData("subtypes", 1)]
     public async Task EmptyHierarchyResultNamesWhatIsMissingAsync(string action, int lineCount)
     {
-        await WriteFileAsync(_root, SourceFile, SourceText);
+        await WriteFileAsync(Root, SourceFile, SourceText);
         await using var session = CreateSession(
-            _root,
+            Root,
             FakeServer(server =>
                 server.Handle = (method, _) =>
                     Task.FromResult<JsonNode?>(
@@ -1139,8 +1136,8 @@ public sealed class LspToolTests : IDisposable
     [Fact]
     public async Task HierarchyWithoutAPreparedItemReportsNoSymbolsAsync()
     {
-        await WriteFileAsync(_root, SourceFile, SourceText);
-        await using var session = CreateSession(_root, FakeServer());
+        await WriteFileAsync(Root, SourceFile, SourceText);
+        await using var session = CreateSession(Root, FakeServer());
         using var tool = CreateTool(session);
 
         var response = await tool.ExecuteAsync(
@@ -1160,9 +1157,9 @@ public sealed class LspToolTests : IDisposable
     [Fact]
     public async Task CodeActionListingHidesSuppressionsButKeepsTheIndexesAsync()
     {
-        await WriteFileAsync(_root, SourceFile, SourceText);
+        await WriteFileAsync(Root, SourceFile, SourceText);
         await using var session = CreateSession(
-            _root,
+            Root,
             FakeServer(server =>
                 server.Handle = (method, _) =>
                     Task.FromResult<JsonNode?>(
@@ -1205,8 +1202,8 @@ public sealed class LspToolTests : IDisposable
     [InlineData("ator.cs", false)]
     public async Task FileNameResolvesOnlyAtWholePathSegmentsAsync(string file, bool resolves)
     {
-        await WriteFileAsync(_root, "src/Math/Calculator.cs", "class Calculator {}");
-        await using var session = CreateSession(_root, FakeServer());
+        await WriteFileAsync(Root, "src/Math/Calculator.cs", "class Calculator {}");
+        await using var session = CreateSession(Root, FakeServer());
         using var tool = CreateTool(session);
 
         var response = await tool.ExecuteAsync(
@@ -1229,9 +1226,9 @@ public sealed class LspToolTests : IDisposable
     [Fact]
     public async Task FileNameThatMatchesSeveralFilesIsAmbiguousAsync()
     {
-        await WriteFileAsync(_root, "A/Calculator.cs", "class A {}");
-        await WriteFileAsync(_root, "B/Calculator.cs", "class B {}");
-        await using var session = CreateSession(_root, FakeServer());
+        await WriteFileAsync(Root, "A/Calculator.cs", "class A {}");
+        await WriteFileAsync(Root, "B/Calculator.cs", "class B {}");
+        await using var session = CreateSession(Root, FakeServer());
         using var tool = CreateTool(session);
 
         var response = await tool.ExecuteAsync(
@@ -1246,9 +1243,9 @@ public sealed class LspToolTests : IDisposable
     [Fact]
     public async Task BulkResolvesEachQueryFileAndEchoesTheResolvedPathOnceAsync()
     {
-        await WriteFileAsync(_root, "src/Math/Source.cs", SourceText);
+        await WriteFileAsync(Root, "src/Math/Source.cs", SourceText);
         await using var session = CreateSession(
-            _root,
+            Root,
             FakeServer(server =>
                 server.Handle = (_, _) => Task.FromResult<JsonNode?>(Found("Found.cs"))
             )
@@ -1281,11 +1278,11 @@ public sealed class LspToolTests : IDisposable
     [Fact]
     public async Task BulkReportsAnAmbiguousFileInTheSectionOfItsQueryAsync()
     {
-        await WriteFileAsync(_root, "A/Calculator.cs", SourceText);
-        await WriteFileAsync(_root, "B/Calculator.cs", SourceText);
-        await WriteFileAsync(_root, "src/Math/Source.cs", SourceText);
+        await WriteFileAsync(Root, "A/Calculator.cs", SourceText);
+        await WriteFileAsync(Root, "B/Calculator.cs", SourceText);
+        await WriteFileAsync(Root, "src/Math/Source.cs", SourceText);
         await using var session = CreateSession(
-            _root,
+            Root,
             FakeServer(server =>
                 server.Handle = (_, _) => Task.FromResult<JsonNode?>(Found("Found.cs"))
             )
@@ -1323,14 +1320,14 @@ public sealed class LspToolTests : IDisposable
         const int firstSeconds = 20;
         const int secondSeconds = 40;
 
-        var settingsPath = Path.Combine(_root, ProjectSettings.FileName);
-        var arguments = LaunchArguments.Parse([LaunchArguments.WorkspaceArgument, _root]);
+        var settingsPath = Path.Combine(Root, ProjectSettings.FileName);
+        var arguments = LaunchArguments.Parse([LaunchArguments.WorkspaceArgument, Root]);
 
         await File.WriteAllTextAsync(settingsPath, StartupTimeoutSetting(firstSeconds), TestCt);
         var settings = new SettingsMonitor(() =>
-            BridgeOptions.From(arguments, ProjectSettingsReader.Read(_root))
+            BridgeOptions.From(arguments, ProjectSettingsReader.Read(Root))
         );
-        await using var session = CreateSession(_root, FakeServer());
+        await using var session = CreateSession(Root, FakeServer());
         using var tool = CreateTool(session, settings);
         var reload = new LspRequest { Action = LspAction.Reload };
 
@@ -1351,14 +1348,14 @@ public sealed class LspToolTests : IDisposable
     public async Task DiagnosticsUseTheProjectSeverityWhenTheCallGivesNoneAsync()
     {
         const string hintCode = "IDE0005";
-        await WriteFileAsync(_root, "A.cs", "class A {}");
+        await WriteFileAsync(Root, "A.cs", "class A {}");
         var options = new BridgeOptions
         {
-            WorkspaceRoot = _root,
+            WorkspaceRoot = Root,
             DiagnosticsSeverity = DiagnosticSeverity.Hint,
         };
         await using var session = CreateSession(
-            _root,
+            Root,
             DiagnosticServer(("A.cs", 0, 0, Error, "CS0246"), ("A.cs", 1, 0, Hint, hintCode))
         );
         using var tool = CreateTool(session);
@@ -1386,8 +1383,6 @@ public sealed class LspToolTests : IDisposable
         ResponseText(explicitWarning).Should().NotContain(hintCode);
         ResponseText(builtInDefault).Should().NotContain(hintCode);
     }
-
-    public void Dispose() => Directory.Delete(_root, recursive: true);
 
     // a diagnostic is its file, zero-based line and character, LSP severity and code
     private static RoslynLauncher DiagnosticServer(
@@ -1427,7 +1422,7 @@ public sealed class LspToolTests : IDisposable
         new([
             .. Enumerable
                 .Range(0, 5)
-                .Select(line => Location(Path.Combine(_root, "Found.cs"), line)),
+                .Select(line => Location(Path.Combine(Root, "Found.cs"), line)),
         ]);
 
     private JsonObject GreeterSymbol(string file, int line) =>
@@ -1435,7 +1430,7 @@ public sealed class LspToolTests : IDisposable
         {
             ["name"] = "Greeter",
             ["kind"] = 5,
-            ["location"] = Location(Path.Combine(_root, file), line),
+            ["location"] = Location(Path.Combine(Root, file), line),
         };
 
     private static LspRequest SymbolQuery() =>
@@ -1459,7 +1454,7 @@ public sealed class LspToolTests : IDisposable
     private static int LineOf(JsonNode? parameters) =>
         parameters!["position"]!["line"]!.GetValue<int>() + 1;
 
-    private JsonArray Found(string file) => new(Location(Path.Combine(_root, file)));
+    private JsonArray Found(string file) => new(Location(Path.Combine(Root, file)));
 
     // Each file name is long enough that two of these sections cannot share a response
     private JsonArray LargeFound() =>
@@ -1469,7 +1464,7 @@ public sealed class LspToolTests : IDisposable
                 .Select(index =>
                     Location(
                         Path.Combine(
-                            _root,
+                            Root,
                             new string('d', 100),
                             string.Create(CultureInfo.InvariantCulture, $"File{index}.cs")
                         )
@@ -1537,7 +1532,7 @@ public sealed class LspToolTests : IDisposable
 
     private async Task<CallToolResult> CallAsync(RoslynLauncher server, LspRequest request)
     {
-        await using var session = CreateSession(_root, server);
+        await using var session = CreateSession(Root, server);
         using var tool = CreateTool(session);
         return await tool.ExecuteAsync(request, TestCt);
     }
@@ -1554,11 +1549,11 @@ public sealed class LspToolTests : IDisposable
         ];
 
     private LspTool CreateTool(RoslynSession session, SettingsMonitor settings) =>
-        TestHelpers.CreateTool(_root, session, settings: settings);
+        TestHelpers.CreateTool(Root, session, settings: settings);
 
     private static string StartupTimeoutSetting(int seconds) =>
         string.Create(CultureInfo.InvariantCulture, $"{{ \"startupTimeout\": {seconds} }}");
 
     private LspTool CreateTool(RoslynSession session, BridgeOptions? options = null) =>
-        TestHelpers.CreateTool(_root, session, options);
+        TestHelpers.CreateTool(Root, session, options);
 }

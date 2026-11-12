@@ -7,20 +7,16 @@ using static RoslynBridge.Tests.Unit.TestHelpers;
 
 namespace RoslynBridge.Tests.Unit.Changes;
 
-public sealed class CommandEditsTests : IDisposable
+public sealed class CommandEditsTests : TempWorkspaceTests
 {
     private const int TestTimeoutMilliseconds = 30_000;
-
-    private readonly string _root = Directory
-        .CreateTempSubdirectory("roslyn-command-edits-")
-        .FullName;
 
     [Fact]
     public async Task CaptureFailureAfterApplyAcknowledgesWrittenFilesAndClosesCallbacksAsync()
     {
-        var path = await WriteFileAsync(_root, "Source.cs", "class A {}");
+        var path = await WriteFileAsync(Root, SourceFile, "class A {}");
         var service = CreateService();
-        var snapshot = Snapshot(_root);
+        var snapshot = Snapshot(Root);
         var captureCalls = 0;
         await using var commandEdits = new CommandEdits(
             service,
@@ -45,7 +41,7 @@ public sealed class CommandEditsTests : IDisposable
             .Phase.Should()
             .Be(EditApplicationPhase.Synchronize);
         commandEdits.Result.FileCount.Should().Be(1);
-        commandEdits.Result.Operations[0].Path.Should().Be("Source.cs");
+        commandEdits.Result.Operations[0].Path.Should().Be(SourceFile);
         await AssertFileTextAsync(path, "class B {}");
 
         var rejected = await commandEdits.ApplyAsync(
@@ -61,13 +57,13 @@ public sealed class CommandEditsTests : IDisposable
     [Fact]
     public async Task SecondCallbackFailureRetainsTheFirstReceiptAsync()
     {
-        var path = await WriteFileAsync(_root, "Source.cs", "class A {}");
+        var path = await WriteFileAsync(Root, SourceFile, "class A {}");
         var service = CreateService();
-        var snapshot = Snapshot(_root);
+        var snapshot = Snapshot(Root);
         await using var commandEdits = new CommandEdits(
             service,
             snapshot,
-            _ => Task.FromResult(Snapshot(_root)),
+            _ => Task.FromResult(Snapshot(Root)),
             TestCt
         );
 
@@ -77,7 +73,7 @@ public sealed class CommandEditsTests : IDisposable
         );
         var second = await commandEdits.ApplyAsync(
             WorkspaceChanges(
-                Path.Combine(_root, "Missing.cs"),
+                Path.Combine(Root, "Missing.cs"),
                 TextEdit(0, 0, 0, 0, "class Missing {}")
             ),
             TestCt
@@ -89,7 +85,7 @@ public sealed class CommandEditsTests : IDisposable
         commandEdits.Result.FileCount.Should().Be(1);
         commandEdits.Result.Operations.Count.Should().Be(1);
         await AssertFileTextAsync(path, "class B {}");
-        File.Exists(Path.Combine(_root, "Missing.cs")).Should().BeFalse();
+        File.Exists(Path.Combine(Root, "Missing.cs")).Should().BeFalse();
     }
 
     [Fact(Timeout = TestTimeoutMilliseconds)]
@@ -97,10 +93,10 @@ public sealed class CommandEditsTests : IDisposable
     {
         // Tests with a timeout must reference the xUnit token directly
         var cancellationToken = TestContext.Current.CancellationToken;
-        var firstPath = await WriteFileAsync(_root, "First.cs", "class A {}");
-        var secondPath = await WriteFileAsync(_root, "Second.cs", "class B {}");
+        var firstPath = await WriteFileAsync(Root, "First.cs", "class A {}");
+        var secondPath = await WriteFileAsync(Root, "Second.cs", "class B {}");
         var service = CreateService();
-        var snapshot = Snapshot(_root);
+        var snapshot = Snapshot(Root);
         var firstCaptureStarted = new TaskCompletionSource(
             TaskCreationOptions.RunContinuationsAsynchronously
         );
@@ -117,7 +113,7 @@ public sealed class CommandEditsTests : IDisposable
                 await releaseFirstCapture.Task.WaitAsync(token);
             }
 
-            return Snapshot(_root);
+            return Snapshot(Root);
         }
 
         await using var commandEdits = new CommandEdits(
@@ -152,9 +148,9 @@ public sealed class CommandEditsTests : IDisposable
     {
         // Tests with a timeout must reference the xUnit token directly
         var cancellationToken = TestContext.Current.CancellationToken;
-        var path = await WriteFileAsync(_root, "Source.cs", "class A {}");
+        var path = await WriteFileAsync(Root, SourceFile, "class A {}");
         var service = CreateService();
-        var snapshot = Snapshot(_root);
+        var snapshot = Snapshot(Root);
         var captureStarted = new TaskCompletionSource(
             TaskCreationOptions.RunContinuationsAsynchronously
         );
@@ -162,7 +158,7 @@ public sealed class CommandEditsTests : IDisposable
         {
             captureStarted.SetResult();
             await Task.Delay(Timeout.InfiniteTimeSpan, token);
-            return Snapshot(_root);
+            return Snapshot(Root);
         }
 
         await using var commandEdits = new CommandEdits(
@@ -196,7 +192,5 @@ public sealed class CommandEditsTests : IDisposable
         await AssertFileTextAsync(path, "class B {}");
     }
 
-    public void Dispose() => Directory.Delete(_root, recursive: true);
-
-    private WorkspaceEditService CreateService() => new(new WorkspacePaths(_root));
+    private WorkspaceEditService CreateService() => new(new WorkspacePaths(Root));
 }

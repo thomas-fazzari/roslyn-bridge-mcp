@@ -35,7 +35,8 @@ internal sealed class FakeRoslynServer : IRoslynServer
     }
 
     /// <summary>
-    /// A references request that the bridge cancels ends without waiting for its answer. The default handler returns null.
+    /// A references or project contexts request that the bridge cancels ends without waiting for its answer.
+    /// The default handler returns null.
     /// </summary>
     public Func<string, JsonNode?, Task<JsonNode?>> Handle { get; set; } =
         (_, _) => Task.FromResult<JsonNode?>(null);
@@ -44,6 +45,11 @@ internal sealed class FakeRoslynServer : IRoslynServer
     /// Completes when the fake reports the project load. Defaults to at once.
     /// </summary>
     public Task ProjectLoad { get; set; } = Task.CompletedTask;
+
+    /// <summary>
+    /// The capabilities of the initialize answer. Defaults to none.
+    /// </summary>
+    public JsonObject Capabilities { get; set; } = [];
 
     /// <summary>
     /// Only didOpen, didChange, didClose, didChangeWatchedFiles, solution/open and project/open, in arrival order.
@@ -121,10 +127,10 @@ internal sealed class FakeRoslynServer : IRoslynServer
     private sealed class Target(FakeRoslynServer server)
     {
         [JsonRpcMethod(LspMethods.Initialize, UseSingleObjectParameterDeserialization = true)]
-        public static JsonObject Initialize(JsonObject parameters)
+        public JsonObject Initialize(JsonObject parameters)
         {
             _ = parameters;
-            return new JsonObject { ["capabilities"] = new JsonObject() };
+            return new JsonObject { ["capabilities"] = server.Capabilities.DeepClone() };
         }
 
         // Roslyn reports the project load after the handshake
@@ -187,6 +193,20 @@ internal sealed class FakeRoslynServer : IRoslynServer
         public Task<JsonNode?> DispatchExtensionMessageAsync(JsonNode? parameters) =>
             server.Handle(LspMethods.TextDocumentDispatchExtensionMessage, parameters);
 
+        [JsonRpcMethod(
+            LspMethods.TextDocumentRename,
+            UseSingleObjectParameterDeserialization = true
+        )]
+        public Task<JsonNode?> RenameAsync(JsonNode? parameters) =>
+            server.Handle(LspMethods.TextDocumentRename, parameters);
+
+        [JsonRpcMethod(
+            LspMethods.WorkspaceWillRenameFiles,
+            UseSingleObjectParameterDeserialization = true
+        )]
+        public Task<JsonNode?> WillRenameFilesAsync(JsonNode? parameters) =>
+            server.Handle(LspMethods.WorkspaceWillRenameFiles, parameters);
+
         [JsonRpcMethod(LspMethods.WorkspaceSymbol, UseSingleObjectParameterDeserialization = true)]
         public Task<JsonNode?> WorkspaceSymbolAsync(JsonNode? parameters) =>
             server.Handle(LspMethods.WorkspaceSymbol, parameters);
@@ -245,8 +265,13 @@ internal sealed class FakeRoslynServer : IRoslynServer
             LspMethods.TextDocumentGetProjectContexts,
             UseSingleObjectParameterDeserialization = true
         )]
-        public Task<JsonNode?> ProjectContextsAsync(JsonNode? parameters) =>
-            server.Handle(LspMethods.TextDocumentGetProjectContexts, parameters);
+        public Task<JsonNode?> ProjectContextsAsync(
+            JsonNode? parameters,
+            CancellationToken cancellationToken
+        ) =>
+            server
+                .Handle(LspMethods.TextDocumentGetProjectContexts, parameters)
+                .WaitAsync(cancellationToken);
 
         [JsonRpcMethod(
             LspMethods.TextDocumentCodeAction,

@@ -9,23 +9,19 @@ using static RoslynBridge.Tests.Unit.TestHelpers;
 
 namespace RoslynBridge.Tests.Unit.Tools;
 
-public sealed class AmbiguousSymbolTests : IDisposable
+public sealed class AmbiguousSymbolTests : TempWorkspaceTests
 {
     private const int EnumKind = 10;
     private const int EnumMemberKind = 22;
     private const int EnumMemberLine = 2;
 
-    private readonly string _root = Directory
-        .CreateTempSubdirectory("roslyn-ambiguous-symbol-")
-        .FullName;
-
     [Fact]
     public async Task TypeOnlyActionsResolveANameSharedWithAnEnumMemberToTheTypeAsync()
     {
-        var folder = await WriteFileAsync(_root, "Folder.cs", "class Folder {}\n");
-        var kinds = await WriteFileAsync(_root, "Kinds.cs", "enum ItemKind { Folder }\n");
+        var folder = await WriteFileAsync(Root, "Folder.cs", "class Folder {}\n");
+        var kinds = await WriteFileAsync(Root, "Kinds.cs", "enum ItemKind { Folder }\n");
         await using var session = CreateSession(
-            _root,
+            Root,
             FakeSymbolServer.With(
                 workspace: new(StringComparer.Ordinal)
                 {
@@ -50,7 +46,7 @@ public sealed class AmbiguousSymbolTests : IDisposable
                 }
             )
         );
-        using var tool = CreateTool(_root, session);
+        using var tool = CreateTool(Root, session);
 
         var members = await tool.ExecuteAsync(
             new LspRequest { Action = LspAction.Members, Symbol = "Folder" },
@@ -66,6 +62,4 @@ public sealed class AmbiguousSymbolTests : IDisposable
         // Source reads any declaration, so the enum member stays a candidate
         source.Should().BeError(ErrorCodes.AmbiguousSymbol);
     }
-
-    public void Dispose() => Directory.Delete(_root, recursive: true);
 }

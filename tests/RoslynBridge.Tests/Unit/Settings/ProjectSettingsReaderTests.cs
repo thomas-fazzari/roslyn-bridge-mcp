@@ -7,7 +7,7 @@ using static RoslynBridge.Tests.Unit.TestHelpers;
 
 namespace RoslynBridge.Tests.Unit.Settings;
 
-public sealed class ProjectSettingsReaderTests : IDisposable
+public sealed class ProjectSettingsReaderTests : TempWorkspaceTests
 {
     private const string Solution = "App.slnx";
     private const string Project = "App.csproj";
@@ -17,21 +17,17 @@ public sealed class ProjectSettingsReaderTests : IDisposable
     private const int StartupSeconds = 300;
     private const int RequestSeconds = 90;
 
-    private readonly string _root = Directory
-        .CreateTempSubdirectory("roslyn-bridge-settings-")
-        .FullName;
-
     public ProjectSettingsReaderTests()
     {
         foreach (var file in new[] { Solution, Project, Notes })
         {
-            File.WriteAllText(Path.Combine(_root, file), string.Empty);
+            File.WriteAllText(Path.Combine(Root, file), string.Empty);
         }
     }
 
     [Fact]
     public void NoFileMeansNoSettings() =>
-        ProjectSettingsReader.Read(_root).Should().BeEquivalentTo(new ProjectSettings());
+        ProjectSettingsReader.Read(Root).Should().BeEquivalentTo(new ProjectSettings());
 
     [Fact]
     public async Task ReadsEveryKeyOfAFileWithCommentsAndTrailingCommasAsync()
@@ -49,7 +45,7 @@ public sealed class ProjectSettingsReaderTests : IDisposable
             """
         );
 
-        var settings = ProjectSettingsReader.Read(_root);
+        var settings = ProjectSettingsReader.Read(Root);
 
         settings.Exclude.Should().Equal(Samples, Vendor);
         settings.StartupTimeout.Should().Be(StartupSeconds);
@@ -64,7 +60,7 @@ public sealed class ProjectSettingsReaderTests : IDisposable
     {
         await WriteSettingsAsync($$"""{ "projects": ["{{Project}}"] }""");
 
-        var settings = ProjectSettingsReader.Read(_root);
+        var settings = ProjectSettingsReader.Read(Root);
 
         settings.Projects.Should().Equal(Project);
         settings.Solution.Should().BeNull();
@@ -91,7 +87,7 @@ public sealed class ProjectSettingsReaderTests : IDisposable
         await WriteSettingsAsync($$"""{ {{faulty}} }""");
 
         var exception = FluentActions
-            .Invoking(() => ProjectSettingsReader.Read(_root))
+            .Invoking(() => ProjectSettingsReader.Read(Root))
             .Should()
             .Throw<InvalidSettingsException>()
             .Which;
@@ -108,7 +104,7 @@ public sealed class ProjectSettingsReaderTests : IDisposable
         );
 
         var exception = FluentActions
-            .Invoking(() => ProjectSettingsReader.Read(_root))
+            .Invoking(() => ProjectSettingsReader.Read(Root))
             .Should()
             .Throw<InvalidSettingsException>()
             .Which;
@@ -125,13 +121,11 @@ public sealed class ProjectSettingsReaderTests : IDisposable
         await WriteSettingsAsync(content);
 
         FluentActions
-            .Invoking(() => ProjectSettingsReader.Read(_root))
+            .Invoking(() => ProjectSettingsReader.Read(Root))
             .Should()
             .Throw<InvalidSettingsException>();
     }
 
-    public void Dispose() => Directory.Delete(_root, recursive: true);
-
     private Task WriteSettingsAsync(string content) =>
-        File.WriteAllTextAsync(Path.Combine(_root, ProjectSettings.FileName), content, TestCt);
+        File.WriteAllTextAsync(Path.Combine(Root, ProjectSettings.FileName), content, TestCt);
 }

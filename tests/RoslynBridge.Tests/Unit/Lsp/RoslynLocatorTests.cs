@@ -6,9 +6,8 @@ using RoslynBridge.Lsp;
 
 namespace RoslynBridge.Tests.Unit.Lsp;
 
-public sealed class RoslynLocatorTests : IDisposable
+public sealed class RoslynLocatorTests : TempWorkspaceTests
 {
-    private readonly string _root = Directory.CreateTempSubdirectory("roslyn-locator-").FullName;
     private readonly Dictionary<string, string> _environment = new(StringComparer.Ordinal);
 
     private static string ArchitectureVariable =>
@@ -55,9 +54,9 @@ public sealed class RoslynLocatorTests : IDisposable
     [Fact]
     public void ServerOnPathWinsOverDotnetTools()
     {
-        var bin = Directory.CreateDirectory(Path.Combine(_root, "bin")).FullName;
+        var bin = Directory.CreateDirectory(Path.Combine(Root, "bin")).FullName;
         var server = CreateFile(Path.Combine(bin, Server));
-        CreateFile(Path.Combine(_root, ".dotnet", "tools", Server));
+        CreateFile(Path.Combine(Root, ".dotnet", "tools", Server));
         _environment["PATH"] = bin;
 
         Locator().FindServer(explicitPath: null).Should().Be(server);
@@ -66,7 +65,7 @@ public sealed class RoslynLocatorTests : IDisposable
     [Fact]
     public void ServerFallsBackToDotnetTools()
     {
-        var server = CreateFile(Path.Combine(_root, ".dotnet", "tools", Server));
+        var server = CreateFile(Path.Combine(Root, ".dotnet", "tools", Server));
 
         Locator().FindServer(explicitPath: null).Should().Be(server);
     }
@@ -74,11 +73,11 @@ public sealed class RoslynLocatorTests : IDisposable
     [Fact]
     public void SymlinkedToolLaunchesTheServerBinaryBesideIt()
     {
-        var tool = CreateFile(Path.Combine(_root, "store", Server));
+        var tool = CreateFile(Path.Combine(Root, "store", Server));
         var server = CreateFile(
-            Path.Combine(_root, "store", Executable(RoslynLocator.ServerBinaryName))
+            Path.Combine(Root, "store", Executable(RoslynLocator.ServerBinaryName))
         );
-        var bin = Directory.CreateDirectory(Path.Combine(_root, "bin")).FullName;
+        var bin = Directory.CreateDirectory(Path.Combine(Root, "bin")).FullName;
         try
         {
             File.CreateSymbolicLink(Path.Combine(bin, Server), tool);
@@ -120,8 +119,6 @@ public sealed class RoslynLocatorTests : IDisposable
         environment["PATH"].Should().Be($"{root}{Path.PathSeparator}/usr/bin");
     }
 
-    public void Dispose() => Directory.Delete(_root, recursive: true);
-
     private static string Dotnet => Executable("dotnet");
 
     private static string Server => Executable(RoslynLocator.ServerName);
@@ -132,13 +129,13 @@ public sealed class RoslynLocatorTests : IDisposable
     private RoslynLocator Locator(string? bridgeRoot = null) =>
         new(
             name => _environment.GetValueOrDefault(name),
-            _root,
-            bridgeRoot ?? Path.Combine(_root, "missing")
+            Root,
+            bridgeRoot ?? Path.Combine(Root, "missing")
         );
 
     private string CreateDotnetRoot(string name)
     {
-        var root = Path.Combine(_root, name);
+        var root = Path.Combine(Root, name);
         Directory.CreateDirectory(Path.Combine(root, "host", "fxr", "10.0.0"));
         Directory.CreateDirectory(Path.Combine(root, "shared", "Microsoft.NETCore.App", "10.0.0"));
         Directory.CreateDirectory(Path.Combine(root, "sdk", "10.0.100"));

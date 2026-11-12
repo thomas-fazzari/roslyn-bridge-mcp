@@ -11,21 +11,17 @@ using static RoslynBridge.Tests.Unit.TestHelpers;
 
 namespace RoslynBridge.Tests.Unit.Tools;
 
-public sealed class SymbolNotFoundTests : IDisposable
+public sealed class SymbolNotFoundTests : TempWorkspaceTests
 {
-    private readonly string _root = Directory
-        .CreateTempSubdirectory("roslyn-symbol-not-found-")
-        .FullName;
-
     [Fact]
     public async Task KnownContainerWithoutTheMemberSaysSoWhenAnotherTypeHasItAsync()
     {
         var manager = await WriteFileAsync(
-            _root,
+            Root,
             "ISessionManager.cs",
             "interface ISessionManager {}\n"
         );
-        var controller = await WriteFileAsync(_root, "Controller.cs", "class Controller {}\n");
+        var controller = await WriteFileAsync(Root, "Controller.cs", "class Controller {}\n");
         var server = FakeSymbolServer.With(
             workspace: new(StringComparer.Ordinal)
             {
@@ -57,8 +53,8 @@ public sealed class SymbolNotFoundTests : IDisposable
     [Fact]
     public async Task KnownContainerWithTheMemberUnderOtherParametersListsItsOverloadFirstAsync()
     {
-        var calculator = await WriteFileAsync(_root, "Calculator.cs", "class Calculator {}\n");
-        var other = await WriteFileAsync(_root, "Other.cs", "class Other {}\n");
+        var calculator = await WriteFileAsync(Root, "Calculator.cs", "class Calculator {}\n");
+        var other = await WriteFileAsync(Root, "Other.cs", "class Other {}\n");
         var server = FakeSymbolServer.With(
             workspace: new(StringComparer.Ordinal)
             {
@@ -79,12 +75,10 @@ public sealed class SymbolNotFoundTests : IDisposable
         CandidateNames(response).Should().Equal("Calculator.Add()", "Other.Add()");
     }
 
-    public void Dispose() => Directory.Delete(_root, recursive: true);
-
     private async Task<CallToolResult> CallAsync(RoslynLauncher server, string symbol)
     {
-        await using var session = CreateSession(_root, server);
-        using var tool = CreateTool(_root, session);
+        await using var session = CreateSession(Root, server);
+        using var tool = CreateTool(Root, session);
         return await tool.ExecuteAsync(
             new LspRequest { Action = LspAction.References, Symbol = symbol },
             TestCt

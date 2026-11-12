@@ -11,18 +11,14 @@ using static RoslynBridge.Tests.Unit.TestHelpers;
 
 namespace RoslynBridge.Tests.Unit.Lsp;
 
-public sealed class LoadProgressTests : IDisposable
+public sealed class LoadProgressTests : TempWorkspaceTests
 {
-    private readonly string _root = Directory
-        .CreateTempSubdirectory("roslyn-bridge-mcp-progress-")
-        .FullName;
-
     private readonly BridgeOptions _options;
 
     public LoadProgressTests() =>
         _options = new BridgeOptions
         {
-            WorkspaceRoot = _root,
+            WorkspaceRoot = Root,
             StartupTimeout = TimeSpan.FromMilliseconds(50),
         };
 
@@ -32,8 +28,8 @@ public sealed class LoadProgressTests : IDisposable
         var cancellationToken = TestContext.Current.CancellationToken;
         var load = NewCompletionSource();
         var launched = NewLaunch();
-        await using var session = CreateSession(_root, Launcher(launched, load.Task), _options);
-        using var tool = CreateTool(_root, session, _options);
+        await using var session = CreateSession(Root, Launcher(launched, load.Task), _options);
+        using var tool = CreateTool(Root, session, _options);
         await session.StartLoadingAsync();
         var server = await launched.Task;
 
@@ -64,8 +60,8 @@ public sealed class LoadProgressTests : IDisposable
         var cancellationToken = TestContext.Current.CancellationToken;
         var load = NewCompletionSource();
         var launched = NewLaunch();
-        await using var session = CreateSession(_root, Launcher(launched, load.Task));
-        using var tool = CreateTool(_root, session);
+        await using var session = CreateSession(Root, Launcher(launched, load.Task));
+        using var tool = CreateTool(Root, session);
         await session.StartLoadingAsync();
         var server = await launched.Task;
         await server.ReportProgressAsync(
@@ -87,11 +83,11 @@ public sealed class LoadProgressTests : IDisposable
         var cancellationToken = TestContext.Current.CancellationToken;
         var launched = NewLaunch();
         await using var session = CreateSession(
-            _root,
+            Root,
             Launcher(launched, NewCompletionSource().Task),
             _options
         );
-        using var tool = CreateTool(_root, session, _options);
+        using var tool = CreateTool(Root, session, _options);
         await session.StartLoadingAsync();
         var server = await launched.Task;
 
@@ -124,7 +120,7 @@ public sealed class LoadProgressTests : IDisposable
         };
         var count = 0;
         await using var session = CreateSession(
-            _root,
+            Root,
             FakeServer(server =>
             {
                 server.ProjectLoad = NewCompletionSource().Task;
@@ -132,7 +128,7 @@ public sealed class LoadProgressTests : IDisposable
             }),
             _options
         );
-        using var tool = CreateTool(_root, session, _options);
+        using var tool = CreateTool(Root, session, _options);
         await session.StartLoadingAsync();
         var first = await launches[0].Task;
         await first.ReportProgressAsync("load", Begin("Loading Workspace.slnx"), cancellationToken);
@@ -146,8 +142,6 @@ public sealed class LoadProgressTests : IDisposable
 
         Task Reload() => session.ReloadAsync(cancellationToken);
     }
-
-    public void Dispose() => Directory.Delete(_root, recursive: true);
 
     private static TaskCompletionSource NewCompletionSource() =>
         new(TaskCreationOptions.RunContinuationsAsynchronously);
