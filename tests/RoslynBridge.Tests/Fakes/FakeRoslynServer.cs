@@ -172,6 +172,21 @@ internal sealed class FakeRoslynServer : IRoslynServer
         public void DidChange(JsonNode? parameters) =>
             server._notifications.Enqueue((LspMethods.TextDocumentDidChange, parameters));
 
+        // Roslyn answers an object, so a handler that ignores the method leaves the extension inactive
+        [JsonRpcMethod(
+            LspMethods.ServerActivateExtension,
+            UseSingleObjectParameterDeserialization = true
+        )]
+        public async Task<JsonNode?> ActivateExtensionAsync(JsonNode? parameters) =>
+            await server.Handle(LspMethods.ServerActivateExtension, parameters) as JsonObject;
+
+        [JsonRpcMethod(
+            LspMethods.TextDocumentDispatchExtensionMessage,
+            UseSingleObjectParameterDeserialization = true
+        )]
+        public Task<JsonNode?> DispatchExtensionMessageAsync(JsonNode? parameters) =>
+            server.Handle(LspMethods.TextDocumentDispatchExtensionMessage, parameters);
+
         [JsonRpcMethod(LspMethods.WorkspaceSymbol, UseSingleObjectParameterDeserialization = true)]
         public Task<JsonNode?> WorkspaceSymbolAsync(JsonNode? parameters) =>
             server.Handle(LspMethods.WorkspaceSymbol, parameters);

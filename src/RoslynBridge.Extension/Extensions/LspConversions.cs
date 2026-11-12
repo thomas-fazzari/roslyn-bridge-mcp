@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.Text;
 
 namespace RoslynBridge.Extension;
 
@@ -19,13 +18,20 @@ internal static class LspConversions
 
     extension(Document document)
     {
-        public async Task<int> GetPositionAsync(
+        /// <returns>Null when the position is past the end of its line or of the document.</returns>
+        public async Task<int?> GetPositionAsync(
             PositionRequest request,
             CancellationToken cancellationToken
         )
         {
             var text = await document.GetTextAsync(cancellationToken);
-            return text.Lines.GetPosition(new LinePosition(request.Line, request.Character));
+            if (request.Line >= text.Lines.Count)
+            {
+                return null;
+            }
+
+            var line = text.Lines[request.Line];
+            return request.Character > line.Span.Length ? null : line.Start + request.Character;
         }
     }
 
