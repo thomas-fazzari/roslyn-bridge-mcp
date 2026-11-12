@@ -817,6 +817,47 @@ public sealed partial class RoslynMcpTests
     }
 
     [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    public async Task ReportsNoSymbolForACharacterPastTheEndOfTheLineAsync()
+    {
+        // Counter.cs line 6 is empty, character 17 falls on Step of line 7, and the file ends on line 25
+        const string counterFile = "Application/Counter.cs";
+        const int emptyLine = 6;
+        const int nextLineCharacter = 17;
+        const int lastLine = 25;
+        const int pastTheLastLine = 500;
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var workspace = await RoslynTestWorkspace.CreateAsync(cancellationToken);
+        var pastTheLineEnd = new LspRequest
+        {
+            Action = LspAction.References,
+            File = counterFile,
+            Line = emptyLine,
+            Character = nextLineCharacter,
+        };
+
+        var references = await workspace.CallRawAsync(pastTheLineEnd);
+        var reads = await workspace.CallRawAsync(pastTheLineEnd with { Action = LspAction.Reads });
+        var writes = await workspace.CallRawAsync(
+            pastTheLineEnd with
+            {
+                Action = LspAction.Writes,
+            }
+        );
+        var pastTheFileEnd = await workspace.CallRawAsync(
+            pastTheLineEnd with
+            {
+                Line = lastLine,
+                Character = pastTheLastLine,
+            }
+        );
+
+        references.Should().BeError(ErrorCodes.SymbolNotFound);
+        reads.Should().BeError(ErrorCodes.SymbolNotFound);
+        writes.Should().BeError(ErrorCodes.SymbolNotFound);
+        pastTheFileEnd.Should().BeError(ErrorCodes.SymbolNotFound);
+    }
+
+    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
     public async Task TellsAMissedSymbolFromARejectedNameOnRenameAsync()
     {
         // In `namespace Sample.Contracts;`, 18 is on Contracts and 28 past the semicolon
