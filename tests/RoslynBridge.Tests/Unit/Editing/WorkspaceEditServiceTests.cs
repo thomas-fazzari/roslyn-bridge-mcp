@@ -9,12 +9,10 @@ using static RoslynBridge.Tests.Unit.TestHelpers;
 
 namespace RoslynBridge.Tests.Unit.Editing;
 
-public sealed class WorkspaceEditServiceTests : IDisposable
+public sealed class WorkspaceEditServiceTests : TempWorkspaceTests
 {
-    private readonly string _root = Directory.CreateTempSubdirectory("roslyn-edit-tests-").FullName;
-
     private readonly string _outside = Directory
-        .CreateTempSubdirectory("roslyn-edit-outside-")
+        .CreateTempSubdirectory("roslyn-bridge-tests-outside-")
         .FullName;
 
     [Theory]
@@ -23,10 +21,10 @@ public sealed class WorkspaceEditServiceTests : IDisposable
     [InlineData("\u0085")]
     public async Task ApplyCountsUnicodeLineSeparatorsLikeRoslynAsync(string separator)
     {
-        var path = Path.Combine(_root, "Source.cs");
+        var path = Path.Combine(Root, SourceFile);
         await File.WriteAllTextAsync(path, $"// a{separator}b\nclass C {{}}\n", TestCt);
         var service = CreateService();
-        var snapshot = Snapshot(_root);
+        var snapshot = Snapshot(Root);
         var edit = WorkspaceChanges(path, TextEdit(2, 6, 2, 7, "D"));
 
         await service.ApplyAsync(edit, snapshot, TestCt);
@@ -39,14 +37,14 @@ public sealed class WorkspaceEditServiceTests : IDisposable
     [Fact]
     public async Task ApplyPreservesUtf8BomCrLfAndUtf16PositionsAsync()
     {
-        var path = Path.Combine(_root, "Source.cs");
+        var path = Path.Combine(Root, SourceFile);
         await File.WriteAllBytesAsync(
             path,
             [0xEF, 0xBB, 0xBF, .. Encoding.UTF8.GetBytes("// 😀 name\r\nclass C {}\r\n")],
             TestCt
         );
         var service = CreateService();
-        var snapshot = Snapshot(_root);
+        var snapshot = Snapshot(Root);
         var edit = WorkspaceChanges(path, TextEdit(0, 6, 0, 10, "value"));
 
         var result = await service.ApplyAsync(edit, snapshot, TestCt);
@@ -72,15 +70,15 @@ public sealed class WorkspaceEditServiceTests : IDisposable
             "The root user bypasses Unix directory permissions."
         );
 
-        var first = await WriteFileAsync(_root, "First.cs", "class First {}");
-        var directory = Directory.CreateDirectory(Path.Combine(_root, "Nested"));
+        var first = await WriteFileAsync(Root, "First.cs", "class First {}");
+        var directory = Directory.CreateDirectory(Path.Combine(Root, "Nested"));
         var deleted = await WriteFileAsync(
-            _root,
+            Root,
             Path.Combine("Nested", "Delete.cs"),
             "class Delete {}"
         );
         var service = CreateService();
-        var snapshot = Snapshot(_root);
+        var snapshot = Snapshot(Root);
         var edit = DocumentChanges(
             DocumentEdit(first, version: null, TextEdit(0, 6, 0, 11, "Changed")),
             DeleteFile(deleted)
@@ -119,9 +117,9 @@ public sealed class WorkspaceEditServiceTests : IDisposable
     [Fact]
     public async Task PreviewDoesNotChangeFilesAsync()
     {
-        var path = await WriteFileAsync(_root, "Source.cs", "class A {}");
+        var path = await WriteFileAsync(Root, SourceFile, "class A {}");
         var service = CreateService();
-        var snapshot = Snapshot(_root);
+        var snapshot = Snapshot(Root);
 
         var (preview, _) = await service.PreviewAsync(
             WorkspaceChanges(path, TextEdit(0, 6, 0, 7, "B")),
@@ -144,7 +142,7 @@ public sealed class WorkspaceEditServiceTests : IDisposable
         for (var index = 0; index < fileCount; index++)
         {
             var path = await WriteFileAsync(
-                _root,
+                Root,
                 string.Create(CultureInfo.InvariantCulture, $"Source{index}.cs"),
                 before
             );
@@ -156,7 +154,7 @@ public sealed class WorkspaceEditServiceTests : IDisposable
 
         var edit = new JsonObject { ["changes"] = changes };
         var service = CreateService();
-        var snapshot = Snapshot(_root);
+        var snapshot = Snapshot(Root);
 
         var (preview, _) = await service.PreviewAsync(edit, snapshot, TestCt);
         var rendered = ResponseText(
@@ -166,7 +164,7 @@ public sealed class WorkspaceEditServiceTests : IDisposable
         preview.Should().HaveCount(fileCount);
         rendered.Should().Contain("files shown");
         rendered.Length.Should().BeLessThanOrEqualTo(ResultText.MaximumResponseCharacters);
-        await AssertFileTextAsync(Path.Combine(_root, "Source0.cs"), before);
+        await AssertFileTextAsync(Path.Combine(Root, "Source0.cs"), before);
 
         var applied = await service.ApplyAsync(edit, snapshot, TestCt);
 
@@ -181,10 +179,10 @@ public sealed class WorkspaceEditServiceTests : IDisposable
     [Fact]
     public async Task StaleSecondFilePreventsEveryWriteAsync()
     {
-        var first = await WriteFileAsync(_root, "First.cs", "class A {}");
-        var second = await WriteFileAsync(_root, "Second.cs", "class B {}");
+        var first = await WriteFileAsync(Root, "First.cs", "class A {}");
+        var second = await WriteFileAsync(Root, "Second.cs", "class B {}");
         var service = CreateService();
-        var snapshot = Snapshot(_root);
+        var snapshot = Snapshot(Root);
         var edit = WorkspaceChanges(first, TextEdit(0, 6, 0, 7, "Changed"));
         edit["changes"]![new Uri(second).AbsoluteUri] = new JsonArray(
             TextEdit(0, 6, 0, 7, "Changed")
@@ -202,10 +200,10 @@ public sealed class WorkspaceEditServiceTests : IDisposable
     [Fact]
     public async Task ExternalChangeToAProjectFileInvalidatesEditAsync()
     {
-        var target = await WriteFileAsync(_root, "Target.cs", "class A {}");
-        var project = await WriteFileAsync(_root, "Sample.csproj", "<Project />");
+        var target = await WriteFileAsync(Root, "Target.cs", "class A {}");
+        var project = await WriteFileAsync(Root, "Sample.csproj", "<Project />");
         var service = CreateService();
-        var snapshot = Snapshot(_root);
+        var snapshot = Snapshot(Root);
         await File.WriteAllTextAsync(project, "<Project Sdk=\"Microsoft.NET.Sdk\" />", TestCt);
 
         await AssertErrorAsync(Apply, ErrorCodes.StaleEdit);
@@ -223,10 +221,10 @@ public sealed class WorkspaceEditServiceTests : IDisposable
     [Fact]
     public async Task ExternalChangeToAnUntouchedSourceKeepsTheEditAsync()
     {
-        var target = await WriteFileAsync(_root, "Target.cs", "class A {}");
-        var other = await WriteFileAsync(_root, "Other.cs", "class B {}");
+        var target = await WriteFileAsync(Root, "Target.cs", "class A {}");
+        var other = await WriteFileAsync(Root, "Other.cs", "class B {}");
         var service = CreateService();
-        var snapshot = Snapshot(_root);
+        var snapshot = Snapshot(Root);
         await File.WriteAllTextAsync(other, "class Other {}", TestCt);
 
         await service.ApplyAsync(
@@ -241,10 +239,10 @@ public sealed class WorkspaceEditServiceTests : IDisposable
     [Fact]
     public async Task PreviewedFileChangedWithItsStampKeptInvalidatesTheApplyAsync()
     {
-        var target = await WriteFileAsync(_root, "Target.cs", "class A {}");
+        var target = await WriteFileAsync(Root, "Target.cs", "class A {}");
         var service = CreateService();
         var edit = WorkspaceChanges(target, TextEdit(0, 6, 0, 7, "C"));
-        var (_, previewed) = await service.PreviewAsync(edit, Snapshot(_root), TestCt);
+        var (_, previewed) = await service.PreviewAsync(edit, Snapshot(Root), TestCt);
         var written = File.GetLastWriteTimeUtc(target);
         await File.WriteAllTextAsync(target, "class B {}", TestCt);
         File.SetLastWriteTimeUtc(target, written);
@@ -259,9 +257,9 @@ public sealed class WorkspaceEditServiceTests : IDisposable
     [Fact]
     public async Task SamePositionInsertsPreserveProtocolOrderAsync()
     {
-        var source = await WriteFileAsync(_root, "Source.cs", "class A {}");
+        var source = await WriteFileAsync(Root, SourceFile, "class A {}");
         var service = CreateService();
-        var snapshot = Snapshot(_root);
+        var snapshot = Snapshot(Root);
         var edit = WorkspaceChanges(
             source,
             TextEdit(0, 0, 0, 0, "public "),
@@ -276,10 +274,10 @@ public sealed class WorkspaceEditServiceTests : IDisposable
     [Fact]
     public async Task RenameCanChangeOnlyFileNameCaseAsync()
     {
-        var source = await WriteFileAsync(_root, "Name.cs", "class Name {}");
-        var destination = Path.Combine(_root, "name.cs");
+        var source = await WriteFileAsync(Root, "Name.cs", "class Name {}");
+        var destination = Path.Combine(Root, "name.cs");
         var service = CreateService();
-        var snapshot = Snapshot(_root);
+        var snapshot = Snapshot(Root);
         var edit = DocumentChanges(
             RenameFile(source, destination),
             DocumentEdit(destination, version: null, TextEdit(0, 6, 0, 10, "name"))
@@ -287,17 +285,17 @@ public sealed class WorkspaceEditServiceTests : IDisposable
 
         await service.ApplyAsync(edit, snapshot, TestCt);
 
-        Directory.EnumerateFiles(_root).Select(Path.GetFileName).Should().Equal("name.cs");
+        Directory.EnumerateFiles(Root).Select(Path.GetFileName).Should().Equal("name.cs");
         await AssertFileTextAsync(destination, "class name {}");
     }
 
     [Fact]
     public async Task RenameOnlyCaseAndBackLeavesOriginalFileAsync()
     {
-        var source = await WriteFileAsync(_root, "Name.cs", "class Name {}");
-        var destination = Path.Combine(_root, "name.cs");
+        var source = await WriteFileAsync(Root, "Name.cs", "class Name {}");
+        var destination = Path.Combine(Root, "name.cs");
         var service = CreateService();
-        var snapshot = Snapshot(_root);
+        var snapshot = Snapshot(Root);
         var edit = DocumentChanges(
             RenameFile(source, destination),
             RenameFile(destination, source)
@@ -306,15 +304,15 @@ public sealed class WorkspaceEditServiceTests : IDisposable
         var result = await service.ApplyAsync(edit, snapshot, TestCt);
 
         result.Operations.Should().BeEmpty();
-        Directory.EnumerateFiles(_root).Select(Path.GetFileName).Should().Equal("Name.cs");
+        Directory.EnumerateFiles(Root).Select(Path.GetFileName).Should().Equal("Name.cs");
     }
 
     [Fact]
     public async Task CancelledApplyWritesNothingAsync()
     {
-        var source = await WriteFileAsync(_root, "Source.cs", "class A {}");
+        var source = await WriteFileAsync(Root, SourceFile, "class A {}");
         var service = CreateService();
-        var snapshot = Snapshot(_root);
+        var snapshot = Snapshot(Root);
 
         await FluentActions.Awaiting(Apply).Should().ThrowAsync<OperationCanceledException>();
         await AssertFileTextAsync(source, "class A {}");
@@ -334,9 +332,9 @@ public sealed class WorkspaceEditServiceTests : IDisposable
     [InlineData("Notes.md")]
     public async Task EditTargetMustBeAnIncludedSourceFileAsync(string relativePath)
     {
-        var target = Path.Combine(_root, relativePath);
+        var target = Path.Combine(Root, relativePath);
         var service = CreateService();
-        var snapshot = Snapshot(_root);
+        var snapshot = Snapshot(Root);
 
         await AssertErrorAsync(Apply, ErrorCodes.InvalidRequest);
         File.Exists(target).Should().BeFalse();
@@ -350,10 +348,10 @@ public sealed class WorkspaceEditServiceTests : IDisposable
     [InlineData(FileOperation.Rename)]
     public async Task EditTargetMustBeInsideTheWorkspaceAsync(string kind)
     {
-        var source = await WriteFileAsync(_root, "Source.cs", "class Source {}");
+        var source = await WriteFileAsync(Root, SourceFile, "class Source {}");
         var target = Path.Combine(_outside, "Target.cs");
         var service = CreateService();
-        var snapshot = Snapshot(_root);
+        var snapshot = Snapshot(Root);
         var operation = string.Equals(kind, FileOperation.Create, StringComparison.Ordinal)
             ? CreateFile(target)
             : RenameFile(source, target);
@@ -374,9 +372,9 @@ public sealed class WorkspaceEditServiceTests : IDisposable
     [InlineData("file://server:{0}")]
     public async Task EditRequiresALocalFileUriAsync(string targetFormat)
     {
-        var target = Path.Combine(_root, "Created.cs");
+        var target = Path.Combine(Root, "Created.cs");
         var service = CreateService();
-        var snapshot = Snapshot(_root);
+        var snapshot = Snapshot(Root);
         var operation = CreateFile(target);
         operation["uri"] = string.Format(
             CultureInfo.InvariantCulture,
@@ -397,10 +395,10 @@ public sealed class WorkspaceEditServiceTests : IDisposable
     [InlineData(FileOperation.Rename)]
     public async Task ReplacingAnExistingFileRequiresOverwriteAsync(string kind)
     {
-        var source = await WriteFileAsync(_root, "Source.cs", "class Source {}");
-        var target = await WriteFileAsync(_root, "Target.cs", "class Target {}");
+        var source = await WriteFileAsync(Root, SourceFile, "class Source {}");
+        var target = await WriteFileAsync(Root, "Target.cs", "class Target {}");
         var service = CreateService();
-        var snapshot = Snapshot(_root);
+        var snapshot = Snapshot(Root);
         var operation = string.Equals(kind, FileOperation.Create, StringComparison.Ordinal)
             ? CreateFile(target)
             : RenameFile(source, target);
@@ -413,13 +411,17 @@ public sealed class WorkspaceEditServiceTests : IDisposable
         Task Apply() => service.ApplyAsync(DocumentChanges(operation), snapshot, TestCt);
     }
 
-    public void Dispose()
+    protected override void Dispose(bool disposing)
     {
-        Directory.Delete(_root, recursive: true);
-        Directory.Delete(_outside, recursive: true);
+        if (disposing)
+        {
+            Directory.Delete(_outside, recursive: true);
+        }
+
+        base.Dispose(disposing);
     }
 
-    private WorkspaceEditService CreateService() => new(new WorkspacePaths(_root));
+    private WorkspaceEditService CreateService() => new(new WorkspacePaths(Root));
 
     private static async Task AssertErrorAsync(Func<Task> apply, string code) =>
         (await apply.Should().ThrowAsync<ToolErrorException>()).Which.Error.Code.Should().Be(code);

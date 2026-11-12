@@ -7,21 +7,17 @@ using static RoslynBridge.Tests.Unit.TestHelpers;
 
 namespace RoslynBridge.Tests.Unit.Lsp;
 
-public sealed class SessionDocumentTests : IDisposable
+public sealed class SessionDocumentTests : TempWorkspaceTests
 {
     private const string ChangedText = "class B {}";
     private const int FileDeleted = 3;
 
-    private readonly string _root = Directory
-        .CreateTempSubdirectory("roslyn-bridge-mcp-documents-")
-        .FullName;
-
     [Fact]
     public async Task ConcurrentOpensOfOneFileSendOneDidOpenAsync()
     {
-        var path = await WriteFileAsync(_root, "Greeter.cs", "class A {}");
+        var path = await WriteFileAsync(Root, "Greeter.cs", "class A {}");
         var servers = new List<FakeRoslynServer>();
-        await using var session = CreateSession(_root, FakeServer(servers.Add));
+        await using var session = CreateSession(Root, FakeServer(servers.Add));
         await session.EnsureStartedAsync(TestCt);
 
         await Task.WhenAll(
@@ -36,10 +32,10 @@ public sealed class SessionDocumentTests : IDisposable
     [Fact]
     public async Task SendsSameLengthEditsButNotTouchedFilesAsync()
     {
-        var path = await WriteFileAsync(_root, "Greeter.cs", "class A {}");
+        var path = await WriteFileAsync(Root, "Greeter.cs", "class A {}");
         var written = File.GetLastWriteTimeUtc(path);
         var servers = new List<FakeRoslynServer>();
-        await using var session = CreateSession(_root, FakeServer(servers.Add));
+        await using var session = CreateSession(Root, FakeServer(servers.Add));
         await session.EnsureStartedAsync(TestCt);
         await session.OpenDocumentAsync(path, TestCt);
 
@@ -61,9 +57,9 @@ public sealed class SessionDocumentTests : IDisposable
     [Fact]
     public async Task DeletedFileClosesItsDocumentAndIsReportedAsDeletedAsync()
     {
-        var path = await WriteFileAsync(_root, "Greeter.cs", "class A {}");
+        var path = await WriteFileAsync(Root, "Greeter.cs", "class A {}");
         var servers = new List<FakeRoslynServer>();
-        await using var session = CreateSession(_root, FakeServer(servers.Add));
+        await using var session = CreateSession(Root, FakeServer(servers.Add));
         await session.EnsureStartedAsync(TestCt);
         await session.OpenDocumentAsync(path, TestCt);
         await RegisterWatchedFilesAsync(servers[0]);
@@ -90,8 +86,6 @@ public sealed class SessionDocumentTests : IDisposable
             .Should()
             .Contain((uri, FileDeleted));
     }
-
-    public void Dispose() => Directory.Delete(_root, recursive: true);
 
     private static Task<JsonNode?> RegisterWatchedFilesAsync(FakeRoslynServer server) =>
         server.RequestClientAsync(

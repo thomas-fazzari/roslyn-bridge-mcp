@@ -8,16 +8,14 @@ using static RoslynBridge.Tests.Unit.TestHelpers;
 
 namespace RoslynBridge.Tests.Unit.Tools;
 
-public sealed class LspAccessTests : IDisposable
+public sealed class LspAccessTests : TempWorkspaceTests
 {
     private const int TextKind = 1;
     private const int ReadKind = 2;
     private const int WriteKind = 3;
-    private const string SourceFile = "Source.cs";
 
     private static readonly string[] _referencedFiles = ["A.cs", "B.cs"];
 
-    private readonly string _root = Directory.CreateTempSubdirectory("roslyn-lsp-access-").FullName;
     private readonly ConcurrentQueue<(string File, int Line)> _highlightRequests = new();
 
     // A.cs line 1 is a write, 2 a read and 3 a write. B.cs line 1 and 2 are reads, 3 is a declaration,
@@ -39,8 +37,8 @@ public sealed class LspAccessTests : IDisposable
     )
     {
         await WriteFilesAsync();
-        await using var session = CreateSession(_root, HighlightServer());
-        using var tool = CreateTool(_root, session);
+        await using var session = CreateSession(Root, HighlightServer());
+        using var tool = CreateTool(Root, session);
 
         var response = await tool.ExecuteAsync(
             At(Enum.Parse<LspAction>(action, ignoreCase: true)),
@@ -55,8 +53,8 @@ public sealed class LspAccessTests : IDisposable
     public async Task ShowsTheSourceLinesOfReadsWithContextAsync()
     {
         await WriteFilesAsync();
-        await using var session = CreateSession(_root, HighlightServer());
-        using var tool = CreateTool(_root, session);
+        await using var session = CreateSession(Root, HighlightServer());
+        using var tool = CreateTool(Root, session);
 
         var response = await tool.ExecuteAsync(At(LspAction.Reads) with { Context = true }, TestCt);
 
@@ -74,8 +72,8 @@ public sealed class LspAccessTests : IDisposable
         await WriteFilesAsync();
         _highlights["A.cs"] = [(0, TextKind)];
         _highlights["B.cs"] = [];
-        await using var session = CreateSession(_root, HighlightServer());
-        using var tool = CreateTool(_root, session);
+        await using var session = CreateSession(Root, HighlightServer());
+        using var tool = CreateTool(Root, session);
 
         var response = await tool.ExecuteAsync(
             At(Enum.Parse<LspAction>(action, ignoreCase: true)),
@@ -89,8 +87,8 @@ public sealed class LspAccessTests : IDisposable
     public async Task PagesTheReadsAfterFilteringAsync()
     {
         await WriteFilesAsync();
-        await using var session = CreateSession(_root, HighlightServer());
-        using var tool = CreateTool(_root, session);
+        await using var session = CreateSession(Root, HighlightServer());
+        using var tool = CreateTool(Root, session);
         var request = At(LspAction.Reads) with { Limit = 2 };
 
         var first = await tool.ExecuteAsync(request, TestCt);
@@ -108,8 +106,8 @@ public sealed class LspAccessTests : IDisposable
     public async Task BulkRunsWritesLikeAnyOtherNavigationAsync()
     {
         await WriteFilesAsync();
-        await using var session = CreateSession(_root, HighlightServer());
-        using var tool = CreateTool(_root, session);
+        await using var session = CreateSession(Root, HighlightServer());
+        using var tool = CreateTool(Root, session);
 
         var response = await tool.ExecuteAsync(
             new LspRequest
@@ -127,13 +125,11 @@ public sealed class LspAccessTests : IDisposable
             );
     }
 
-    public void Dispose() => Directory.Delete(_root, recursive: true);
-
     private async Task WriteFilesAsync()
     {
-        await WriteFileAsync(_root, SourceFile, "class S {}");
+        await WriteFileAsync(Root, SourceFile, "class S {}");
         await WriteFileAsync(
-            _root,
+            Root,
             "A.cs",
             """
             a0
@@ -144,7 +140,7 @@ public sealed class LspAccessTests : IDisposable
             """
         );
         await WriteFileAsync(
-            _root,
+            Root,
             "B.cs",
             """
             b0
@@ -183,7 +179,7 @@ public sealed class LspAccessTests : IDisposable
             .. _referencedFiles.SelectMany(file =>
                 Enumerable
                     .Range(0, file is "A.cs" ? 3 : 4)
-                    .Select(line => Location(Path.Combine(_root, file), line))
+                    .Select(line => Location(Path.Combine(Root, file), line))
             ),
         ]);
 

@@ -8,19 +8,15 @@ using static RoslynBridge.Tests.Unit.TestHelpers;
 
 namespace RoslynBridge.Tests.Unit.Lsp;
 
-public sealed class ClientCallbacksTests : IDisposable
+public sealed class ClientCallbacksTests : TempWorkspaceTests
 {
-    private readonly string _root = Directory
-        .CreateTempSubdirectory("roslyn-callback-tests-")
-        .FullName;
-
     [Fact]
     public async Task ApplyEditForwardsTheWorkspaceEditToTheFileEditorAsync()
     {
-        var source = await WriteFileAsync(_root, "Source.cs", "class Before {}");
-        var paths = new WorkspacePaths(_root);
+        var source = await WriteFileAsync(Root, SourceFile, "class Before {}");
+        var paths = new WorkspacePaths(Root);
         var editor = new WorkspaceEditService(paths);
-        var snapshot = Snapshot(_root);
+        var snapshot = Snapshot(Root);
         await using var session = CreateSession(paths.Root, RoslynProcess.Start);
         using var edits = session.HandleWorkspaceEdits(
             async (edit, token) =>
@@ -43,8 +39,8 @@ public sealed class ClientCallbacksTests : IDisposable
     [Fact]
     public async Task ApplyEditOutsideAToolCallIsNotAppliedAsync()
     {
-        var source = await WriteFileAsync(_root, "Source.cs", "class Before {}");
-        var paths = new WorkspacePaths(_root);
+        var source = await WriteFileAsync(Root, SourceFile, "class Before {}");
+        var paths = new WorkspacePaths(Root);
         await using var session = CreateSession(paths.Root, RoslynProcess.Start);
         var callbacks = CreateCallbacks(session, paths);
 
@@ -56,8 +52,6 @@ public sealed class ClientCallbacksTests : IDisposable
         response.Applied.Should().BeFalse();
         await AssertFileTextAsync(source, "class Before {}");
     }
-
-    public void Dispose() => Directory.Delete(_root, recursive: true);
 
     private static ClientCallbacks CreateCallbacks(RoslynSession session, WorkspacePaths paths) =>
         new(session, paths, NullLogger<RoslynSession>.Instance, new TaskCompletionSource());

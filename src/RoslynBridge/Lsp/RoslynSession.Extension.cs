@@ -8,11 +8,11 @@ namespace RoslynBridge.Lsp;
 
 internal sealed partial class RoslynSession
 {
-    private const string ReferencesMessage = "RoslynBridge.Extension.ReferencesHandler";
-    private const string CallersMessage = "RoslynBridge.Extension.CallersHandler";
-    private const string UnusedMessage = "RoslynBridge.Extension.UnusedHandler";
-    private const int RequestCancelledCode = -32800;
-    private const int ServerCancelledCode = -32802;
+    internal const string ReferencesMessage = "RoslynBridge.Extension.ReferencesHandler";
+    internal const string CallersMessage = "RoslynBridge.Extension.CallersHandler";
+    internal const string UnusedMessage = "RoslynBridge.Extension.UnusedHandler";
+    internal const int RequestCancelledCode = -32800;
+    internal const int ServerCancelledCode = -32802;
 
     private static readonly string _extensionPath = Path.Combine(
         AppContext.BaseDirectory,

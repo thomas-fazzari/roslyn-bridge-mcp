@@ -6,7 +6,7 @@ using static RoslynBridge.Tests.Unit.TestHelpers;
 
 namespace RoslynBridge.Tests.Unit.Settings;
 
-public sealed class BridgeOptionsTests : IDisposable
+public sealed class BridgeOptionsTests : TempWorkspaceTests
 {
     private const string Samples = "samples";
     private const string Vendor = "vendor";
@@ -17,10 +17,6 @@ public sealed class BridgeOptionsTests : IDisposable
     private const string FileSettings = $$"""
         { "exclude": ["{{Samples}}"], "startupTimeout": 300, "requestTimeout": 90 }
         """;
-
-    private readonly string _root = Directory
-        .CreateTempSubdirectory("roslyn-bridge-options-")
-        .FullName;
 
     [Fact]
     public void UsesTheDefaultsWithoutAFile()
@@ -88,14 +84,12 @@ public sealed class BridgeOptionsTests : IDisposable
             .Should()
             .Throw<InvalidLaunchArgumentsException>();
 
-    public void Dispose() => Directory.Delete(_root, recursive: true);
-
     private BridgeOptions Parse(params string[] arguments) =>
         BridgeOptions.From(
-            LaunchArguments.Parse([LaunchArguments.WorkspaceArgument, _root, .. arguments]),
-            ProjectSettingsReader.Read(_root)
+            LaunchArguments.Parse([LaunchArguments.WorkspaceArgument, Root, .. arguments]),
+            ProjectSettingsReader.Read(Root)
         );
 
     private Task WriteSettingsAsync(string content) =>
-        File.WriteAllTextAsync(Path.Combine(_root, ProjectSettings.FileName), content, TestCt);
+        File.WriteAllTextAsync(Path.Combine(Root, ProjectSettings.FileName), content, TestCt);
 }

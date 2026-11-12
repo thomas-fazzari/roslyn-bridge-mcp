@@ -14,18 +14,14 @@ using static RoslynBridge.Tests.Unit.TestHelpers;
 
 namespace RoslynBridge.Tests.Unit.Changes;
 
-public sealed class LspChangesTests : IDisposable
+public sealed class LspChangesTests : TempWorkspaceTests
 {
-    private readonly string _root = Directory
-        .CreateTempSubdirectory("roslyn-lsp-changes-")
-        .FullName;
-
     [Fact]
     public async Task EvictionKeepsTheNewestProposalsAsync()
     {
-        await using var session = CreateSession(_root, FakeServer());
+        await using var session = CreateSession(Root, FakeServer());
         var changes = CreateChanges(session);
-        var snapshot = Snapshot(_root);
+        var snapshot = Snapshot(Root);
         var proposals = new List<string>();
         for (var index = 0; index < 2 * LspChanges.MaximumPendingProposals; index++)
         {
@@ -51,9 +47,9 @@ public sealed class LspChangesTests : IDisposable
     [Fact]
     public async Task ProposalCannotBeUsedForAnotherActionAsync()
     {
-        await using var session = CreateSession(_root, FakeServer());
+        await using var session = CreateSession(Root, FakeServer());
         var changes = CreateChanges(session);
-        var snapshot = Snapshot(_root);
+        var snapshot = Snapshot(Root);
         var preview = await changes.CompleteAsync(
             new PendingChange(LspAction.Rename, snapshot, Edit: [], Command: null),
             apply: false,
@@ -75,14 +71,14 @@ public sealed class LspChangesTests : IDisposable
     public async Task FailedCommandWithoutWritesKeepsTheOriginalErrorAsync()
     {
         await using var session = CreateSession(
-            _root,
+            Root,
             FakeServer(server =>
                 server.Handle = (_, _) => throw new LocalRpcException("Unknown command.")
             )
         );
         await session.EnsureStartedAsync(TestCt);
         var changes = CreateChanges(session);
-        var snapshot = Snapshot(_root);
+        var snapshot = Snapshot(Root);
         var command = new JsonObject { ["command"] = "unknown.command" };
 
         await FluentActions.Awaiting(Apply).Should().ThrowAsync<RemoteRpcException>();
@@ -99,15 +95,15 @@ public sealed class LspChangesTests : IDisposable
     [Fact]
     public async Task SynchronizeFailureAfterAWritePreservesTheCompletedWriteAsync()
     {
-        var source = await WriteFileAsync(_root, "Source.cs", "class A {}");
-        var destination = Path.Combine(_root, "Renamed.cs");
+        var source = await WriteFileAsync(Root, SourceFile, "class A {}");
+        var destination = Path.Combine(Root, RenamedFile);
         var servers = new List<FakeRoslynServer>();
-        await using var session = CreateSession(_root, FakeServer(servers.Add));
+        await using var session = CreateSession(Root, FakeServer(servers.Add));
         await session.EnsureStartedAsync(TestCt);
         var changes = CreateChanges(session);
         var pending = new PendingChange(
             LspAction.RenameFile,
-            Snapshot(_root),
+            Snapshot(Root),
             DocumentChanges(RenameFile(source, destination)),
             Command: null
         );
@@ -131,10 +127,10 @@ public sealed class LspChangesTests : IDisposable
     [Fact]
     public async Task ListingFlattensNestedActionsAndResolvesFixAllByScopeAsync()
     {
-        var path = await WriteFileAsync(_root, "Source.cs", "class A {}");
+        var path = await WriteFileAsync(Root, SourceFile, "class A {}");
         JsonNode? fixAll = null;
         await using var session = CreateSession(
-            _root,
+            Root,
             FakeServer(server =>
                 server.Handle = (method, parameters) =>
                 {
@@ -195,8 +191,6 @@ public sealed class LspChangesTests : IDisposable
         preview.Files.Should().ContainSingle();
     }
 
-    public void Dispose() => Directory.Delete(_root, recursive: true);
-
     private static JsonArray CodeActions()
     {
         var wrap = new JsonObject
@@ -234,7 +228,7 @@ public sealed class LspChangesTests : IDisposable
 
     private LspChanges CreateChanges(RoslynSession session)
     {
-        var paths = new WorkspacePaths(_root);
+        var paths = new WorkspacePaths(Root);
         var queries = new LspQueries(session, paths, new SymbolResolver(session, paths));
         return new LspChanges(session, paths, new WorkspaceEditService(paths), queries);
     }

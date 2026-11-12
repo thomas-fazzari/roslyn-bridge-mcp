@@ -7,17 +7,13 @@ using static RoslynBridge.Tests.Unit.TestHelpers;
 
 namespace RoslynBridge.Tests.Unit.Lsp;
 
-public sealed class SessionLifecycleTests : IDisposable
+public sealed class SessionLifecycleTests : TempWorkspaceTests
 {
-    private readonly string _root = Directory
-        .CreateTempSubdirectory("roslyn-bridge-mcp-session-")
-        .FullName;
-
     [Fact]
     public async Task CrashDuringARequestReportsStderrAndRestartsOnTheNextCallAsync()
     {
         var servers = new List<FakeRoslynServer>();
-        await using var session = CreateSession(_root, FakeServer(servers.Add));
+        await using var session = CreateSession(Root, FakeServer(servers.Add));
         await session.EnsureStartedAsync(TestCt);
         await servers[0].WriteErrorAsync("Unhandled exception: out of memory", TestCt);
         servers[0].Handle = (_, _) =>
@@ -47,11 +43,11 @@ public sealed class SessionLifecycleTests : IDisposable
     [Fact]
     public async Task SymbolicLinkCreatedAfterStartIsIgnoredAsync()
     {
-        var target = Path.Combine(_root, "Target.cs");
+        var target = Path.Combine(Root, "Target.cs");
         await File.WriteAllTextAsync(target, "class Target {}", TestCt);
-        await using var session = CreateSession(_root, FakeServer());
+        await using var session = CreateSession(Root, FakeServer());
         await session.EnsureStartedAsync(TestCt);
-        var link = Path.Combine(_root, "Link.cs");
+        var link = Path.Combine(Root, "Link.cs");
         try
         {
             File.CreateSymbolicLink(link, target);
@@ -69,6 +65,4 @@ public sealed class SessionLifecycleTests : IDisposable
 
         (await session.CopyDocumentVersionsAsync(TestCt)).Should().NotContainKey(link);
     }
-
-    public void Dispose() => Directory.Delete(_root, recursive: true);
 }

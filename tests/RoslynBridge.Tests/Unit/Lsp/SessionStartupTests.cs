@@ -8,17 +8,13 @@ using static RoslynBridge.Tests.Unit.TestHelpers;
 
 namespace RoslynBridge.Tests.Unit.Lsp;
 
-public sealed class SessionStartupTests : IDisposable
+public sealed class SessionStartupTests : TempWorkspaceTests
 {
-    private readonly string _root = Directory
-        .CreateTempSubdirectory("roslyn-bridge-mcp-startup-")
-        .FullName;
-
     [Fact]
     public async Task ReportsStderrWhenTheServerExitsDuringStartupAsync()
     {
         Assert.SkipWhen(OperatingSystem.IsWindows(), "The fake server is a shell script.");
-        var server = Path.Combine(_root, "server.sh");
+        var server = Path.Combine(Root, "server.sh");
         await File.WriteAllTextAsync(
             server,
             "#!/bin/sh\necho 'You must install .NET to run this application.' >&2\nexit 1\n",
@@ -29,9 +25,9 @@ public sealed class SessionStartupTests : IDisposable
             File.SetUnixFileMode(server, UnixFileMode.UserRead | UnixFileMode.UserExecute);
         }
         await using var session = CreateSession(
-            _root,
+            Root,
             RoslynProcess.Start,
-            new BridgeOptions { WorkspaceRoot = _root, ServerPath = server }
+            new BridgeOptions { WorkspaceRoot = Root, ServerPath = server }
         );
 
         (await FluentActions.Awaiting(Start).Should().ThrowAsync<IOException>())
@@ -45,7 +41,7 @@ public sealed class SessionStartupTests : IDisposable
     [Fact]
     public async Task OpensTheConfiguredSolutionAfterTheHandshakeAsync()
     {
-        var solution = Path.Combine(_root, "App.slnx");
+        var solution = Path.Combine(Root, "App.slnx");
 
         var notifications = await StartAsync(new BridgeOptions { Solution = solution });
 
@@ -64,8 +60,8 @@ public sealed class SessionStartupTests : IDisposable
     [Fact]
     public async Task OpensTheConfiguredProjectsAfterTheHandshakeAsync()
     {
-        var first = Path.Combine(_root, "A", "A.csproj");
-        var second = Path.Combine(_root, "B", "B.csproj");
+        var first = Path.Combine(Root, "A", "A.csproj");
+        var second = Path.Combine(Root, "B", "B.csproj");
 
         var notifications = await StartAsync(new BridgeOptions { Projects = [first, second] });
 
@@ -87,19 +83,17 @@ public sealed class SessionStartupTests : IDisposable
         notifications.Should().BeEmpty();
     }
 
-    public void Dispose() => Directory.Delete(_root, recursive: true);
-
     private async Task<List<(string Method, JsonNode? Parameters)>> StartAsync(
         BridgeOptions options
     )
     {
         FakeRoslynServer? fake = null;
         await using var session = CreateSession(
-            _root,
+            Root,
             FakeServer(server => fake = server),
             options with
             {
-                WorkspaceRoot = _root,
+                WorkspaceRoot = Root,
             }
         );
 

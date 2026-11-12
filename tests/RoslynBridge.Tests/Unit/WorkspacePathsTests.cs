@@ -6,28 +6,26 @@ using static RoslynBridge.Tests.Unit.TestHelpers;
 
 namespace RoslynBridge.Tests.Unit;
 
-public sealed class WorkspacePathsTests : IDisposable
+public sealed class WorkspacePathsTests : TempWorkspaceTests
 {
-    private readonly string _root = Directory.CreateTempSubdirectory("roslyn-path-tests-").FullName;
-
     [Fact]
     public async Task EnumerateFilesSkipsExcludedSubtreesAsync()
     {
         foreach (var directory in WorkspacePaths.ExcludedDirectories)
         {
             await WriteFileAsync(
-                _root,
+                Root,
                 Path.Combine(directory, "Nested", "Generated.cs"),
                 "class Source {}"
             );
         }
 
         var source = await WriteFileAsync(
-            _root,
+            Root,
             Path.Combine("src", "Source.cs"),
             "class Source {}"
         );
-        var paths = new WorkspacePaths(_root);
+        var paths = new WorkspacePaths(Root);
 
         paths.EnumerateFiles().Select(file => file.Path).Should().Equal(source);
     }
@@ -38,11 +36,11 @@ public sealed class WorkspacePathsTests : IDisposable
     public async Task EnumerateFilesKeepsSourceDirectoriesAsync(string directory)
     {
         var source = await WriteFileAsync(
-            _root,
+            Root,
             Path.Combine(directory, "Source.cs"),
             "class Source {}"
         );
-        var paths = new WorkspacePaths(_root);
+        var paths = new WorkspacePaths(Root);
 
         paths.EnumerateFiles().Select(file => file.Path).Should().Equal(source);
         paths.IsWatchedDirectory(directory).Should().BeTrue();
@@ -54,14 +52,14 @@ public sealed class WorkspacePathsTests : IDisposable
     {
         Assert.SkipWhen(OperatingSystem.IsWindows(), "Unix permissions are required.");
 
-        var source = await WriteFileAsync(_root, "Source.cs", "class Source {}");
+        var source = await WriteFileAsync(Root, SourceFile, "class Source {}");
         var locked = Path.GetDirectoryName(
-            await WriteFileAsync(_root, Path.Combine("locked", "Hidden.cs"), "class Source {}")
+            await WriteFileAsync(Root, Path.Combine("locked", "Hidden.cs"), "class Source {}")
         )!;
         File.SetUnixFileMode(locked, UnixFileMode.None);
         try
         {
-            var paths = new WorkspacePaths(_root);
+            var paths = new WorkspacePaths(Root);
 
             paths.EnumerateFiles().Select(file => file.Path).Should().Equal(source);
         }
@@ -77,29 +75,29 @@ public sealed class WorkspacePathsTests : IDisposable
     [Fact]
     public async Task ContainsProjectFindsAProjectTwoFoldersBelowTheRootAsync()
     {
-        await WriteFileAsync(_root, Path.Combine("src", "App", "App.csproj"), "<Project />");
+        await WriteFileAsync(Root, Path.Combine("src", "App", "App.csproj"), "<Project />");
 
-        new WorkspacePaths(_root).ContainsProject().Should().BeTrue();
+        new WorkspacePaths(Root).ContainsProject().Should().BeTrue();
     }
 
     [Fact]
     public async Task ContainsProjectIgnoresSourcesExcludedDirectoriesAndDeepFoldersAsync()
     {
-        await WriteFileAsync(_root, "Source.cs", "class Source {}");
-        await WriteFileAsync(_root, Path.Combine("bin", "App.csproj"), "<Project />");
-        await WriteFileAsync(_root, Path.Combine("a", "b", "c", "App.csproj"), "<Project />");
+        await WriteFileAsync(Root, SourceFile, "class Source {}");
+        await WriteFileAsync(Root, Path.Combine("bin", "App.csproj"), "<Project />");
+        await WriteFileAsync(Root, Path.Combine("a", "b", "c", "App.csproj"), "<Project />");
 
-        new WorkspacePaths(_root).ContainsProject().Should().BeFalse();
+        new WorkspacePaths(Root).ContainsProject().Should().BeFalse();
     }
 
     [Fact]
     public void WorkspaceFileReadsAWindowsDriveWrittenLikeRoslyn()
     {
         Assert.SkipUnless(OperatingSystem.IsWindows(), "Drive letters exist only on Windows.");
-        var file = Path.Combine(_root, "src", "Source.cs");
+        var file = Path.Combine(Root, "src", "Source.cs");
         var uri = $"file:///{char.ToLowerInvariant(file[0])}%3A{file[2..].Replace('\\', '/')}";
 
-        new WorkspacePaths(_root).TryGetWorkspaceFile(uri).Should().Be(file);
+        new WorkspacePaths(Root).TryGetWorkspaceFile(uri).Should().Be(file);
     }
 
     [Fact]
@@ -112,7 +110,7 @@ public sealed class WorkspacePathsTests : IDisposable
             .Which.Error.Code.Should()
             .Be(ErrorCodes.InvalidRequest);
 
-        string Resolve() => new WorkspacePaths(_root).Resolve("src/A\0.cs");
+        string Resolve() => new WorkspacePaths(Root).Resolve("src/A\0.cs");
     }
 
     [Theory]
@@ -121,11 +119,11 @@ public sealed class WorkspacePathsTests : IDisposable
     public async Task ResolveRejectsAPathThroughASymbolicLinkAsync(bool linkDirectory)
     {
         var target = await WriteFileAsync(
-            _root,
+            Root,
             Path.Combine("Target", "Source.cs"),
             "class Source {}"
         );
-        var link = Path.Combine(_root, linkDirectory ? "Linked" : "Linked.cs");
+        var link = Path.Combine(Root, linkDirectory ? "Linked" : "Linked.cs");
         try
         {
             if (linkDirectory)
@@ -151,7 +149,7 @@ public sealed class WorkspacePathsTests : IDisposable
         return;
 
         string Resolve() =>
-            new WorkspacePaths(_root).Resolve(
+            new WorkspacePaths(Root).Resolve(
                 linkDirectory ? Path.Combine("Linked", "Source.cs") : "Linked.cs"
             );
     }
@@ -162,14 +160,14 @@ public sealed class WorkspacePathsTests : IDisposable
         const string samples = "samples";
         const string vendor = "vendor";
 
-        var kept = await WriteFileAsync(_root, Path.Combine("src", "Source.cs"), "class Source {}");
+        var kept = await WriteFileAsync(Root, Path.Combine("src", "Source.cs"), "class Source {}");
         var inSamples = await WriteFileAsync(
-            _root,
+            Root,
             Path.Combine(samples, "Sample.cs"),
             "class S {}"
         );
-        var inVendor = await WriteFileAsync(_root, Path.Combine(vendor, "Vendor.cs"), "class V {}");
-        var paths = new WorkspacePaths(_root);
+        var inVendor = await WriteFileAsync(Root, Path.Combine(vendor, "Vendor.cs"), "class V {}");
+        var paths = new WorkspacePaths(Root);
 
         paths.Exclude([samples]);
         var first = paths.EnumerateFiles().Select(file => file.Path).ToList();
@@ -184,10 +182,8 @@ public sealed class WorkspacePathsTests : IDisposable
 
     [Fact]
     public void IntermediateOutputRemainsWatchedForRestoreChanges() =>
-        new WorkspacePaths(_root)
+        new WorkspacePaths(Root)
             .IsWatchedDirectory(WorkspacePaths.IntermediateDirectoryName)
             .Should()
             .BeTrue();
-
-    public void Dispose() => Directory.Delete(_root, recursive: true);
 }

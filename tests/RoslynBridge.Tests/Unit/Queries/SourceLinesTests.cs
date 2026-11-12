@@ -6,12 +6,8 @@ using RoslynBridge.Results;
 
 namespace RoslynBridge.Tests.Unit.Queries;
 
-public sealed class SourceLinesTests : IDisposable
+public sealed class SourceLinesTests : TempWorkspaceTests
 {
-    private readonly DirectoryInfo _root = Directory.CreateTempSubdirectory("source-lines-");
-
-    public void Dispose() => _root.Delete(recursive: true);
-
     [Fact]
     public void AddsEachOccurrenceLineOnceAndTrimmed()
     {
@@ -63,8 +59,8 @@ public sealed class SourceLinesTests : IDisposable
 
         var result = SourceLines.Add(
             symbols,
-            new WorkspacePaths(_root.FullName),
-            Path.Combine(_root.FullName, "Caller.cs")
+            new WorkspacePaths(Root),
+            Path.Combine(Root, "Caller.cs")
         );
 
         result
@@ -90,7 +86,7 @@ public sealed class SourceLinesTests : IDisposable
             .BeNull();
 
     private void Write(string file, string text) =>
-        File.WriteAllText(Path.Combine(_root.FullName, file), text);
+        File.WriteAllText(Path.Combine(Root, file), text);
 
     private IReadOnlyDictionary<int, string>? Lines(
         string file,
@@ -99,7 +95,7 @@ public sealed class SourceLinesTests : IDisposable
         SourceLines
             .Add(
                 new Locations([new FileLocations(file, positions)], positions.Length, null, 0),
-                new WorkspacePaths(_root.FullName)
+                new WorkspacePaths(Root)
             )
             .Files[0]
             .Lines;

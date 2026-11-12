@@ -7,17 +7,15 @@ using static RoslynBridge.Tests.Unit.TestHelpers;
 
 namespace RoslynBridge.Tests.Unit.Tools;
 
-public sealed class WorkspaceBoundaryTests : IDisposable
+public sealed class WorkspaceBoundaryTests : TempWorkspaceTests
 {
-    private readonly string _parent = Directory.CreateTempSubdirectory("roslyn-boundary-").FullName;
-
-    private readonly string _root;
+    private readonly string _workspace;
     private readonly string _outside;
 
     public WorkspaceBoundaryTests()
     {
-        _root = Directory.CreateDirectory(Path.Combine(_parent, "Workspace")).FullName;
-        _outside = Directory.CreateDirectory(Path.Combine(_parent, "Outside")).FullName;
+        _workspace = Directory.CreateDirectory(Path.Combine(Root, "Workspace")).FullName;
+        _outside = Directory.CreateDirectory(Path.Combine(Root, "Outside")).FullName;
     }
 
     [Theory]
@@ -33,8 +31,8 @@ public sealed class WorkspaceBoundaryTests : IDisposable
             outside,
             new Uri(outside).AbsoluteUri
         );
-        await using var session = CreateSession(_root, FakeServer());
-        using var tool = CreateTool(_root, session);
+        await using var session = CreateSession(_workspace, FakeServer());
+        using var tool = CreateTool(_workspace, session);
 
         var response = await tool.ExecuteAsync(
             new LspRequest { Action = LspAction.Symbols, File = file },
@@ -43,6 +41,4 @@ public sealed class WorkspaceBoundaryTests : IDisposable
 
         response.Should().BeError(ErrorCodes.InvalidRequest);
     }
-
-    public void Dispose() => Directory.Delete(_parent, recursive: true);
 }
