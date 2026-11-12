@@ -12,7 +12,8 @@ public sealed class SymbolResolverTests
     private const string File = "/workspace/Shapes.cs";
 
     // Document symbols in the shape Roslyn returns them
-    private static readonly JsonArray _documentSymbols = new(
+    private static readonly JsonArray _documentSymbols =
+    [
         DocumentSymbol(
             "Sample.Application",
             3,
@@ -43,8 +44,8 @@ public sealed class SymbolResolverTests
                 ),
                 DocumentSymbol("Run() : void", 6, 30, DocumentSymbol("Step(int) : void", 6, 32))
             )
-        )
-    );
+        ),
+    ];
 
     [Theory]
     [InlineData(
@@ -114,8 +115,10 @@ public sealed class SymbolResolverTests
         };
         var projects = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal)
         {
-            ["/workspace/App/Program.cs"] = ["app"],
-            ["/workspace/Lib/Program.cs"] = secondProject is null ? [] : [secondProject],
+            ["/workspace/App/Program.cs"] = [with(StringComparer.Ordinal), "app"],
+            ["/workspace/Lib/Program.cs"] = secondProject is null
+                ? [with(StringComparer.Ordinal)]
+                : [with(StringComparer.Ordinal), secondProject],
         };
 
         var symbols = SymbolResolver.DistinctSymbols(declarations, projects);

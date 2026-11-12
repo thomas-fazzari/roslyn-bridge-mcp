@@ -13,7 +13,7 @@ internal static partial class ResultLines
 
     // Result lines that are not indented details, totals or notes start with a workspace file
     public static bool IsFileLine(string line) =>
-        !line.StartsWith(' ')
+        !line.StartsWith(' ', StringComparison.Ordinal)
         && !line.StartsWith("truncated:", StringComparison.Ordinal)
         && !line.StartsWith("incomplete:", StringComparison.Ordinal)
         && !SummaryPattern().IsMatch(line);

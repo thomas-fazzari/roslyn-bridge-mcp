@@ -22,9 +22,10 @@ internal sealed partial class LspChanges(
     private static readonly TimeSpan _proposalLifetime = TimeSpan.FromMinutes(5);
 
     // Insertion order is the creation order, so eviction and expiry start at index 0
-    private readonly OrderedDictionary<string, PendingChange> _pending = new(
-        StringComparer.Ordinal
-    );
+    private readonly OrderedDictionary<string, PendingChange> _pending =
+    [
+        with(StringComparer.Ordinal),
+    ];
 
     public void Clear() => _pending.Clear();
 

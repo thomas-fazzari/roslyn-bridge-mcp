@@ -303,16 +303,14 @@ internal sealed partial class LspQueries(
         );
         return
         [
-            .. items.Zip(
-                keys,
-                (item, key) =>
-                    key is { } found && names.TryGetValue(found, out var name)
-                        ? item with
-                        {
-                            Name = name,
-                            Detail = null,
-                        }
-                        : item
+            .. items.Zip(keys, (item, key) =>
+                key is { } found && names.TryGetValue(found, out var name)
+                    ? item with
+                    {
+                        Name = name,
+                        Detail = null,
+                    }
+                    : item
             ),
         ];
     }

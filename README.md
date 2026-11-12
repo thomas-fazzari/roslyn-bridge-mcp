@@ -14,7 +14,7 @@ The bridge reads saved files and works independently of your editor.
 
 ## Install
 
-With the .NET 10 SDK, install the bridge as a .NET tool. `setup` installs the Roslyn language server and prints the command that registers the bridge in each agent it finds:
+With the .NET 11 SDK, install the bridge as a .NET tool. `setup` installs the Roslyn language server and prints the command that registers the bridge in each agent it finds:
 
 ```sh
 dotnet tool install --global ThomasFazzari.RoslynBridge

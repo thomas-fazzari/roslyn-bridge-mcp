@@ -15,7 +15,8 @@ internal sealed class RoslynLocator(
     internal const string ServerName = "roslyn-language-server";
     internal const string ServerBinaryName = "Microsoft.CodeAnalysis.LanguageServer";
 
-    private const string RuntimeMajorVersion = "10.";
+    // Roslyn targets net10.0 and rolls forward to a later major version
+    private const int MinimumRuntimeMajorVersion = 10;
 
     private static readonly string[] _architectureVariables =
     [
@@ -39,8 +40,7 @@ internal sealed class RoslynLocator(
     public string FindServer(string? explicitPath)
     {
         var toolsHome = environment("DOTNET_CLI_HOME") ?? home;
-        var launcher =
-            explicitPath
+        var launcher = explicitPath
             ?? FindOnPath(ServerName)
             ?? ExistingFile(Path.Combine(toolsHome, ".dotnet", "tools", Executable(ServerName)))
             ?? throw new FileNotFoundException(
@@ -59,7 +59,7 @@ internal sealed class RoslynLocator(
         return IsValidRoot(root)
             ? root
             : throw new DirectoryNotFoundException(
-                $"The .NET install {root} does not contain a .NET 10 runtime and an SDK. Pass --dotnet-root."
+                $"The .NET install {root} does not contain a .NET 10 or later runtime and an SDK. Pass --dotnet-root."
             );
     }
 
@@ -90,18 +90,17 @@ internal sealed class RoslynLocator(
         return File.Exists(Path.Combine(root, Executable("dotnet")))
             && Directory.Exists(Path.Combine(root, "host", "fxr"))
             && Directory.Exists(runtimes)
-            && Directory
-                .EnumerateDirectories(runtimes)
-                .Any(static runtime =>
-                    Path.GetFileName(runtime)
-                        .StartsWith(RuntimeMajorVersion, StringComparison.Ordinal)
-                )
+            && Directory.EnumerateDirectories(runtimes).Any(IsSupportedRuntime)
             && Directory.Exists(sdks)
             && Directory.EnumerateDirectories(sdks).Any();
     }
 
     private static string Executable(string name) =>
         OperatingSystem.IsWindows() ? $"{name}.exe" : name;
+
+    private static bool IsSupportedRuntime(string runtime) =>
+        Version.TryParse(Path.GetFileName(runtime).Split('-')[0], out var version)
+        && version.Major >= MinimumRuntimeMajorVersion;
 
     private string? FindOnPath(string name)
     {

@@ -94,8 +94,7 @@ internal sealed class CallersHandler
             ? method.ContainingType
             : caller;
         var references = declared.DeclaringSyntaxReferences;
-        var reference =
-            references.FirstOrDefault(syntax => syntax.SyntaxTree == site.SourceTree)
+        var reference = references.FirstOrDefault(syntax => syntax.SyntaxTree == site.SourceTree)
             ?? references.FirstOrDefault();
         if (
             reference is null

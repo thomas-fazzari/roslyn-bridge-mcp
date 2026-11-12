@@ -225,11 +225,10 @@ internal static class SymbolExtensions
             }
 
             var declaration = reference.GetSyntax(cancellationToken).WholeDeclaration.GetLocation();
-            var name =
-                symbol.Locations.SingleOrDefault(location =>
-                    location.SourceTree == reference.SyntaxTree
-                    && declaration.SourceSpan.Contains(location.SourceSpan)
-                ) ?? declaration;
+            var name = symbol.Locations.SingleOrDefault(location =>
+                location.SourceTree == reference.SyntaxTree
+                && declaration.SourceSpan.Contains(location.SourceSpan)
+            ) ?? declaration;
             return new CallItem(
                 symbol.MemberName,
                 symbol.LspKind,

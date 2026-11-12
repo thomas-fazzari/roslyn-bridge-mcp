@@ -8,7 +8,7 @@ namespace RoslynBridge.Tests.Unit.Lsp;
 
 public sealed class RoslynLocatorTests : TempWorkspaceTests
 {
-    private readonly Dictionary<string, string> _environment = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, string> _environment = [with(StringComparer.Ordinal)];
 
     private static string ArchitectureVariable =>
         $"DOTNET_ROOT_{RuntimeInformation.ProcessArchitecture.ToString().ToUpperInvariant()}";
@@ -27,6 +27,26 @@ public sealed class RoslynLocatorTests : TempWorkspaceTests
         var root = CreateDotnetRoot("bridge");
 
         Locator(root).FindDotnetRoot(explicitRoot: null).Should().Be(root);
+    }
+
+    [Theory]
+    [InlineData("11.0.0")]
+    [InlineData("11.0.0-rc.2.26504.105")]
+    public void RootWithALaterRuntimeIsAccepted(string runtime)
+    {
+        var root = CreateDotnetRoot("later", runtime);
+
+        Locator().FindDotnetRoot(root).Should().Be(root);
+    }
+
+    [Fact]
+    public void RootWithAnOlderRuntimeIsRejected()
+    {
+        var root = CreateDotnetRoot("older", "9.0.10");
+
+        FluentActions.Invoking(Find).Should().Throw<DirectoryNotFoundException>();
+
+        string Find() => Locator().FindDotnetRoot(root);
     }
 
     [Fact]
@@ -133,11 +153,11 @@ public sealed class RoslynLocatorTests : TempWorkspaceTests
             bridgeRoot ?? Path.Combine(Root, "missing")
         );
 
-    private string CreateDotnetRoot(string name)
+    private string CreateDotnetRoot(string name, string runtime = "10.0.0")
     {
         var root = Path.Combine(Root, name);
-        Directory.CreateDirectory(Path.Combine(root, "host", "fxr", "10.0.0"));
-        Directory.CreateDirectory(Path.Combine(root, "shared", "Microsoft.NETCore.App", "10.0.0"));
+        Directory.CreateDirectory(Path.Combine(root, "host", "fxr", runtime));
+        Directory.CreateDirectory(Path.Combine(root, "shared", "Microsoft.NETCore.App", runtime));
         Directory.CreateDirectory(Path.Combine(root, "sdk", "10.0.100"));
         CreateFile(Path.Combine(root, Dotnet));
         return root;

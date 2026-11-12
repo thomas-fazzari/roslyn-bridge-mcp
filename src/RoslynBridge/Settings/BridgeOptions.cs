@@ -57,12 +57,10 @@ internal sealed record BridgeOptions
             WorkspaceRoot = arguments.WorkspaceRoot,
             ServerPath = arguments.ServerPath,
             DotnetRoot = arguments.DotnetRoot,
-            StartupTimeout =
-                arguments.StartupTimeout
+            StartupTimeout = arguments.StartupTimeout
                 ?? Seconds(settings.StartupTimeout)
                 ?? TimeSpan.FromSeconds(DefaultStartupTimeoutSeconds),
-            RequestTimeout =
-                arguments.RequestTimeout
+            RequestTimeout = arguments.RequestTimeout
                 ?? Seconds(settings.RequestTimeout)
                 ?? TimeSpan.FromSeconds(DefaultRequestTimeoutSeconds),
             Exclude = (settings.Exclude ?? [])

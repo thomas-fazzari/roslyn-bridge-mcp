@@ -14,7 +14,7 @@ internal static class FakeSymbolServer
         Dictionary<string, JsonObject[]>? documents = null
     )
     {
-        var byFile = documents ?? new Dictionary<string, JsonObject[]>(StringComparer.Ordinal);
+        var byFile = documents ?? [with(StringComparer.Ordinal)];
         return (_, _) =>
             new FakeRoslynServer
             {
@@ -37,7 +37,7 @@ internal static class FakeSymbolServer
     }
 
     private static JsonArray SymbolsFor(Dictionary<string, JsonObject[]> symbols, string key) =>
-        new([.. symbols.GetValueOrDefault(key, []).Select(symbol => symbol.DeepClone())]);
+        [.. symbols.GetValueOrDefault(key, []).Select(symbol => symbol.DeepClone())];
 
     private static string FileNameOf(JsonNode? parameters) =>
         Path.GetFileName(

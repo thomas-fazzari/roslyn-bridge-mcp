@@ -49,8 +49,7 @@ internal sealed class EditedDocument(string path, byte[]? original)
 
     public void Apply(TextEdit?[] edits)
     {
-        var content =
-            Content
+        var content = Content
             ?? throw new ToolErrorException(
                 ToolError.InvalidLspData($"The file does not exist: {Path}")
             );

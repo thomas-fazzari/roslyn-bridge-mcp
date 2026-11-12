@@ -57,8 +57,7 @@ internal sealed class RoslynProcess(Process process) : IRoslynServer
             locator.FindDotnetRoot(options.DotnetRoot)
         );
 
-        var process =
-            Process.Start(startInfo)
+        var process = Process.Start(startInfo)
             ?? throw new InvalidOperationException("The Roslyn process could not be started.");
         return new RoslynProcess(process);
     }

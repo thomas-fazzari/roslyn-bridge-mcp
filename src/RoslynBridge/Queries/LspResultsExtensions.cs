@@ -71,13 +71,11 @@ internal static class LspResultsExtensions
             var generated = 0;
             foreach (var location in locations)
             {
-                var uri =
-                    location.ResolvedUri
+                var uri = location.ResolvedUri
                     ?? throw new ToolErrorException(
                         ToolError.InvalidLspData("Roslyn returned a location without a URI.")
                     );
-                var range =
-                    location.ResolvedRange
+                var range = location.ResolvedRange
                     ?? throw new ToolErrorException(
                         ToolError.InvalidLspData("Roslyn returned a location without a position.")
                     );
@@ -191,9 +189,8 @@ internal static class LspResultsExtensions
     {
         var range = symbol.SelectionRange ?? symbol.Location?.Range ?? symbol.Range;
         var uri = symbol.Location?.Uri ?? symbol.Uri;
-        var kind =
-            Qualified(symbol.Name, parent ?? ContainingType(symbol.ContainerName))
-                ?.CorrectedKind(symbol.Kind)
+        var kind = Qualified(symbol.Name, parent ?? ContainingType(symbol.ContainerName))
+            ?.CorrectedKind(symbol.Kind)
             ?? symbol.Kind;
 
         return new SymbolItem(

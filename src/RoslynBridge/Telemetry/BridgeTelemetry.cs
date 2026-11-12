@@ -119,9 +119,8 @@ internal static class BridgeTelemetry
                 )
                 .WithTracing(static tracing => tracing.AddSource(Name))
                 .WithMetrics(static metrics => metrics.AddMeter(Name, McpSdkMeter))
-                .WithLogging(
-                    configureBuilder: null,
-                    configureOptions: static logging => logging.IncludeFormattedMessage = true
+                .WithLogging(configureBuilder: null, configureOptions: static logging =>
+                    logging.IncludeFormattedMessage = true
                 )
                 .UseOtlpExporter();
             return builder;
@@ -157,17 +156,11 @@ internal static class BridgeTelemetry
         );
 
     public static Task TraceAsync(string name, Histogram<double> duration, Func<Task> operation) =>
-        TraceAsync(
-            name,
-            ActivityKind.Internal,
-            duration,
-            tags: default,
-            async () =>
-            {
-                await operation();
-                return true;
-            }
-        );
+        TraceAsync(name, ActivityKind.Internal, duration, tags: default, async () =>
+        {
+            await operation();
+            return true;
+        });
 
     /// <summary>
     /// Marks the activity failed when the tags hold an <see cref="ErrorType"/>.

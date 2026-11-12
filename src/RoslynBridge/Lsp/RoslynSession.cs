@@ -123,9 +123,8 @@ internal sealed partial class RoslynSession(
         JsonNode? parameters,
         CancellationToken cancellationToken
     ) =>
-        BridgeTelemetry.TraceLspAsync(
-            method,
-            () => InvokeAsync(method, parameters, cancellationToken)
+        BridgeTelemetry.TraceLspAsync(method, () =>
+            InvokeAsync(method, parameters, cancellationToken)
         );
 
     public async Task NotifyAsync(
@@ -289,21 +288,19 @@ internal sealed partial class RoslynSession(
 
     private async Task InitializeAsync(CancellationToken cancellationToken)
     {
-        var rpc =
-            _rpc ?? throw new InvalidOperationException("The Roslyn transport is not started.");
+        var rpc = _rpc
+            ?? throw new InvalidOperationException("The Roslyn transport is not started.");
 
         var initialize = ClientCapabilities.Create(paths);
         JsonObject? result;
         try
         {
-            result = await BridgeTelemetry.TraceLspAsync(
-                LspMethods.Initialize,
-                () =>
-                    rpc.InvokeWithParameterObjectAsync<JsonObject>(
-                        LspMethods.Initialize,
-                        initialize,
-                        cancellationToken
-                    )
+            result = await BridgeTelemetry.TraceLspAsync(LspMethods.Initialize, () =>
+                rpc.InvokeWithParameterObjectAsync<JsonObject>(
+                    LspMethods.Initialize,
+                    initialize,
+                    cancellationToken
+                )
             );
         }
         catch (Exception exception) when (exception is ConnectionLostException or IOException)

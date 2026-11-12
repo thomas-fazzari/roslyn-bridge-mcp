@@ -6,7 +6,7 @@ import { Aside } from "@astrojs/starlight/components";
 
 ## Install
 
-Prerequisites: the .NET 10 SDK and a Model Context Protocol (MCP) client such as Claude Code, Codex, GitHub Copilot CLI, pi or Antigravity.
+Prerequisites: the .NET 11 SDK and a Model Context Protocol (MCP) client such as Claude Code, Codex, GitHub Copilot CLI, pi or Antigravity.
 
 The bridge is a .NET tool on [NuGet](https://www.nuget.org/packages/ThomasFazzari.RoslynBridge).
 
@@ -97,7 +97,7 @@ A project can also set these in [`.roslyn-bridge.json`](settings.mdx) (the argum
 
 Timeout arguments accept 1 to 600 seconds. When you raise these limits, keep the client's tool timeout above the sum of the startup and request timeouts.
 
-Roslyn runs on the .NET install that runs the bridge, which needs a .NET 10 runtime and an SDK. Pass `--dotnet-root` to use another install.
+Roslyn runs on the .NET install that runs the bridge, which needs an SDK. Pass `--dotnet-root` to use another install with a .NET 10 or later runtime and an SDK.
 
 MCP clients often start the bridge without your shell environment. On macOS and Linux, when .NET is outside its default or registered location, `setup` prints a command that sets `DOTNET_ROOT`.
 
