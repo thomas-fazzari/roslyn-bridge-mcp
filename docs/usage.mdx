@@ -218,7 +218,7 @@ reflection or code outside the workspace may still use a public symbol
 | Note          | Reflection or code outside the workspace may still use a public symbol. Absent when no symbol is unused.        |
 
 A test project references an xUnit, NUnit, MSTest or TUnit assembly. A use from a test project counts for code in a test project, so a test helper that a test uses stays live.
-A use inside the symbol's own declaration, in a documentation comment or in a `using` directive does not count.
+A use inside the symbol's own declaration, in a documentation comment, in a `using` directive or in an inactive `#if` block does not count.
 An unused type stands for its members, which get no line of their own. A used member keeps its types, as an extension method keeps its static class.
 A partial type is checked only when every part outside generated code is selected.
 

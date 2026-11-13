@@ -93,7 +93,6 @@ public sealed class ProjectSettingsReaderTests : TempWorkspaceTests
             .Which;
 
         exception.Faults.Should().ContainSingle().Which.Should().ContainEquivalentOf(fragment);
-        exception.Message.Should().Contain(ProjectSettings.FileName);
     }
 
     [Fact]

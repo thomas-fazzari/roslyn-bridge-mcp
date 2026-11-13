@@ -32,8 +32,10 @@ public sealed partial class RoslynMcpTests
     private const string TotalTestSymbol = "Counter.Total";
     private const string StepTestSymbol = "Counter.Step";
     private const string UnusedFixture = "Unused";
+    private const string UnusedKeptFixture = "UnusedKept";
     private const string LeftoversTestFile = "Application/Leftovers.cs";
     private const string LeftoverChecksTestFile = "Checks/LeftoverChecks.cs";
+    private const string KeptTestFile = "Application/Kept.cs";
 
     [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
     public async Task ReportsFreshDiagnosticsAndNavigatesAcrossProjectsAsync()
@@ -953,6 +955,37 @@ public sealed partial class RoslynMcpTests
                   via Sample.Application.Leftovers.Entry()
                 1 file checked, 4 unused symbols, 2 skipped as framework code
                 truncated: 4 unused symbols in total, next offset: 2. Raise limit or narrow the query.
+                reflection or code outside the workspace may still use a public symbol
+                """
+            );
+    }
+
+    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    public async Task KeepsTheMembersThatADebuggerDisplayOrAFixedLayoutReachesAsync()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var workspace = await RoslynTestWorkspace.CreateAsync(
+            cancellationToken,
+            overlay: UnusedKeptFixture
+        );
+
+        var unused = await workspace.CallAsync(
+            new LspRequest
+            {
+                Action = LspAction.Symbols,
+                File = KeptTestFile,
+                Unused = true,
+            }
+        );
+
+        // A DebuggerDisplay format names Inner, Label and both Count overloads, an interop layout holds
+        // Magic and Length, and enum members are out of the check. Only Dump, used in inactive code, is left.
+        unused
+            .Should()
+            .Be(
+                $"""
+                {KeptTestFile}:33:26 method Sample.Application.Tracing.Dump()
+                1 file checked, 1 unused symbol
                 reflection or code outside the workspace may still use a public symbol
                 """
             );

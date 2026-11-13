@@ -89,6 +89,13 @@ internal sealed partial class RoslynSession
                 cancellationToken
             );
         }
+        catch (RemoteInvocationException exception)
+            when (exception.ErrorCode is RequestCancelledCode or ServerCancelledCode)
+        {
+            return ToolError.InvalidLspData(
+                "Roslyn cancelled the search for unused symbols. Retry the call."
+            );
+        }
         catch (RemoteRpcException exception)
         {
             return UnusedFailure(exception.Message);
