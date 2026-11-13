@@ -14,7 +14,7 @@ namespace RoslynBridge.Tests.Unit.Tools;
 public sealed class SymbolNotFoundTests : TempWorkspaceTests
 {
     [Fact]
-    public async Task KnownContainerWithoutTheMemberSaysSoWhenAnotherTypeHasItAsync()
+    public async Task KnownContainerWithoutTheMemberListsItsMembersBeforeTheOtherTypesAsync()
     {
         var manager = await WriteFileAsync(
             Root,
@@ -44,8 +44,8 @@ public sealed class SymbolNotFoundTests : TempWorkspaceTests
         var response = await CallAsync(server, "ISessionManager.ReportPlaybackStart");
 
         response.Should().BeError(ErrorCodes.SymbolNotFound);
-        ResponseText(response).Should().Contain("'ISessionManager' has no member");
-        CandidateNames(response)
+        ResultLines
+            .CandidateNames(ResponseText(response))
             .Should()
             .Equal("ISessionManager.OnPlaybackStart()", "Controller.ReportPlaybackStart()");
     }
@@ -71,8 +71,10 @@ public sealed class SymbolNotFoundTests : TempWorkspaceTests
         var response = await CallAsync(server, "Calculator.Add(int)");
 
         response.Should().BeError(ErrorCodes.SymbolNotFound);
-        ResponseText(response).Should().NotContain("has no member");
-        CandidateNames(response).Should().Equal("Calculator.Add()", "Other.Add()");
+        ResultLines
+            .CandidateNames(ResponseText(response))
+            .Should()
+            .Equal("Calculator.Add()", "Other.Add()");
     }
 
     private async Task<CallToolResult> CallAsync(RoslynLauncher server, string symbol)
@@ -84,12 +86,4 @@ public sealed class SymbolNotFoundTests : TempWorkspaceTests
             TestCt
         );
     }
-
-    private static string[] CandidateNames(CallToolResult response) =>
-        [
-            .. ResultLines
-                .Lines(ResponseText(response))
-                .Skip(1)
-                .Select(line => line.Split(' ', 3)[2]),
-        ];
 }

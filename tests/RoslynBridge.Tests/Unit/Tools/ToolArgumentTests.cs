@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Thomas Fazzari
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+using ModelContextProtocol.Protocol;
 using RoslynBridge.Lsp;
 using RoslynBridge.Tests.Assertions;
 using RoslynBridge.Tools;
@@ -48,16 +49,9 @@ public sealed class ToolArgumentTests : IAsyncDisposable
         );
 
         response.Should().BeError(ErrorCodes.InvalidRequest);
-        ResponseText(response).Should().Contain($"'{argument}'");
-        if (suggestion is null)
-        {
-            ResponseText(response).Should().NotContain("Did you mean");
-        }
-        else
-        {
-            ResponseText(response).Should().Contain($"Did you mean '{suggestion}'?");
-        }
-
+        QuotedNames(response)
+            .Should()
+            .Equal(suggestion is null ? [argument] : [argument, suggestion]);
         _launches.Should().Be(0);
     }
 
@@ -159,4 +153,8 @@ public sealed class ToolArgumentTests : IAsyncDisposable
         await _session.DisposeAsync();
         Directory.Delete(_root, recursive: true);
     }
+
+    // The error quotes the unknown argument, then the suggestion if there is one
+    private static string[] QuotedNames(CallToolResult response) =>
+        [.. ResponseText(response).Split('\'').Where((_, index) => index % 2 == 1)];
 }

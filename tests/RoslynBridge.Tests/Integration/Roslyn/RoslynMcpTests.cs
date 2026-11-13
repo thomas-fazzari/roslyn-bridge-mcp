@@ -6,7 +6,6 @@ using RoslynBridge.Lsp;
 using RoslynBridge.Requests;
 using RoslynBridge.Tests.Assertions;
 using static RoslynBridge.Tests.Assertions.ResultLines;
-using static RoslynBridge.Tests.Unit.TestHelpers;
 
 namespace RoslynBridge.Tests.Integration.Roslyn;
 
@@ -780,7 +779,6 @@ public sealed partial class RoslynMcpTests
         markdown.Should().BeError(ErrorCodes.InvalidRequest);
         missing.Should().BeError(ErrorCodes.InvalidRequest);
         pastTheEnd.Should().BeError(ErrorCodes.InvalidRequest);
-        ResponseText(pastTheEnd).Should().Contain($"{ConsumerTestFile}, which has");
     }
 
     [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]

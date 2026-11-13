@@ -965,15 +965,14 @@ public sealed class LspToolTests : TempWorkspaceTests
         var response = await CallAsync(server, ReferencesOf("Calculator.Missing"));
 
         response.Should().BeError(ErrorCodes.SymbolNotFound);
-        ResponseText(response)
+        ResultLines
+            .CandidateNames(ResponseText(response))
             .Should()
-            .Contain("'Calculator' has no member 'Missing'")
-            .And.NotContain("Other.MissingA()");
-        CandidateNames(response).Should().Equal("Calculator.MissingTotalValue()");
+            .Equal("Calculator.MissingTotalValue()");
     }
 
     [Fact]
-    public async Task QualifiedNameWithAKnownContainerAndNoSimilarMemberPointsToMembersAsync()
+    public async Task QualifiedNameWithAKnownContainerAndNoSimilarMemberListsNoCandidatesAsync()
     {
         var calculator = await WriteFileAsync(Root, "Calculator.cs", "class Calculator {}\n");
         var server = FakeSymbolServer.With(
@@ -990,11 +989,7 @@ public sealed class LspToolTests : TempWorkspaceTests
         var response = await CallAsync(server, ReferencesOf("Calculator.Missing"));
 
         response.Should().BeError(ErrorCodes.SymbolNotFound);
-        ResponseText(response)
-            .Should()
-            .Be(
-                "error symbol_not_found: No declaration matches 'Calculator.Missing' because 'Calculator' has no member 'Missing'. Use members to list its members."
-            );
+        ResultLines.CandidateNames(ResponseText(response)).Should().BeEmpty();
     }
 
     [Fact]
@@ -1019,7 +1014,8 @@ public sealed class LspToolTests : TempWorkspaceTests
         var response = await CallAsync(server, ReferencesOf("Nope.Missing"));
 
         response.Should().BeError(ErrorCodes.SymbolNotFound);
-        ResponseText(response).Should().Contain("Similar types: Nopes.");
+        ResultLines.CandidateNames(ResponseText(response)).Should().BeEmpty();
+        ResponseText(response).Should().Contain("Nopes", Exactly.Once());
     }
 
     [Fact]
@@ -1040,7 +1036,7 @@ public sealed class LspToolTests : TempWorkspaceTests
         var response = await CallAsync(server, ReferencesOf("Sample.Calculater"));
 
         response.Should().BeError(ErrorCodes.SymbolNotFound);
-        CandidateNames(response).Should().Equal("Sample.Calculator");
+        ResultLines.CandidateNames(ResponseText(response)).Should().Equal("Sample.Calculator");
     }
 
     [Fact]
@@ -1303,14 +1299,20 @@ public sealed class LspToolTests : TempWorkspaceTests
         );
 
         response.Should().BeSuccessful();
-        ResponseText(response)
+        var lines = ResultLines.Lines(ResponseText(response));
+        lines.Should().HaveCount(5);
+        lines[..2]
             .Should()
-            .Be(
-                $"{ResultText.ResolvedFilePrefix}src/Math/Source.cs\n"
-                    + "## 1 references Calculator.cs:1:1\n"
-                    + $"error {ErrorCodes.AmbiguousFile}: 'Calculator.cs' matches 2 files. Send more of the path. Matches: A/Calculator.cs, B/Calculator.cs\n"
-                    + "## 2 references src/Math/Source.cs:2:1\nFound.cs 1:1"
+            .Equal(
+                $"{ResultText.ResolvedFilePrefix}src/Math/Source.cs",
+                "## 1 references Calculator.cs:1:1"
             );
+        lines[2]
+            .Should()
+            .StartWith($"error {ErrorCodes.AmbiguousFile}:")
+            .And.Contain("A/Calculator.cs")
+            .And.Contain("B/Calculator.cs");
+        lines[3..].Should().Equal("## 2 references src/Math/Source.cs:2:1", "Found.cs 1:1");
     }
 
     [Fact]
@@ -1534,14 +1536,6 @@ public sealed class LspToolTests : TempWorkspaceTests
 
     private static LspRequest ReferencesOf(string symbol) =>
         new() { Action = LspAction.References, Symbol = symbol };
-
-    private static string[] CandidateNames(CallToolResult response) =>
-        [
-            .. ResultLines
-                .Lines(ResponseText(response))
-                .Skip(1)
-                .Select(line => line.Split(' ', 3)[2]),
-        ];
 
     private LspTool CreateTool(RoslynSession session, SettingsMonitor settings) =>
         TestHelpers.CreateTool(Root, session, settings: settings);

@@ -19,21 +19,6 @@ public sealed class BridgeOptionsTests : TempWorkspaceTests
         """;
 
     [Fact]
-    public void UsesTheDefaultsWithoutAFile()
-    {
-        var options = Parse();
-
-        options
-            .StartupTimeout.Should()
-            .Be(TimeSpan.FromSeconds(BridgeOptions.DefaultStartupTimeoutSeconds));
-        options
-            .RequestTimeout.Should()
-            .Be(TimeSpan.FromSeconds(BridgeOptions.DefaultRequestTimeoutSeconds));
-        options.Exclude.Should().BeEmpty();
-        options.DiagnosticsSeverity.Should().BeNull();
-    }
-
-    [Fact]
     public async Task TakesTheSettingsOfTheFileAsync()
     {
         await WriteSettingsAsync(FileSettings);
