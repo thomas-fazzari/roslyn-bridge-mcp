@@ -13,5 +13,5 @@
   "mounts": [
     "source=roslyn-bridge-node-modules,target=${containerWorkspaceFolder}/docs/node_modules,type=volume"
   ],
-  "postCreateCommand": "sudo chown vscode:vscode docs/node_modules && mise install && mise run install && dotnet tool install --global roslyn-language-server --prerelease"
+  "postCreateCommand": "sudo chown vscode:vscode docs/node_modules && mise install && mise run install && dotnet tool install --global roslyn-language-server --version $(dotnet msbuild src/RoslynBridge/RoslynBridge.csproj -getProperty:RoslynServerVersion)"
 }
