@@ -47,7 +47,7 @@ Without `solution` and `projects`, Roslyn finds what to load itself, which loads
 
 An invalid file stops the bridge at startup. It exits with code 1 and prints each fault on the standard error, so the MCP client shows why the server did not start.
 
-Faults are an unreadable or malformed file, an unknown key, a value of the wrong type or out of range, a path that does not exist or leaves the workspace, and `solution` set together with `projects`. An unknown key or a malformed file is reported alone, before the other checks.
+Faults are an unreadable or malformed file, an unknown key, a value of the wrong type or out of range, an `exclude` entry that is not a folder name, a path with the wrong extension, a path that does not exist or leaves the workspace, and `solution` set together with `projects`. An unknown key or a malformed file is reported alone, before the other checks.
 
 ```text
 .roslyn-bridge.json is invalid:

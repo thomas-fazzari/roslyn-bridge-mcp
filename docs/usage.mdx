@@ -18,14 +18,14 @@ The [agent reference](/roslyn-bridge-mcp/llms.txt) gives this reference in plain
 
 ## Tools
 
-| Tool            | Arguments                                                                                                                                                                                                                          | Result                                                                        |
-| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| `diagnostics`   | `file` path or glob, `severity`, `ids`, `summary`                                                                                                                                                                                  | Errors, warnings and suggestions                                              |
-| `navigate`      | `action` (`definition`, `type_definition`, `implementation`, `references`, `reads`, `writes`, `callers`, `callees`, `supertypes`, `subtypes`, `hover`, `source`, `members`, `impact`), and `symbol` or `file`, `line`, `character` | Locations, related symbols, hover text, source or members                     |
-| `bulk_navigate` | `queries` (1 to 16 items, each with the `action` and the `symbol` or `file`, `line`, `character` of `navigate`), `context`, `limit`, `offset`                                                                                      | One section per query                                                         |
-| `symbols`       | `file` or `query`, or `unused` with an optional `file` path or glob                                                                                                                                                                | Document, workspace or unused symbols                                         |
-| `edit`          | `action` (`rename`, `rename_file`, `code_actions`) and its inputs                                                                                                                                                                  | Edit previews, then applied changes                                           |
-| `lsp`           | `action` (`status`, `capabilities`, `reload`, `request`), `method`, `parameters`                                                                                                                                                   | Session state, a fresh session or a raw Language Server Protocol (LSP) result |
+| Tool            | Arguments                                                                                                                                                                                                                                                                          | Result                                                                        |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `diagnostics`   | `file` path or glob, `severity`, `ids`, `summary`, `limit`, `offset`                                                                                                                                                                                                               | Errors, warnings and suggestions                                              |
+| `navigate`      | `action` (`definition`, `type_definition`, `implementation`, `references`, `reads`, `writes`, `callers`, `callees`, `supertypes`, `subtypes`, `hover`, `source`, `members`, `impact`), and `symbol` or `file`, `line`, `character`, plus `context`, `inherited`, `limit`, `offset` | Locations, related symbols, hover text, source or members                     |
+| `bulk_navigate` | `queries` (1 to 16 items, each with the `action`, `inherited` and the `symbol` or `file`, `line`, `character` of `navigate`), `context`, `limit`, `offset`                                                                                                                         | One section per query                                                         |
+| `symbols`       | `file` or `query`, or `unused` with an optional `file` path or glob, and `limit`, `offset`                                                                                                                                                                                         | Document, workspace or unused symbols                                         |
+| `edit`          | `action` (`rename`, `rename_file`, `code_actions`), `symbol` or `file`, `line`, `character`, `endLine`, `endCharacter`, `newName`, `diagnostic`, `actionIndex`, `proposalId`, `apply`, `all`, `limit`                                                                              | Edit previews, then applied changes                                           |
+| `lsp`           | `action` (`status`, `capabilities`, `reload`, `request`), `method`, `parameters`, `apply`                                                                                                                                                                                          | Session state, a fresh session or a raw Language Server Protocol (LSP) result |
 
 `diagnostics`, `navigate`, `bulk_navigate` and `symbols` are read-only. `edit` and `lsp` can write files.
 Each tool takes flat arguments:
@@ -174,6 +174,24 @@ These files get no semantic diagnostics. A newly created file gets a few seconds
 After a `truncated:` line, omitted files are not necessarily clean.
 `limit` defaults to 50 and accepts 1 to 250. Narrow the query if results are truncated or too large.
 
+## Errors
+
+| Code               | When                                                                                                      | What to do                                                        |
+| ------------------ | --------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| `invalid_request`  | An argument is missing, unknown, out of range, or names an expired proposal.                              | Fix the argument the message names, then call again.              |
+| `invalid_settings` | `reload` finds `.roslyn-bridge.json` invalid.                                                             | Fix the faults in the message, then reload again.                 |
+| `stale_edit`       | A file the proposal edits, or a project, props, solution or editorconfig file, changes after the preview. | Request a new preview.                                            |
+| `loading`          | Roslyn does not finish loading the workspace before the startup timeout.                                  | Retry the same call, because the load continues.                  |
+| `timeout`          | The call does not finish before the request timeout.                                                      | Narrow the query, or raise `requestTimeout`.                      |
+| `cancelled`        | The client cancels the call while the bridge applies an edit.                                             | Read the receipt, because some files may already be written.      |
+| `lsp_error`        | Roslyn fails the request, or returns data the bridge cannot read.                                         | Call again. If it fails again, run `lsp` with `action=reload`.    |
+| `io_error`         | The bridge cannot read or write a file, or cannot start the Roslyn server.                                | Check the permissions and the path in the message.                |
+| `result_too_large` | The result exceeds 32 000 characters.                                                                     | Lower `limit` or narrow the query.                                |
+| `internal_error`   | An applied edit fails with an unexpected error.                                                           | Check the files in the receipt. Report the message as a bug.      |
+| `symbol_not_found` | No declaration matches `symbol`, or the position touches no symbol.                                       | Send a candidate from the message back, or search with `symbols`. |
+| `ambiguous_symbol` | `symbol` matches several declarations.                                                                    | Send one of the listed candidates back unchanged.                 |
+| `ambiguous_file`   | `file` matches several workspace files.                                                                   | Send more of the path.                                            |
+
 ## Unused code
 
 `symbols` with `unused` lists the types and members of `file` that nothing uses, or that only unused code or tests use. `file` takes a path or a glob, as for diagnostics. Omit it to check every `.cs` file.
@@ -189,15 +207,15 @@ src/Report.cs:41:24 method MyApp.Report.Trace()
 reflection or code outside the workspace may still use a public symbol
 ```
 
-| Line           | Meaning                                                                                                                       |
-| -------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| Symbol line    | The declaration, its kind and a name that `navigate` and `edit` accept, in file and position order.                           |
-| `via NAME`     | NAME is unused code that uses the symbol. Remove them together. One line per user, in file and position order.                |
-| `tests only`   | Only test projects use the symbol. It follows the `via` lines.                                                                |
-| Totals         | Files checked and unused symbols. The `skipped as framework code` count appears when it is above zero.                        |
-| `truncated:`   | Paging, as for other results. `limit` and `offset` count symbol lines. Each page runs the whole check again.                  |
-| `incomplete:`  | Selected files that no project compiles, such as a new file Roslyn has not attached yet. They were not checked.               |
-| Note           | Reflection or code outside the workspace may still use a public symbol. Absent when no symbol is unused.                      |
+| Line          | Meaning                                                                                                         |
+| ------------- | --------------------------------------------------------------------------------------------------------------- |
+| Symbol line   | The declaration, its kind and a name that `navigate` and `edit` accept, in file and position order.             |
+| `via NAME`    | NAME is unused code that uses the symbol. Remove them together. One line per user, in file and position order.  |
+| `tests only`  | Only test projects use the symbol. It follows the `via` lines.                                                  |
+| Totals        | Files checked and unused symbols. The `skipped as framework code` count appears when it is above zero.          |
+| `truncated:`  | Paging, as for other results. `limit` and `offset` count symbol lines. Each page runs the whole check again.    |
+| `incomplete:` | Selected files that no project compiles, such as a new file Roslyn has not attached yet. They were not checked. |
+| Note          | Reflection or code outside the workspace may still use a public symbol. Absent when no symbol is unused.        |
 
 A test project references an xUnit, NUnit, MSTest or TUnit assembly. A use from a test project counts for code in a test project, so a test helper that a test uses stays live.
 A use inside the symbol's own declaration, in a documentation comment or in a `using` directive does not count.
