@@ -21,13 +21,13 @@ dotnet tool install --global ThomasFazzari.RoslynBridge
 roslyn-bridge-mcp setup
 ```
 
-Setup installs the official Roslyn language server as a global .NET tool when it is missing. It then prints the command that registers the bridge in each agent it detects, for example:
+Setup installs the official Roslyn language server as a global .NET tool, or updates it to the version the bridge is built for. It then prints the command that registers the bridge in each agent it detects, for example:
 
 ```sh
 claude mcp add --scope user roslyn -- ~/.dotnet/tools/roslyn-bridge-mcp
 ```
 
-Run the printed command once per agent. To update, run `dotnet tool update --global ThomasFazzari.RoslynBridge`. The command path stays the same, so the registrations keep working.
+Run the printed command once per agent. To update, run `dotnet tool update --global ThomasFazzari.RoslynBridge`, then `roslyn-bridge-mcp setup` to update the Roslyn language server. The command path stays the same, so the registrations keep working.
 
 Your C# project can target a different .NET version. Keep its required SDK and workloads installed, including any SDK pinned in its `global.json`.
 

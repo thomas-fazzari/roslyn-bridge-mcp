@@ -44,7 +44,7 @@ internal static class Setup
         }
 
         output.WriteLine($".NET: {root}");
-        var server = FindOrInstallServer(locator, root, output);
+        var server = FindOrInstallServer(locator, root, output, RunToCompletion);
         if (server is null)
         {
             return 1;
@@ -134,15 +134,34 @@ internal static class Setup
     private static string Quote(string path) =>
         path.Contains(' ', StringComparison.Ordinal) ? $"\"{path}\"" : path;
 
-    private static string? FindOrInstallServer(
+    internal static string? FindOrInstallServer(
         RoslynLocator locator,
         string root,
-        TextWriter output
+        TextWriter output,
+        Action<ProcessStartInfo> run
     )
     {
+        var tools = locator.GlobalToolsDirectory;
         try
         {
-            return locator.FindServer(explicitPath: null);
+            var server = locator.FindServer(explicitPath: null);
+            if (!IsInside(tools, server))
+            {
+                output.WriteLine(
+                    $"Warning: setup leaves the Roslyn language server at {server} unchanged because it is outside {tools}. The bridge is built for version {ServerVersion}."
+                );
+                return server;
+            }
+
+            var installed = GlobalToolVersion(tools);
+            if (string.Equals(installed, ServerVersion, StringComparison.OrdinalIgnoreCase))
+            {
+                return server;
+            }
+
+            output.WriteLine(
+                $"Updating the Roslyn language server from version {installed ?? "unknown"} to {ServerVersion}..."
+            );
         }
         catch (FileNotFoundException)
         {
@@ -155,14 +174,21 @@ internal static class Setup
         };
         foreach (
             var argument in (string[])
-                ["tool", "update", "--global", RoslynLocator.ServerName, "--version", ServerVersion]
+                [
+                    "tool",
+                    "update",
+                    "--global",
+                    RoslynLocator.ServerName,
+                    "--version",
+                    ServerVersion,
+                    "--allow-downgrade",
+                ]
         )
         {
             startInfo.ArgumentList.Add(argument);
         }
 
-        using var install = Process.Start(startInfo);
-        install?.WaitForExit();
+        run(startInfo);
         try
         {
             return locator.FindServer(explicitPath: null);
@@ -172,6 +198,30 @@ internal static class Setup
             output.WriteLine(exception.Message);
             return null;
         }
+    }
+
+    // The .NET SDK keeps each installed version in .store/ID/VERSION on every platform
+    private static string? GlobalToolVersion(string tools)
+    {
+        var store = Path.Combine(tools, ".store", RoslynLocator.ServerName);
+        if (!Directory.Exists(store))
+        {
+            return null;
+        }
+
+        return Directory.GetDirectories(store) is [var version] ? Path.GetFileName(version) : null;
+    }
+
+    private static bool IsInside(string directory, string path)
+    {
+        var relative = Path.GetRelativePath(directory, path);
+        return !Path.IsPathRooted(relative) && !relative.StartsWith("..", StringComparison.Ordinal);
+    }
+
+    private static void RunToCompletion(ProcessStartInfo startInfo)
+    {
+        using var process = Process.Start(startInfo);
+        process?.WaitForExit();
     }
 
     // A command on PATH can be a broken version manager shim, so the agent must answer --version
