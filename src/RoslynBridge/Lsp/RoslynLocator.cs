@@ -37,14 +37,16 @@ internal sealed class RoslynLocator(
     internal static string BridgeRoot() =>
         Path.GetFullPath(Path.Combine(RuntimeEnvironment.GetRuntimeDirectory(), "..", "..", ".."));
 
+    public string GlobalToolsDirectory =>
+        Path.Combine(environment("DOTNET_CLI_HOME") ?? home, ".dotnet", "tools");
+
     public string FindServer(string? explicitPath)
     {
-        var toolsHome = environment("DOTNET_CLI_HOME") ?? home;
         var launcher = explicitPath
             ?? FindOnPath(ServerName)
-            ?? ExistingFile(Path.Combine(toolsHome, ".dotnet", "tools", Executable(ServerName)))
+            ?? ExistingFile(Path.Combine(GlobalToolsDirectory, Executable(ServerName)))
             ?? throw new FileNotFoundException(
-                $"The Roslyn language server was not found on PATH or in ~/.dotnet/tools. Install it with `dotnet tool install -g {ServerName} --prerelease`, or pass --server."
+                "The Roslyn language server was not found on PATH or in ~/.dotnet/tools. Install it with `roslyn-bridge-mcp setup`, or pass --server."
             );
         var server = Path.Combine(
             Path.GetDirectoryName(RealPath(launcher))!,
