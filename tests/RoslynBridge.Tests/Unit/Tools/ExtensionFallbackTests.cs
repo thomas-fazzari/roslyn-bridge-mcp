@@ -45,6 +45,7 @@ public sealed class ExtensionFallbackTests : TempWorkspaceTests
     }
 
     [Theory]
+    [InlineData(RoslynSession.RequestCancelledCode, 2)]
     [InlineData(RoslynSession.ServerCancelledCode, 2)]
     [InlineData(HandlerFailureCode, 1)]
     public async Task DispatchFailureDisablesTheExtensionUnlessRoslynCancelledAsync(

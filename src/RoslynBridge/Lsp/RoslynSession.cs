@@ -198,6 +198,15 @@ internal sealed partial class RoslynSession(
                 timeout.Token
             );
         }
+        // StreamJsonRpc turns a RequestCancelled answer into a cancellation of the call
+        catch (OperationCanceledException exception) when (!timeout.IsCancellationRequested)
+        {
+            throw new RemoteInvocationException(
+                $"Roslyn cancelled request '{method}'.",
+                RequestCancelledCode,
+                exception
+            );
+        }
         catch (OperationCanceledException exception)
             when (!cancellationToken.IsCancellationRequested)
         {
