@@ -30,6 +30,7 @@
 
   <ItemGroup>
     <None Include="../../README.md" Pack="true" PackagePath="" />
+    <None Include="../../LICENSE" Pack="true" PackagePath="" />
     <None Include="../../NOTICE" Pack="true" PackagePath="" />
     <None Include="../../THIRD_PARTY_NOTICES.md" Pack="true" PackagePath="" />
   </ItemGroup>

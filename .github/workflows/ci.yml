@@ -103,6 +103,13 @@ jobs:
       - name: Set package version
         run: mise run ci:version
       - run: mise run pack
+      - name: Check the package contents
+        run: |
+          entries="$(unzip -Z1 artifacts/nupkg/*.nupkg)"
+          grep -qE '^LICENSE$' <<<"$entries" ||
+            { printf 'LICENSE is missing from the package.\n' >&2; exit 1; }
+          grep -qE '^tools/[^/]+/any/extension/RoslynBridge\.Extension\.dll$' <<<"$entries" ||
+            { printf 'The Roslyn extension DLL is missing from the package.\n' >&2; exit 1; }
       - name: Start the packed tool
         run: |
           dotnet tool install ThomasFazzari.RoslynBridge --tool-path "$RUNNER_TEMP/tool" --add-source artifacts/nupkg --version "$APP_VERSION"
