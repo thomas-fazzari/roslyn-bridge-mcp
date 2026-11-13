@@ -30,6 +30,9 @@ coordinates.
 Results are compact text lines. Failed calls start with "error CODE: message"
 and set isError. Raw LSP results and capabilities are JSON.
 An error, incomplete report or truncated result does not establish success.
+result_too_large means the response exceeds 32 000 characters. Lower limit or
+narrow the query. io_error means the bridge cannot read or write a file, or
+cannot start the Roslyn server.
 
 CONTENTS
 --------
@@ -65,8 +68,10 @@ diagnostics {"file":"src/{Calculator,Program}.cs"}
 Omitting file, using "*" or "**/*.cs" selects all C# files. Split large audits
 by project or directory.
 
-severity sets the lowest reported severity. The default, warning, reports
-errors and warnings. Use information or hint to include analyzer suggestions:
+severity sets the lowest reported severity. The default is the project's
+diagnostics.severity setting in .roslyn-bridge.json, or else warning, which
+reports errors and warnings. Use information or hint to include analyzer
+suggestions:
 diagnostics {"file":"src/Calculator.cs","severity":"hint"}
 
 Only some codes. Codes match without regard to case, and ids applies before
@@ -445,7 +450,8 @@ index, its kind when Roslyn gives one, and its title:
 1 quickfix Fix All: Remove unnecessary usings (Document)
 2 refactor Introduce parameter for 'x' > into new overload
 A fix-all entry fixes every occurrence in the scope in parentheses. A title with
-">" is a choice inside a nested action.
+">" is a choice inside a nested action. limit caps the listed actions and
+defaults to 50.
 
 Entries under "Suppress or configure issues" are hidden, and a final line
 counts them:
@@ -484,8 +490,10 @@ The status is applied, partially applied or not applied. "Roslyn synchronized"
 reports a successful Roslyn refresh. Commands add "command executed" and their
 result. On a later failure, the response starts with "error CODE: message" and
 "failed step: STEP", with the failed path and operation when known, and then
-the receipt. Read both before retrying. After an application failure, the
-bridge reloads Roslyn on the next request. Large receipts end with
+the receipt. Read both before retrying. cancelled means the client cancelled
+the call during the apply. internal_error means an unexpected failure during
+the apply. After an application failure, the bridge reloads Roslyn on the next
+request. Large receipts end with
 "truncated: N more operations not shown" or "result omitted".
 A successful result ends with the diagnostics of the changed C# files, in the
 format of DIAGNOSTICS, for example:
@@ -506,7 +514,8 @@ SESSION AND RAW REQUESTS
 Session status:
 lsp {"action":"status"}
 
-Status returns running, loading, workspace and server lines, such as
+Status returns running, loading and workspace lines, and a server line when
+the bridge was started with --server, such as
 running: true
 loading: false
 
@@ -529,7 +538,9 @@ Reload:
 lsp {"action":"reload"}
 
 Reload discards pending proposals. Use it when results remain stale after an
-external change, then issue the original query again.
+external change, then issue the original query again. Reload reads
+.roslyn-bridge.json again. When the file has become invalid, the call returns
+invalid_settings and the bridge keeps the settings it had.
 
 RAW LSP
 -------
