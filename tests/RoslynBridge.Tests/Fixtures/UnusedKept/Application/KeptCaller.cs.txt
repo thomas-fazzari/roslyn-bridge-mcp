@@ -1,0 +1,13 @@
+namespace Sample.Application;
+
+public static class KeptCaller
+{
+    public static string Run()
+    {
+#if DEBUG_ONLY_SYMBOL_NOT_DEFINED
+        Tracing.Dump();
+#endif
+        var header = new Header();
+        return Tracing.Start() + new Badge().ToString() + header.ToString() + Mode.Quiet.ToString();
+    }
+}

@@ -2,12 +2,17 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 using System.Collections.Frozen;
+using System.Runtime.InteropServices;
+using System.Text.RegularExpressions;
 using Microsoft.CodeAnalysis;
 
 namespace RoslynBridge.Extension;
 
-internal static class SymbolExtensions
+internal static partial class SymbolExtensions
 {
+    private const string DebuggerDisplayName = "System.Diagnostics.DebuggerDisplayAttribute";
+    private const string StructLayoutName = "System.Runtime.InteropServices.StructLayoutAttribute";
+
     // Any other attribute may be how a framework finds the declaration, as test and serializer attributes are
     private static readonly FrozenSet<string> _neutralAttributes = new[]
     {
@@ -25,7 +30,7 @@ internal static class SymbolExtensions
         "System.Diagnostics.ConditionalAttribute",
         "System.Diagnostics.Contracts.PureAttribute",
         "System.Diagnostics.DebuggerBrowsableAttribute",
-        "System.Diagnostics.DebuggerDisplayAttribute",
+        DebuggerDisplayName,
         "System.Diagnostics.DebuggerHiddenAttribute",
         "System.Diagnostics.DebuggerNonUserCodeAttribute",
         "System.Diagnostics.DebuggerStepThroughAttribute",
@@ -36,7 +41,7 @@ internal static class SymbolExtensions
         "System.Runtime.CompilerServices.MethodImplAttribute",
         "System.Runtime.CompilerServices.OverloadResolutionPriorityAttribute",
         "System.Runtime.CompilerServices.SkipLocalsInitAttribute",
-        "System.Runtime.InteropServices.StructLayoutAttribute",
+        StructLayoutName,
     }.ToFrozenSet(StringComparer.Ordinal);
 
     extension(INamedTypeSymbol type)
@@ -119,6 +124,7 @@ internal static class SymbolExtensions
             !symbol.IsImplicitlyDeclared
             && !symbol.IsOverride
             && !symbol.ImplementsInterfaceMember
+            && !symbol.IsNamedByDebuggerDisplay
             && symbol switch
             {
                 INamedTypeSymbol type => type.TypeKind
@@ -130,7 +136,8 @@ internal static class SymbolExtensions
                 // The synthesized ToString of a record calls PrintMembers
                 IMethodSymbol { Name: "PrintMembers", ContainingType.IsRecord: true } => false,
                 IMethodSymbol method => method.MethodKind is MethodKind.Ordinary,
-                IPropertySymbol or IEventSymbol or IFieldSymbol => true,
+                IFieldSymbol => !symbol.IsInFixedLayout,
+                IPropertySymbol or IEventSymbol => true,
                 _ => false,
             };
 
@@ -170,6 +177,26 @@ internal static class SymbolExtensions
                     attribute.AttributeClass is not { } type
                     || !_neutralAttributes.Contains(type.ToDisplayString())
                 );
+
+        private bool IsInFixedLayout =>
+            symbol is IFieldSymbol { IsStatic: false, IsConst: false }
+            && symbol.ContainingType is { } type
+            && type.GetAttributes()
+                .Any(attribute =>
+                    attribute.AttributeClass?.ToDisplayString() is StructLayoutName
+                    && attribute.ConstructorArguments
+                        is [{ Value: (int)LayoutKind.Sequential or (int)LayoutKind.Explicit }, ..]
+                );
+
+        private bool IsNamedByDebuggerDisplay =>
+            symbol is IPropertySymbol or IFieldSymbol or IMethodSymbol
+            && symbol.ContainingType is { } type
+            && type.GetAttributes()
+                .Where(attribute =>
+                    attribute.AttributeClass?.ToDisplayString() is DebuggerDisplayName
+                )
+                .SelectMany(DisplayedNames)
+                .Contains(symbol.Name, StringComparer.Ordinal);
 
         private IEnumerable<INamedTypeSymbol> ContainingTypes
         {
@@ -238,4 +265,17 @@ internal static class SymbolExtensions
             );
         }
     }
+
+    private static IEnumerable<string> DisplayedNames(AttributeData attribute) =>
+        attribute
+            .ConstructorArguments.Concat(attribute.NamedArguments.Select(pair => pair.Value))
+            .Select(argument => argument.Value as string)
+            .OfType<string>()
+            .SelectMany(format =>
+                LeadingIdentifier().Matches(format).Select(match => match.Groups["name"].Value)
+            );
+
+    // The first identifier of each brace expression, such as Inner in "{Inner.Name,nq}"
+    [GeneratedRegex(@"\{(?<name>\w+)", RegexOptions.NonBacktracking)]
+    private static partial Regex LeadingIdentifier();
 }

@@ -1,0 +1,34 @@
+namespace Sample.Application;
+
+[System.Diagnostics.DebuggerDisplay("{Label,nq} ({Count()}) {Inner.Length}")]
+public sealed class Badge
+{
+    private string Inner => "inner";
+
+    private string Label => "badge";
+
+    private int Count() => 1;
+
+    private int Count(int extra) => extra;
+}
+
+[System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+public struct Header
+{
+    public int Magic;
+
+    public int Length;
+}
+
+public enum Mode
+{
+    Quiet,
+    Loud,
+}
+
+public static class Tracing
+{
+    public static string Start() => "start";
+
+    public static string Dump() => "dump";
+}
