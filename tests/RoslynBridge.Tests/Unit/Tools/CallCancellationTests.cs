@@ -6,6 +6,7 @@ using RoslynBridge.Requests;
 using RoslynBridge.Settings;
 using RoslynBridge.Tests.Assertions;
 using RoslynBridge.Tests.Fakes;
+using StreamJsonRpc;
 using static RoslynBridge.Tests.Unit.TestHelpers;
 
 namespace RoslynBridge.Tests.Unit.Tools;
@@ -54,6 +55,38 @@ public sealed class CallCancellationTests : TempWorkspaceTests
 
         response.Should().BeError(ErrorCodes.Timeout);
         unanswered.SetResult(null);
+    }
+
+    [Fact]
+    public async Task RequestThatRoslynCancelsFailsWithAnLspErrorAsync()
+    {
+        await WriteFileAsync(Root, SourceFile, "class A {}\n");
+        await using var session = CreateSession(
+            Root,
+            FakeServer(server =>
+                server.Handle = (method, _) =>
+                    method is LspMethods.TextDocumentReferences
+                        ? throw new LocalRpcException("The request was cancelled.")
+                        {
+                            ErrorCode = RoslynSession.RequestCancelledCode,
+                        }
+                        : Task.FromResult<JsonNode?>(null)
+            )
+        );
+        using var tool = CreateTool(Root, session);
+
+        var response = await tool.ExecuteAsync(
+            new LspRequest
+            {
+                Action = LspAction.References,
+                File = SourceFile,
+                Line = 1,
+                Character = 1,
+            },
+            TestCt
+        );
+
+        response.Should().BeError(ErrorCodes.Lsp);
     }
 
     [Fact(Timeout = 30_000)]
