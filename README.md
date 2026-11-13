@@ -3,7 +3,7 @@
 [![CI](https://img.shields.io/github/actions/workflow/status/thomas-fazzari/roslyn-bridge-mcp/ci.yml?branch=master&label=CI)](https://github.com/thomas-fazzari/roslyn-bridge-mcp/actions/workflows/ci.yml)
 [![NuGet](https://img.shields.io/nuget/v/ThomasFazzari.RoslynBridge?logo=nuget&logoColor=white)](https://www.nuget.org/packages/ThomasFazzari.RoslynBridge)
 [![Documentation](https://img.shields.io/badge/docs-BC52EE?logo=astro&logoColor=white&labelColor=555)](https://thomas-fazzari.github.io/roslyn-bridge-mcp/)
-[![License](https://img.shields.io/github/license/thomas-fazzari/roslyn-bridge-mcp)](LICENSE)
+[![License](https://img.shields.io/github/license/thomas-fazzari/roslyn-bridge-mcp)](https://github.com/thomas-fazzari/roslyn-bridge-mcp/blob/master/LICENSE)
 
 C# diagnostics, navigation and refactoring for coding agents, backed by the official Roslyn language server through the Model Context Protocol (MCP).
 
@@ -39,13 +39,13 @@ The snippet is all the agent needs. Do not describe the tools, their parameters 
 
 ## Benchmarks
 
-Releases that change performance are benchmarked against the previous one on real repositories. Results are in [bench/results](bench/results), and the [methodology](https://github.com/thomas-fazzari/roslyn-bridge-mcp/blob/master/bench/README.md) explains how to read them.
+Releases that change performance are benchmarked against the previous one on real repositories. Results are in [bench/results](https://github.com/thomas-fazzari/roslyn-bridge-mcp/tree/master/bench/results), and the [methodology](https://github.com/thomas-fazzari/roslyn-bridge-mcp/blob/master/bench/README.md) explains how to read them.
 
 ## License
 
-Licensed under the GNU Affero General Public License, version 3 or later, with additional terms under section 7. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
+Licensed under the GNU Affero General Public License, version 3 or later, with additional terms under section 7. See [LICENSE](https://github.com/thomas-fazzari/roslyn-bridge-mcp/blob/master/LICENSE) and [NOTICE](https://github.com/thomas-fazzari/roslyn-bridge-mcp/blob/master/NOTICE).
 
-Third-party notices are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md), which the NuGet package also contains.
+Third-party notices are in [THIRD_PARTY_NOTICES.md](https://github.com/thomas-fazzari/roslyn-bridge-mcp/blob/master/THIRD_PARTY_NOTICES.md), which the NuGet package also contains.
 
 ## Contributors
 
