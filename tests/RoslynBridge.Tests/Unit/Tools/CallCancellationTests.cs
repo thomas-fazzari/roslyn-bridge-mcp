@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Thomas Fazzari
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+using ModelContextProtocol.Protocol;
 using RoslynBridge.Lsp;
 using RoslynBridge.Requests;
 using RoslynBridge.Settings;
@@ -119,25 +120,72 @@ public sealed class CallCancellationTests : TempWorkspaceTests
         );
         using var tool = CreateTool(Root, session);
 
-        var response = await tool.ExecuteAsync(
-            new LspRequest
-            {
-                Action = LspAction.RenameFile,
-                File = SourceFile,
-                NewName = RenamedFile,
-                Apply = true,
-            },
-            cancellation.Token
-        );
+        var response = await tool.ExecuteAsync(RenameFileApplied(), cancellation.Token);
 
         response.Should().BeError(ErrorCodes.Cancelled);
+        AssertTheMovedFileIsReported(response, source);
+        afterTheWrite.SetResult(null);
+    }
+
+    [Fact(Timeout = 30_000)]
+    public async Task TimeoutDuringAnAppliedEditReportsTheWrittenFilesAsync()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var source = await WriteFileAsync(Root, SourceFile, "class A {}\n");
+        var options = new BridgeOptions
+        {
+            WorkspaceRoot = Root,
+            StartupTimeout = TimeSpan.FromSeconds(1),
+            RequestTimeout = TimeSpan.FromMilliseconds(500),
+        };
+        // The bridge waits for a project to pick up the moved file until the call times out
+        var outsideEveryProject = new JsonObject
+        {
+            ["_vs_projectContexts"] = new JsonArray(
+                new JsonObject { ["_vs_is_miscellaneous"] = true }
+            ),
+        };
+        await using var session = CreateSession(
+            Root,
+            FakeServer(server =>
+            {
+                server.Capabilities = LspCapabilityJson.WillRenameFiles();
+                server.Handle = (method, _) =>
+                    Task.FromResult<JsonNode?>(
+                        method is LspMethods.TextDocumentGetProjectContexts
+                            ? outsideEveryProject.DeepClone()
+                            : null
+                    );
+            }),
+            options
+        );
+        using var tool = CreateTool(Root, session, options);
+
+        var response = await tool.ExecuteAsync(RenameFileApplied(), cancellationToken);
+
+        response.Should().BeError(ErrorCodes.Timeout);
+        AssertTheMovedFileIsReported(response, source);
+    }
+
+    private static LspRequest RenameFileApplied() =>
+        new()
+        {
+            Action = LspAction.RenameFile,
+            File = SourceFile,
+            NewName = RenamedFile,
+            Apply = true,
+        };
+
+    private void AssertTheMovedFileIsReported(CallToolResult response, string source)
+    {
         ResultLines
             .Lines(ResponseText(response))
             .Should()
-            .Contain($"create {RenamedFile}")
+            .Contain("failed step: synchronize")
+            .And.Contain("applied: 2 files, 2 operations, Roslyn not synchronized")
+            .And.Contain($"create {RenamedFile}")
             .And.Contain($"delete {SourceFile}");
         File.Exists(source).Should().BeFalse();
         File.Exists(Path.Combine(Root, RenamedFile)).Should().BeTrue();
-        afterTheWrite.SetResult(null);
     }
 }

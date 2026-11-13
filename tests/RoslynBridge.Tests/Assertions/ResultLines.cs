@@ -11,6 +11,14 @@ internal static partial class ResultLines
 
     public static string[] Lines(string text) => text.Split('\n');
 
+    // A preview starts with "proposal <id>: ..." and a code action listing with "proposal <id>"
+    public static string ProposalId(string response) =>
+        Lines(response)[0].Split(' ')[1].TrimEnd(':');
+
+    // One candidate per line after the error line
+    public static string[] CandidateNames(string response) =>
+        [.. Lines(response).Skip(1).Select(line => line.Split(' ', 3)[2])];
+
     // Result lines that are not indented details, totals or notes start with a workspace file
     public static bool IsFileLine(string line) =>
         !line.StartsWith(' ', StringComparison.Ordinal)
