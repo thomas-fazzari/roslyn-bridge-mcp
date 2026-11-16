@@ -7,11 +7,8 @@ idiomatic_version_file_enable_tools = ["dotnet"]
 "dotnet:csharpier" = "1.4.0"
 bun = "1.4.4"
 hk = "2.12.0"
-"aqua:oxc-project/oxc/oxfmt" = "0.78.0"
 rumdl = "v0.3.4"
 shellcheck = "0.11.0"
-shfmt = "3.14.1"
-"aqua:skaji/relocatable-perl" = { version = "5.44.0.0", os = ["linux", "macos"] }
 
 [task_config]
 includes = ["eng/tasks"]
@@ -71,8 +68,4 @@ run = "bunx --bun astro build"
 [tasks."docs:check"]
 description = "Lints Markdown, checks its formatting and builds the documentation"
 depends = ["docs:build"]
-run = ["rumdl check .", 'oxfmt --check "docs/**/*.mjs"']
-
-[tasks."notices:check"]
-description = "Checks that THIRD_PARTY_NOTICES.md lists the packages the tool package ships"
-run = "perl eng/tasks/check-notices.pl"
+run = "rumdl check ."

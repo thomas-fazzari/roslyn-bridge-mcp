@@ -5,7 +5,6 @@
 !/.gitignore
 !/.editorconfig
 !/.gitattributes
-!/.oxfmtrc.json
 !/.rumdl.toml
 !/AGENTS.md
 !/ARCHITECTURE.md
@@ -24,7 +23,6 @@
 !/nuget.config
 !/.roslyn-bridge.json
 !/roslyn-bridge.code-workspace
-!/.lazy.lua
 
 !/.devcontainer/
 !/.devcontainer/devcontainer.json

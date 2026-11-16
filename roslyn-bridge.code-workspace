@@ -4,8 +4,6 @@
     "csharp.debug.justMyCode": false,
     "csharp.suppressBuildAssetsNotification": true,
     "dotnet.defaultSolution": "RoslynBridge.slnx",
-    "oxc.enable.oxlint": false,
-    "oxc.path.oxfmt": "${userHome}/.local/share/mise/shims/oxfmt",
     "editor.formatOnSave": true,
     "editor.formatOnSaveMode": "file",
     "files.associations": {
@@ -56,9 +54,6 @@
     "[csharp][xml]": {
       "editor.defaultFormatter": "csharpier.csharpier-vscode",
     },
-    "[javascript][typescript][json][jsonc][yaml]": {
-      "editor.defaultFormatter": "oxc.oxc-vscode",
-    },
     "[markdown][mdx]": {
       "editor.defaultFormatter": "rvben.rumdl",
       "editor.wordWrap": "on",
@@ -71,12 +66,11 @@
       "hverlin.mise-vscode",
       "EditorConfig.EditorConfig",
       "redhat.vscode-yaml",
-      "oxc.oxc-vscode",
       "rvben.rumdl",
       "tamasfe.even-better-toml",
       "unifiedjs.vscode-mdx",
+      "timonwong.shellcheck",
       "ms-vscode-remote.remote-containers",
-      "bscan.perlnavigator",
     ],
   },
   "tasks": {

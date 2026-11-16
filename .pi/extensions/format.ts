@@ -8,10 +8,6 @@ const run = promisify(execFile);
 const FORMAT_TIMEOUT_MS = 15_000;
 const FORMATTERS: [RegExp, string[]][] = [
   [/\.(?:cs|csx|csproj|props|targets|slnx)$/u, ["csharpier", "format"]],
-  [
-    /\.(?:json|jsonc|ya?ml|toml|m?js|ts)$/u,
-    ["oxfmt", "--write", "--no-error-on-unmatched-pattern"],
-  ],
   [/\.mdx?$/u, ["rumdl", "fmt", "--silent"]],
 ];
 

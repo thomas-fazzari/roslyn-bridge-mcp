@@ -10,16 +10,10 @@ local linters = new Mapping<String, Step> {
     check = "csharpier check {{files}}"
     fix = "csharpier format {{files}}"
   }
-  ["oxfmt"] {
-    glob = "**/*.{json,jsonc,yml,yaml,toml,js,mjs,ts}"
-    check = "oxfmt --check --no-error-on-unmatched-pattern {{files}}"
-    fix = "oxfmt --write --no-error-on-unmatched-pattern {{files}}"
-  }
   ["rumdl"] = (Builtins.rumdl) {
     glob = List("**/*.md", "**/*.mdx")
   }
   ["shellcheck"] = Builtins.shellcheck
-  ["shfmt"] = Builtins.shfmt
 }
 
 steps = linters
@@ -28,7 +22,7 @@ hooks {
   ["commit-msg"] {
     steps {
       ["commit-type"] {
-        check = "perl eng/tasks/commit-msg.pl {{commit_msg_file}}"
+        check = "eng/tasks/commit-msg.sh {{commit_msg_file}}"
       }
     }
   }
