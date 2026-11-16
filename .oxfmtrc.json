@@ -1,3 +1,0 @@
-{
-  "ignorePatterns": ["docs/bun.lock", "docs/.astro/**", "docs/dist/**", "bench/results/**"]
-}
