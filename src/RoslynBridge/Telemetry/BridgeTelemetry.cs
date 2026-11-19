@@ -88,9 +88,7 @@ internal static class BridgeTelemetry
         public HostApplicationBuilder AddTelemetry()
         {
             if (!IsEnabled(Environment.GetEnvironmentVariables()))
-            {
                 return builder;
-            }
 
             // The empty host reads no environment variable, and the exporter reads only configuration
             builder.Configuration.AddInMemoryCollection(
@@ -177,17 +175,13 @@ internal static class BridgeTelemetry
     {
         duration.Record(Stopwatch.GetElapsedTime(started).TotalSeconds, tags);
         if (activity is null)
-        {
             return;
-        }
 
         foreach (var (key, value) in tags)
         {
             activity.SetTag(key, value);
             if (string.Equals(key, ErrorType, StringComparison.Ordinal))
-            {
                 activity.SetStatus(ActivityStatusCode.Error);
-            }
         }
     }
 
@@ -215,9 +209,7 @@ internal static class BridgeTelemetry
         {
             var result = await operation();
             if (errorOf(result) is { } error)
-            {
                 tags.Add(ErrorType, error.Code);
-            }
 
             return result;
         }

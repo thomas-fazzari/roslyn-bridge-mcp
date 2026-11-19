@@ -65,9 +65,7 @@ internal sealed partial class RoslynSession(
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         if (IsReady || IsLoading)
-        {
             return;
-        }
 
         await StopConnectionAsync();
         _startupCancellation?.Dispose();
@@ -190,9 +188,7 @@ internal sealed partial class RoslynSession(
     public async ValueTask DisposeAsync()
     {
         if (_disposed)
-        {
             return;
-        }
 
         _disposed = true;
         await StopAsync();
@@ -242,9 +238,7 @@ internal sealed partial class RoslynSession(
         }
 
         if (started is ToolError)
-        {
             await StopConnectionAsync();
-        }
 
         return started;
     }
@@ -293,9 +287,7 @@ internal sealed partial class RoslynSession(
         var connection = _connection;
         _connection = null;
         if (connection is not null)
-        {
             await connection.DisposeAsync();
-        }
     }
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "Stopped Roslyn while it was loading.")]

@@ -109,9 +109,7 @@ internal static partial class SymbolExtensions
                 for (var type = symbol.ContainingType; type is not null; type = type.ContainingType)
                 {
                     if (type.DeclarationKey is { } key)
-                    {
                         yield return key;
-                    }
                 }
             }
         }

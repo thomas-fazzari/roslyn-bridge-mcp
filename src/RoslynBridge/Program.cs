@@ -71,9 +71,7 @@ internal static class Program
         var host = builder.Build().StartTelemetry();
         // stdio transport delivers no tool call before RunAsync, so this cannot race one
         if (host.Services.GetRequiredService<WorkspacePaths>().ContainsProject())
-        {
             await host.Services.GetRequiredService<RoslynSession>().StartLoadingAsync();
-        }
 
         await host.RunAsync(CancellationToken.None);
     }

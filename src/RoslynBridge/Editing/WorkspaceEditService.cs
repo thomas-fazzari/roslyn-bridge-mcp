@@ -26,14 +26,10 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
     {
         var planned = await PlanAsync(edit, snapshot, cancellationToken);
         if (planned.IsError(out var planError, out var documents))
-        {
             return planError;
-        }
 
         if (EnsureCurrent(documents, snapshot, cancellationToken) is ToolError staleError)
-        {
             return staleError;
-        }
 
         return documents
             .Where(document => document.Changed)
@@ -67,9 +63,7 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
         {
             var result = await ApplyPlannedAsync(edit, snapshot, cancellationToken);
             if (result is ToolError error)
-            {
                 BridgeTelemetry.MarkFailed(activity, error.Code);
-            }
 
             return result;
         }
@@ -88,9 +82,7 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
     {
         var planned = await PlanAsync(edit, snapshot, cancellationToken);
         if (planned.IsError(out var planError, out var documents))
-        {
             return planError;
-        }
 
         var temporaryFiles = new Dictionary<string, string>(StringComparer.Ordinal);
         var completedOperations = new List<FileOperation>();
@@ -159,14 +151,10 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
         try
         {
             if (await StageAsync(documents, temporaryFiles, cancellationToken) is ToolError error)
-            {
                 return new ApplyFailure(error, Mutation: null);
-            }
 
             if (EnsureCurrent(documents, snapshot, cancellationToken) is ToolError staleError)
-            {
                 return new ApplyFailure(staleError, Mutation: null);
-            }
 
             cancellationToken.ThrowIfCancellationRequested();
             var written = ApplyDestinationWrites(
@@ -176,9 +164,7 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
                 ref pendingMutation
             );
             if (written is ToolError writeError)
-            {
                 return new ApplyFailure(writeError, pendingMutation);
-            }
 
             ApplyCaseOnlyRenames(documents, completedOperations, ref pendingMutation);
             var deleted = ApplySourceDeletions(documents, completedOperations, ref pendingMutation);
@@ -209,9 +195,7 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
             var temporary = temporaryFiles[destination];
             pendingMutation = new(paths.RelativePath(destination), DestinationOperation(document));
             if (paths.Resolve(destination) is ToolError error)
-            {
                 return error;
-            }
 
             File.Move(temporary, destination, overwrite: true);
             completedOperations.Add(
@@ -265,9 +249,7 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
         {
             pendingMutation = new(paths.RelativePath(document.Path), FileOperation.Delete);
             if (paths.Resolve(document.Path) is ToolError error)
-            {
                 return error;
-            }
 
             File.Delete(document.Path);
             completedOperations.Add(new(paths.RelativePath(document.Path), FileOperation.Delete));
@@ -309,18 +291,14 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
         )
         {
             if (paths.Resolve(document.Path) is ToolError error)
-            {
                 return error;
-            }
 
             Directory.CreateDirectory(Path.GetDirectoryName(document.Path)!);
             var temporary = $"{document.Path}.{Guid.NewGuid():N}.tmp";
             temporaryFiles.Add(document.Path, temporary);
             await File.WriteAllBytesAsync(temporary, document.Content!, cancellationToken);
             if (!OperatingSystem.IsWindows() && document.ModeSource is { } modeSource)
-            {
                 File.SetUnixFileMode(temporary, File.GetUnixFileMode(modeSource));
-            }
         }
 
         return Result.Success;
@@ -334,9 +312,7 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
     {
         var documents = new Dictionary<string, EditedDocument>(StringComparer.Ordinal);
         if (edit.Read<WorkspaceEdit>().IsError(out var readError, out var workspaceEdit))
-        {
             return readError;
-        }
 
         if (workspaceEdit is { Changes: not null, DocumentChanges: not null })
         {
@@ -349,22 +325,16 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
         {
             var loaded = await GetDocumentAsync(uri, documents, snapshot, cancellationToken);
             if (loaded.IsError(out var documentError, out var document))
-            {
                 return documentError;
-            }
 
             if (ApplyEdits(document, edits) is ToolError editError)
-            {
                 return editError;
-            }
         }
 
         foreach (var operation in workspaceEdit.DocumentChanges ?? [])
         {
             if (operation is null)
-            {
                 return ToolError.InvalidLspData("Missing document operation.");
-            }
 
             if (
                 await PlanOperationAsync(operation, documents, snapshot, cancellationToken)
@@ -375,20 +345,14 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
             }
 
             if (CheckSize(documents.Values) is ToolError sizeError)
-            {
                 return sizeError;
-            }
         }
 
         if (CheckSize(documents.Values) is ToolError error)
-        {
             return error;
-        }
 
         if (ValidateParents(documents) is ToolError parentsError)
-        {
             return parentsError;
-        }
 
         return documents.Values.ToList();
     }
@@ -458,15 +422,11 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
     )
     {
         if (operation.TextDocument is not { } identifier)
-        {
             return ToolError.InvalidLspData("A document edit needs textDocument.");
-        }
 
         var loaded = await GetDocumentAsync(identifier.Uri, documents, snapshot, cancellationToken);
         if (loaded.IsError(out var error, out var document))
-        {
             return error;
-        }
 
         if (
             identifier.Version is { } version
@@ -499,9 +459,7 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
             cancellationToken
         );
         if (required.IsError(out var error, out var document))
-        {
             return error;
-        }
 
         if (document.Content is not null && operation.Options is not { Overwrite: true })
         {
@@ -529,24 +487,16 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
             cancellationToken
         );
         if (sourceDocument.IsError(out var sourceError, out var source))
-        {
             return sourceError;
-        }
 
         if (source.Content is null)
-        {
             return ToolError.InvalidRequest($"The file to rename does not exist: {source.Path}");
-        }
 
         if (operation.NewUri is not { } newUri)
-        {
             return MissingProperty("newUri");
-        }
 
         if (ResolveEditPath(newUri).IsError(out var pathError, out var destinationPath))
-        {
             return pathError;
-        }
 
         if (IsCaseOnlyAlias(source, destinationPath, snapshot))
         {
@@ -561,14 +511,10 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
             cancellationToken
         );
         if (destinationDocument.IsError(out var destinationError, out var destination))
-        {
             return destinationError;
-        }
 
         if (ReferenceEquals(source, destination))
-        {
             return Result.Success;
-        }
 
         if (destination.Content is not null && operation.Options is not { Overwrite: true })
         {
@@ -608,9 +554,7 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
     )
     {
         if (operation.Options is { Recursive: true })
-        {
             return ToolError.InvalidRequest("Recursive delete operations are not supported.");
-        }
 
         var required = await GetRequiredDocumentAsync(
             operation.Uri,
@@ -620,14 +564,10 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
             cancellationToken
         );
         if (required.IsError(out var error, out var document))
-        {
             return error;
-        }
 
         if (document.Content is null && operation.Options is not { IgnoreIfNotExists: true })
-        {
             return ToolError.InvalidRequest($"The file to delete does not exist: {document.Path}");
-        }
 
         document.Content = null;
         return Result.Success;
@@ -642,9 +582,7 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
     )
     {
         if (uri is null)
-        {
             return MissingProperty(property);
-        }
 
         return await GetDocumentAsync(uri, documents, snapshot, cancellationToken);
     }
@@ -657,33 +595,23 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
     )
     {
         if (ResolveEditPath(uri).IsError(out var pathError, out var path))
-        {
             return pathError;
-        }
 
         if (documents.TryGetValue(path, out var document))
-        {
             return document;
-        }
 
         document = documents.Values.FirstOrDefault(candidate =>
             candidate.CaseOnlyRename && StringComparer.Ordinal.Equals(candidate.Path, path)
         );
         if (document is not null)
-        {
             return document;
-        }
 
         if (Directory.Exists(path))
-        {
             return ToolError.InvalidRequest($"Workspace edits support files only: {path}");
-        }
 
         var original = await ReadOriginalAsync(path, snapshot, cancellationToken);
         if (original.IsError(out var readError, out var content))
-        {
             return readError;
-        }
 
         document = new EditedDocument(path, content);
         documents.Add(path, document);

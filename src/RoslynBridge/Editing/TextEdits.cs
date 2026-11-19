@@ -21,9 +21,7 @@ internal static class TextEdits
         var lines = GetLines(source);
         var parseResult = edits.Select((edit, index) => Parse(edit, index, lines)).All();
         if (parseResult.IsError(out var error, out var parsed))
-        {
             return error;
-        }
 
         var changes = parsed
             .OrderBy(change => change.Start)
@@ -34,16 +32,12 @@ internal static class TextEdits
         foreach (var change in changes)
         {
             if (change.Start < offset || change.End < change.Start)
-            {
                 return ToolError.InvalidLspData("Text edit ranges overlap or run backwards.");
-            }
 
             result.Append(source, offset, change.Start - offset).Append(change.Text);
             offset = change.End;
             if (result.Length > WorkspaceEditService.MaximumFileBytes)
-            {
                 return ToolError.InvalidRequest("The edited document exceeds the size limit.");
-            }
         }
 
         result.Append(source, offset, source.Length - offset);
@@ -57,15 +51,11 @@ internal static class TextEdits
         for (var index = 0; index < source.Length; index++)
         {
             if (!IsLineBreak(source[index]))
-            {
                 continue;
-            }
 
             lines.Add(new LineSpan(start, index - start));
             if (source[index] == '\r' && index + 1 < source.Length && source[index + 1] == '\n')
-            {
                 index++;
-            }
 
             start = index + 1;
         }
@@ -81,9 +71,7 @@ internal static class TextEdits
     private static Result<Change> Parse(TextEdit? edit, int index, List<LineSpan> lines)
     {
         if (edit is null)
-        {
             return ToolError.InvalidLspData("Missing text edit.");
-        }
 
         if (
             GetOffset(edit.Range.Start, lines) is not { } start

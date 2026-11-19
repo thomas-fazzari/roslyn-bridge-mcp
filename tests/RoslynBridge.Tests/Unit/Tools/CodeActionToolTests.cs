@@ -126,9 +126,7 @@ public sealed class CodeActionToolTests : TempWorkspaceTests
                 {
                     // A crash while synchronizing fails the call, while the diagnostics after it ignore one
                     if (method is LspMethods.TextDocumentGetProjectContexts)
-                    {
                         server.Crash();
-                    }
 
                     return Task.FromResult<JsonNode?>(
                         method is LspMethods.TextDocumentCodeAction ? actions.DeepClone() : null

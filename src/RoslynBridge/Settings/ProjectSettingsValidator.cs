@@ -14,18 +14,14 @@ internal static class ProjectSettingsValidator
         foreach (var folder in settings.Exclude ?? [])
         {
             if (!IsFolderName(folder))
-            {
                 faults.Add($"exclude entry '{folder}' is not a folder name");
-            }
         }
 
         CheckTimeout("startupTimeout", settings.StartupTimeout, faults);
         CheckTimeout("requestTimeout", settings.RequestTimeout, faults);
 
         if (settings.Solution is not null)
-        {
             CheckPath(root, "solution", settings.Solution, _solutionExtensions, faults);
-        }
 
         foreach (var project in settings.Projects ?? [])
         {
@@ -33,14 +29,10 @@ internal static class ProjectSettingsValidator
         }
 
         if (settings.Solution is not null && settings.Projects is { Length: > 0 })
-        {
             faults.Add("solution and projects cannot both be set");
-        }
 
         if (settings.Diagnostics?.Severity is { } severity && !Enum.IsDefined(severity))
-        {
             faults.Add("diagnostics.severity must be error, warning, information or hint");
-        }
 
         return faults;
     }

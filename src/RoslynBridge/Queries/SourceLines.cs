@@ -92,9 +92,7 @@ internal static class SourceLines
     private static string[]? Read(string? file, Dictionary<string, string[]?> files)
     {
         if (file is null)
-        {
             return null;
-        }
 
         if (!files.TryGetValue(file, out var text))
         {

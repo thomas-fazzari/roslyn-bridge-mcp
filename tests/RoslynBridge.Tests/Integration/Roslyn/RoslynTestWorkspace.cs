@@ -44,14 +44,10 @@ internal sealed class RoslynTestWorkspace : IAsyncDisposable
         {
             workspace.CopyFixture("Workspace");
             if (overlay is not null)
-            {
                 workspace.CopyFixture(overlay);
-            }
 
             if (settings is not null)
-            {
                 await workspace.WriteFileAsync(ProjectSettings.FileName, settings);
-            }
 
             await workspace.RestoreAsync();
             await workspace.ConnectAsync(requestTimeoutSeconds);

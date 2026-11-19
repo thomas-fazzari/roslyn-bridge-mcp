@@ -25,9 +25,7 @@ internal sealed record SymbolName(ImmutableArray<string> Segments, string? Param
     public static SymbolName? Parse(string text)
     {
         if (string.IsNullOrWhiteSpace(text))
-        {
             return null;
-        }
 
         var name = WithoutType(text);
 
@@ -36,9 +34,7 @@ internal sealed record SymbolName(ImmutableArray<string> Segments, string? Param
         {
             var open = MatchingOpen(name);
             if (open < 0)
-            {
                 return null;
-            }
 
             parameters = Normalize(name[open..]);
             name = name[..open];
@@ -113,9 +109,7 @@ internal sealed record SymbolName(ImmutableArray<string> Segments, string? Param
     private static bool ParametersSelect(string requested, string? declared, bool exact)
     {
         if (exact || declared is null)
-        {
             return string.Equals(requested, declared, StringComparison.Ordinal);
-        }
 
         var requestedTypes = SplitAtTopLevel(requested[1..^1], ',').ToArray();
         var declaredTypes = SplitAtTopLevel(declared[1..^1], ',').ToArray();
@@ -135,9 +129,7 @@ internal sealed record SymbolName(ImmutableArray<string> Segments, string? Param
     {
         var open = segment.IndexOf('<', StringComparison.Ordinal);
         if (open <= 0 || segment[^1] != '>')
-        {
             return segment;
-        }
 
         var arity = SplitAtTopLevel(segment[(open + 1)..^1], ',').Count();
         return $"{segment[..open]}`{arity.ToString(CultureInfo.InvariantCulture)}";
@@ -150,9 +142,7 @@ internal sealed record SymbolName(ImmutableArray<string> Segments, string? Param
         {
             depth -= Depth(text, index);
             if (depth == 0)
-            {
                 return index;
-            }
         }
 
         return -1;
@@ -165,9 +155,7 @@ internal sealed record SymbolName(ImmutableArray<string> Segments, string? Param
         {
             depth += Depth(text, index);
             if (depth == 0 && string.CompareOrdinal(text, index, value, 0, value.Length) == 0)
-            {
                 return index;
-            }
         }
 
         return -1;

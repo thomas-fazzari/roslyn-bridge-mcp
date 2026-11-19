@@ -13,9 +13,7 @@ internal sealed partial class RoslynConnection
     private void QueueFile(string path)
     {
         if (!paths.IsWatched(path))
-        {
             return;
-        }
 
         if (_pendingFiles.Count >= WorkspacePaths.MaximumFileCount)
         {
@@ -80,9 +78,7 @@ internal sealed partial class RoslynConnection
         }
 
         if (synchronized is ToolError)
-        {
             Requeue(changedPaths, scanRequested);
-        }
 
         return synchronized;
     }
@@ -93,9 +89,7 @@ internal sealed partial class RoslynConnection
     )
     {
         if (ScanWorkspace(cancellationToken).IsError(out var error, out var current))
-        {
             return error;
-        }
 
         var notified = await NotifyFileChangesAsync(
             current,
@@ -103,9 +97,7 @@ internal sealed partial class RoslynConnection
             cancellationToken
         );
         if (notified is not ToolError)
-        {
             _workspaceFiles = current;
-        }
 
         return notified;
     }
@@ -113,9 +105,7 @@ internal sealed partial class RoslynConnection
     private void Requeue(List<string> changedPaths, bool scanRequested)
     {
         if (scanRequested)
-        {
             Interlocked.Exchange(ref _scanRequested, 1);
-        }
 
         foreach (var path in changedPaths)
         {
@@ -165,9 +155,7 @@ internal sealed partial class RoslynConnection
     )
     {
         if (changedPaths.Count == 0)
-        {
             return Result.Success;
-        }
 
         var updates = new Dictionary<string, FileStamp?>(StringComparer.Ordinal);
         var changes = new List<FileChange>();
@@ -179,9 +167,7 @@ internal sealed partial class RoslynConnection
             if (current is null)
             {
                 if (exists)
-                {
                     changes.Add(new FileChange(path, FileDeleted));
-                }
             }
             else
             {
@@ -193,9 +179,7 @@ internal sealed partial class RoslynConnection
         }
 
         if (await SendFileChangesAsync(changes, cancellationToken) is ToolError error)
-        {
             return error;
-        }
 
         foreach (var (path, stamp) in updates)
         {
@@ -232,9 +216,7 @@ internal sealed partial class RoslynConnection
                     cancellationToken
                 );
                 if (notified is ToolError notifyError)
-                {
                     return notifyError;
-                }
             }
 
             foreach (var change in batch)
@@ -246,9 +228,7 @@ internal sealed partial class RoslynConnection
                 }
 
                 if (change.Type is FileCreated)
-                {
                     _createdFiles[change.Path] = 0;
-                }
 
                 if (
                     await SynchronizeClosedDocumentAsync(change.Path, cancellationToken)
@@ -268,9 +248,7 @@ internal sealed partial class RoslynConnection
     private IEnumerable<FileChange> WithProjectReloads(FileChange[] batch)
     {
         if (!OperatingSystem.IsWindows() || !Array.Exists(batch, IsSourceFileAddedOrRemoved))
-        {
             return batch;
-        }
 
         var projectsByDirectory = _workspaceFiles
             .Keys.Where(path =>
@@ -301,9 +279,7 @@ internal sealed partial class RoslynConnection
         while (directory is not null && directory.Length >= paths.Root.Length)
         {
             if (projectsByDirectory.Contains(directory))
-            {
                 return projectsByDirectory[directory];
-            }
 
             directory = Path.GetDirectoryName(directory);
         }

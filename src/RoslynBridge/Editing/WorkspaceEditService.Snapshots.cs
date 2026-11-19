@@ -70,15 +70,11 @@ internal sealed partial class WorkspaceEditService
         foreach (var path in touched.Distinct(StringComparer.Ordinal))
         {
             if (FileStamp.Read(path) != Expected(snapshot, path))
-            {
                 return _staleWorkspace;
-            }
         }
 
         if (paths.EnumerateFiles(cancellationToken).IsError(out var error, out var files))
-        {
             return error;
-        }
 
         // Build output under obj also holds generated props and editorconfig files, so only sources count
         var projectFiles = 0;
@@ -86,9 +82,7 @@ internal sealed partial class WorkspaceEditService
         {
             projectFiles++;
             if (!snapshot.Files.TryGetValue(file.Path, out var stamp) || stamp != file.Stamp)
-            {
                 return _staleWorkspace;
-            }
         }
 
         var snapshotProjectFiles = snapshot
@@ -112,17 +106,13 @@ internal sealed partial class WorkspaceEditService
         if (FileStamp.Read(path) is not { } stamp)
         {
             if (expected is null)
-            {
                 return (byte[]?)null;
-            }
 
             return ToolError.StaleEdit($"The source file was deleted: {path}");
         }
 
         if (stamp != expected)
-        {
             return ChangedFile(path);
-        }
 
         if (stamp.Length > MaximumFileBytes)
         {
@@ -185,9 +175,7 @@ internal sealed partial class WorkspaceEditService
         }
 
         if (paths.Resolve(WorkspacePaths.LocalPath(uri)).IsError(out var error, out var resolved))
-        {
             return error;
-        }
 
         if (!IsSourceFile(resolved))
         {

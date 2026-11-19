@@ -22,14 +22,10 @@ internal sealed partial class RoslynConnection
             cancellationToken
         );
         if (response.IsError(out var error, out var result))
-        {
             return error is { RpcCode: not null } ? Array.Empty<ProjectContext>() : error;
-        }
 
         if (result is null)
-        {
             return Array.Empty<ProjectContext>();
-        }
 
         return result.Read<ProjectContexts>().Map(found => found.Contexts ?? []);
     }
@@ -61,9 +57,7 @@ internal sealed partial class RoslynConnection
                 pending.Select(file => IsMiscellaneousAsync(file.Second, cancellationToken))
             );
             if (states.All().IsError(out var error, out var flags))
-            {
                 return error;
-            }
 
             var stillOutside = pending.Where((_, index) => flags[index]).ToList();
             pending = [];

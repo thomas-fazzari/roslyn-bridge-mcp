@@ -51,9 +51,7 @@ internal static partial class ResultText
     {
         var text = new StringBuilder(ErrorPrefix).Append(error.Code);
         if (error.RpcCode is { } code)
-        {
             text.Append(CultureInfo.InvariantCulture, $" (LSP {code})");
-        }
 
         text.Append(": ").Append(OneLine(error.Message)).Append('\n');
         foreach (var candidate in error.Candidates ?? [])
@@ -67,9 +65,7 @@ internal static partial class ResultText
     public static string? ErrorCode(string text)
     {
         if (!text.StartsWith(ErrorPrefix, StringComparison.Ordinal))
-        {
             return null;
-        }
 
         var code = text.AsSpan(ErrorPrefix.Length);
         var end = code.IndexOfAny(' ', ':');
@@ -79,9 +75,7 @@ internal static partial class ResultText
     public static string Json(JsonNode? node)
     {
         if (node is null)
-        {
             return "null";
-        }
 
         using var buffer = new MemoryStream();
         using (var writer = new Utf8JsonWriter(buffer, _jsonOptions))
@@ -123,9 +117,7 @@ internal static partial class ResultText
     {
         var header = $"{heading} {section.Label}";
         if (section.Result.IsError(out var error, out var value))
-        {
             return $"{header}\n{Error(error)}\n";
-        }
 
         switch (value)
         {
@@ -143,9 +135,7 @@ internal static partial class ResultText
     private static string OmissionNote(SectionsReport report, int[] sizes, SortedSet<int> omitted)
     {
         if (omitted.Count == 0)
-        {
             return string.Empty;
-        }
 
         return new StringBuilder("omitted to fit: ")
             .AppendJoin(
@@ -169,15 +159,11 @@ internal static partial class ResultText
             .Append(status.Loading ? "true" : "false")
             .Append('\n');
         if (status.Progress is { } progress)
-        {
             text.Append("progress: ").Append(progress).Append('\n');
-        }
 
         text.Append("workspace: ").Append(status.Workspace).Append('\n');
         if (status.Server is { } server)
-        {
             text.Append("server: ").Append(server).Append('\n');
-        }
     }
 
     private static void AppendDiagnostics(StringBuilder text, DiagnosticReport report)
@@ -192,9 +178,7 @@ internal static partial class ResultText
                     .Append(' ')
                     .Append(diagnostic.Severity.ToString().ToLowerInvariant());
                 if (diagnostic.Code is { } code)
-                {
                     text.Append(' ').Append(code);
-                }
 
                 text.Append(' ').Append(OneLine(diagnostic.Message)).Append('\n');
             }
@@ -204,9 +188,7 @@ internal static partial class ResultText
         {
             var example = summary.Example;
             if (example.Code is { } code)
-            {
                 text.Append(code).Append(' ');
-            }
 
             text.Append(CultureInfo.InvariantCulture, $"x{summary.Count} ")
                 .Append(example.Severity.ToString().ToLowerInvariant())
@@ -235,9 +217,7 @@ internal static partial class ResultText
         }
 
         if (report.FilteredByIds)
-        {
             text.Append(", filtered by ids");
-        }
 
         text.Append('\n');
         var (total, noun) =
@@ -295,9 +275,7 @@ internal static partial class ResultText
             }
 
             if (symbol.TestsOnly)
-            {
                 text.Append(Indent).Append("tests only\n");
-            }
         }
 
         text.Append(Count(unused.FilesChecked, "file", "files"))
@@ -335,27 +313,21 @@ internal static partial class ResultText
         }
 
         if (unused.Total > 0)
-        {
             text.Append("reflection or code outside the workspace may still use a public symbol\n");
-        }
     }
 
     private static void AppendNoRelated(StringBuilder text, LspAction hierarchy)
     {
         text.Append("no ").Append(hierarchy.Name).Append('\n');
         if (hierarchy is LspAction.Callers)
-        {
             text.Append("reflection or code outside the workspace may still call the member\n");
-        }
     }
 
     private static void AppendSymbolTree(StringBuilder text, SymbolItem symbol, string indent)
     {
         AppendSymbol(text, symbol, indent);
         if (symbol.Through is { } through)
-        {
             text.Append(Indent).Append("through ").Append(through).Append('\n');
-        }
 
         if (symbol.Lines is { } lines)
         {
@@ -378,9 +350,7 @@ internal static partial class ResultText
     private static IEnumerable<SourcePosition> LinePositions(SymbolItem symbol)
     {
         if (symbol.Calls.Count > 0)
-        {
             return symbol.Calls;
-        }
 
         return symbol.Position is { } position ? [position] : [];
     }
@@ -497,9 +467,7 @@ internal static partial class ResultText
         {
             text.Append(Indent).Append(Position(position));
             if (lines.TryGetValue(position.Line, out var source) && source.Length > 0)
-            {
                 text.Append(' ').Append(source);
-            }
 
             text.Append('\n');
         }
@@ -509,25 +477,17 @@ internal static partial class ResultText
     {
         text.Append(indent);
         if (Location(symbol) is { } location)
-        {
             text.Append(location).Append(' ');
-        }
 
         if (symbol.Kind is { } kind)
-        {
             text.Append(kind).Append(' ');
-        }
 
         text.Append(symbol.Name);
         if (symbol.Detail is { } detail)
-        {
             text.Append(" : ").Append(detail);
-        }
 
         if (symbol.Container is { } container)
-        {
             text.Append(" in ").Append(container);
-        }
 
         text.Append('\n');
     }
@@ -536,9 +496,7 @@ internal static partial class ResultText
     {
         var position = symbol.Position is { } first ? Position(first) : null;
         if (position is not null && symbol.End is { } end)
-        {
             position += "-" + Position(end);
-        }
 
         return (symbol.File, position) switch
         {
@@ -596,15 +554,11 @@ internal static partial class ResultText
     )
     {
         if (nextOffset is null && !limited)
-        {
             return;
-        }
 
         text.Append(CultureInfo.InvariantCulture, $"truncated: {total} {noun} in total");
         if (nextOffset is { } next)
-        {
             text.Append(CultureInfo.InvariantCulture, $", next offset: {next}");
-        }
 
         text.Append(". Raise limit or narrow the query.\n");
     }

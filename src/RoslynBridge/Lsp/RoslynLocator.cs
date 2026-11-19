@@ -108,9 +108,7 @@ internal sealed class RoslynLocator(
     {
         var path = environment("PATH");
         if (string.IsNullOrEmpty(path))
-        {
             return null;
-        }
 
         return path.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries)
             .Select(directory => ExistingFile(Path.Combine(directory, Executable(name))))

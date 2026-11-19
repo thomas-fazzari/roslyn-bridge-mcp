@@ -25,20 +25,14 @@ internal sealed partial class LspTool
             .Distinct(StringComparer.Ordinal)
             .ToList();
         if (names.Count == 0)
-        {
             return new ResolvedRequest(request, [], ReadOnlyDictionary<string, ToolError>.Empty);
-        }
 
         if (await session.EnsureStartedAsync(cancellationToken) is ToolError startError)
-        {
             return startError;
-        }
 
         var files = await session.WorkspaceFilesAsync(cancellationToken);
         if (files.IsError(out var filesError, out var known))
-        {
             return filesError;
-        }
 
         // rename_file may move any file, while every other tool reads C# files
         var candidates =
@@ -52,9 +46,7 @@ internal sealed partial class LspTool
             {
                 var error = AmbiguousFile(name, matches);
                 if (request is not BulkRequest)
-                {
                     return error;
-                }
 
                 ambiguous[name] = error;
             }

@@ -20,9 +20,7 @@ public abstract class TempWorkspaceTests : IDisposable
     protected virtual void Dispose(bool disposing)
     {
         if (!disposing)
-        {
             return;
-        }
 
         Directory.Delete(Root, recursive: true);
     }

@@ -55,26 +55,18 @@ internal sealed class EditedDocument(string path, byte[]? original)
     public Result Apply(TextEdit?[] edits)
     {
         if (Content is not { } content)
-        {
             return ToolError.InvalidLspData($"The file does not exist: {Path}");
-        }
 
         var (encoding, preamble) = GetEncoding(content);
         if (Decode(content).IsError(out var decodeError, out var source))
-        {
             return decodeError;
-        }
 
         if (TextEdits.Apply(source, edits).IsError(out var editError, out var edited))
-        {
             return editError;
-        }
 
         var length = encoding.GetByteCount(edited);
         if (length + preamble > WorkspaceEditService.MaximumFileBytes)
-        {
             return ToolError.InvalidRequest($"The edited file exceeds the size limit: {Path}");
-        }
 
         var bytes = new byte[length + preamble];
         content.AsSpan(0, preamble).CopyTo(bytes);
@@ -86,14 +78,10 @@ internal sealed class EditedDocument(string path, byte[]? original)
     public Result<FilePreview> Describe(WorkspacePaths paths)
     {
         if (Decode(Original).IsError(out var beforeError, out var before))
-        {
             return beforeError;
-        }
 
         if (Decode(Content).IsError(out var afterError, out var after))
-        {
             return afterError;
-        }
 
         var preview = TextPreview.Create(before, after);
         var kind = (Original, Content, CaseOnlyRename) switch
@@ -117,9 +105,7 @@ internal sealed class EditedDocument(string path, byte[]? original)
     private Result<string> Decode(byte[]? content)
     {
         if (content is null)
-        {
             return string.Empty;
-        }
 
         var (encoding, preamble) = GetEncoding(content);
         try
@@ -138,24 +124,16 @@ internal sealed class EditedDocument(string path, byte[]? original)
     {
         ReadOnlySpan<byte> bytes = content;
         if (bytes.StartsWith(_utf32BigEndian.Preamble))
-        {
             return (_utf32BigEndian, _utf32BigEndian.Preamble.Length);
-        }
 
         if (bytes.StartsWith(_utf32LittleEndian.Preamble))
-        {
             return (_utf32LittleEndian, _utf32LittleEndian.Preamble.Length);
-        }
 
         if (bytes.StartsWith(_utf8.Preamble))
-        {
             return (_utf8, _utf8.Preamble.Length);
-        }
 
         if (bytes.StartsWith(_utf16LittleEndian.Preamble))
-        {
             return (_utf16LittleEndian, _utf16LittleEndian.Preamble.Length);
-        }
 
         return bytes.StartsWith(_utf16BigEndian.Preamble)
             ? (_utf16BigEndian, _utf16BigEndian.Preamble.Length)

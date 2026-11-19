@@ -23,36 +23,24 @@ internal sealed partial class LspQueries(
     )
     {
         if (request.Inherited && request.Action is not LspAction.Members)
-        {
             return ToolError.InvalidRequest("inherited only applies to members.");
-        }
 
         if (request.Action is LspAction.Source)
-        {
             return (await SourceAsync(request, cancellationToken)).AsToolResult();
-        }
 
         if (request.Action is LspAction.Members)
-        {
             return (await MembersAsync(request, cancellationToken)).AsToolResult();
-        }
 
         if (request.Action is LspAction.Impact)
-        {
             return await ImpactAsync(request, cancellationToken);
-        }
 
         var positioned = await PositionAsync(request.Target, request.Action, cancellationToken);
         if (positioned.IsError(out var error, out var position))
-        {
             return error;
-        }
 
         var result = await NavigateAtAsync(request, position, cancellationToken);
         if (IsEmpty(result) && await MissingSymbolAsync(position, cancellationToken) is { } missing)
-        {
             return missing;
-        }
 
         return result;
     }
@@ -71,9 +59,7 @@ internal sealed partial class LspQueries(
                 cancellationToken
             );
             if (response.IsError(out var error, out var found))
-            {
                 return error;
-            }
 
             // Roslyn returns fuzzy matches in file order, so exact and prefix matches come first
             return found
@@ -103,9 +89,7 @@ internal sealed partial class LspQueries(
             cancellationToken
         );
         if (symbolsResponse.IsError(out var symbolsError, out var documentSymbols))
-        {
             return symbolsError;
-        }
 
         var (limit, offset) = request.Page;
         return documentSymbols.ToSymbolList(paths, limit, offset);
@@ -117,9 +101,7 @@ internal sealed partial class LspQueries(
     )
     {
         if (SelectFiles(request.File, cancellationToken).IsError(out var error, out var selected))
-        {
             return error;
-        }
 
         var files = selected.Take(MaximumDiagnosticFiles + 1).ToArray();
         if (files.Length > MaximumDiagnosticFiles)
@@ -140,9 +122,7 @@ internal sealed partial class LspQueries(
     )
     {
         if (await session.SynchronizeNewFilesAsync(files, cancellationToken) is ToolError error)
-        {
             return error;
-        }
 
         var scanned = new List<ScannedFile>(files.Count);
         foreach (var batch in files.Chunk(RoslynConnection.MaximumOpenDocuments))
@@ -172,9 +152,7 @@ internal sealed partial class LspQueries(
     {
         var located = await LocateAsync(target, action, cancellationToken);
         if (located.IsError(out var error, out var location))
-        {
             return error;
-        }
 
         var (file, position) = location;
         return await PositionParametersAsync(file, position, cancellationToken);
@@ -187,22 +165,16 @@ internal sealed partial class LspQueries(
     )
     {
         if (request.Action.IsHierarchy)
-        {
             return await HierarchyAsync(request, parameters, cancellationToken);
-        }
 
         if (request.Action is LspAction.References || request.Action.IsAccess)
         {
             var lookup = await ReferencesAsync(parameters, cancellationToken);
             if (lookup.IsError(out var error, out var found))
-            {
                 return error;
-            }
 
             if (request.Action.IsAccess)
-            {
                 return await AccessAsync(request, found, cancellationToken);
-            }
 
             var references = found.Locations.Page(request.Page.Limit, request.Page.Offset);
             return request.Context ? SourceLines.Add(references, paths) : references;
@@ -221,14 +193,10 @@ internal sealed partial class LspQueries(
 
         var response = await session.RequestAsync(method, parameters, cancellationToken);
         if (response.IsError(out var requestError, out var result))
-        {
             return requestError;
-        }
 
         if (request.Action is LspAction.Hover)
-        {
             return new HoverText(result.ToHoverText());
-        }
 
         // A generated partial, such as a regex generator's, lists its type a second time
         return result.ToLocations(
@@ -261,17 +229,13 @@ internal sealed partial class LspQueries(
                 ? await session.FindCallersAsync(position, cancellationToken)
                 : ExtensionCallers.NotFound;
         if (callersLookup.IsError(out var callersError, out var callers))
-        {
             return callersError;
-        }
 
         var expansion = callers.Found
             ? new Hierarchy(callers.Calls, Accesses: 0, Prepared: true)
             : await ExpandHierarchyAsync(request.Action, position, cancellationToken);
         if (expansion.IsError(out var hierarchyError, out var hierarchy))
-        {
             return hierarchyError;
-        }
 
         if (
             hierarchy
@@ -291,14 +255,10 @@ internal sealed partial class LspQueries(
             cancellationToken
         );
         if (naming.IsError(out var namesError, out var result))
-        {
             return namesError;
-        }
 
         if (!request.Context)
-        {
             return result;
-        }
 
         // Outgoing call sites are in the requested document, not in the callee's file
         var callSiteFile =
@@ -334,9 +294,7 @@ internal sealed partial class LspQueries(
         var accesses = 0;
         var preparation = await session.RequestAsync(prepare, position, cancellationToken);
         if (preparation.IsError(out var error, out var prepared))
-        {
             return error;
-        }
 
         var items = prepared as JsonArray ?? [];
         foreach (var item in items)
@@ -347,9 +305,7 @@ internal sealed partial class LspQueries(
                 cancellationToken
             );
             if (expansion.IsError(out var expandError, out var expanded))
-            {
                 return expandError;
-            }
 
             foreach (var entry in expanded as JsonArray ?? [])
             {
@@ -361,9 +317,7 @@ internal sealed partial class LspQueries(
 
                 // Outgoing calls also list property, field and constant accesses, which hide the calls
                 if (entry.Read<LspCall>().IsError(out var callError, out var call))
-                {
                     return callError;
-                }
 
                 if (!LspSymbolKinds.IsInvocable(call.To?.Kind))
                 {
@@ -421,14 +375,10 @@ internal sealed partial class LspQueries(
     private static int MatchRank(string name, string query)
     {
         if (string.Equals(name, query, StringComparison.Ordinal))
-        {
             return 0;
-        }
 
         if (string.Equals(name, query, StringComparison.OrdinalIgnoreCase))
-        {
             return 1;
-        }
 
         return name.StartsWith(query, StringComparison.OrdinalIgnoreCase) ? 2 : 3;
     }
@@ -456,9 +406,7 @@ internal sealed partial class LspQueries(
 
         var projects = await session.WaitForProjectsAsync(batch, cancellationToken);
         if (projects.IsError(out var waitError, out var miscellaneous))
-        {
             return waitError;
-        }
 
         var reports = await Task.WhenAll(
             uris.Select(uri => session.DiagnosticReportAsync(uri, cancellationToken))
@@ -494,9 +442,7 @@ internal sealed partial class LspQueries(
                 .ToList();
             belowSeverity += matching.Count - selected.Count;
             if (selected.Count == 0)
-            {
                 continue;
-            }
 
             var relative = paths.RelativePath(file.Path);
             found.AddRange(
@@ -566,14 +512,10 @@ internal sealed partial class LspQueries(
         }
 
         if (paths.Resolve(file).IsError(out var pathError, out var path))
-        {
             return pathError;
-        }
 
         if (SourceLines.ReadLines(path).IsError(out var readError, out var lines))
-        {
             return readError;
-        }
 
         if (position.Line > lines.Length)
         {
@@ -647,9 +589,7 @@ internal sealed partial class LspQueries(
     {
         var positioned = await PositionParametersAsync(file, position, cancellationToken);
         if (positioned.IsError(out var error, out var parameters))
-        {
             return error;
-        }
 
         var response = await session.RequestAsync(
             LspMethods.TextDocumentDefinition,
@@ -657,9 +597,7 @@ internal sealed partial class LspQueries(
             cancellationToken
         );
         if (response.IsError(out var requestError, out var definition))
-        {
             return requestError;
-        }
 
         if (
             definition
@@ -711,9 +649,7 @@ internal sealed partial class LspQueries(
     {
         var open = pattern.IndexOf('{', StringComparison.Ordinal);
         if (open < 0)
-        {
             return [pattern];
-        }
 
         var depth = 0;
         var start = open + 1;

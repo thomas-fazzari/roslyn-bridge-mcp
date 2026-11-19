@@ -105,9 +105,7 @@ internal sealed class FakeRoslynServer : IRoslynServer
     public void Crash()
     {
         if (HasExited)
-        {
             return;
-        }
 
         HasExited = true;
         _rpc.Dispose();

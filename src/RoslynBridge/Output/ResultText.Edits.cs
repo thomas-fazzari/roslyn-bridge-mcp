@@ -16,9 +16,7 @@ internal static partial class ResultText
         {
             text.Append(action.Index.ToString(CultureInfo.InvariantCulture));
             if (action.Kind is { } kind)
-            {
                 text.Append(' ').Append(kind);
-            }
 
             text.Append(' ').Append(OneLine(action.Title)).Append('\n');
         }
@@ -66,9 +64,7 @@ internal static partial class ResultText
         }
 
         if (preview.Truncated)
-        {
             text.Append("preview truncated: some changes are not shown in full\n");
-        }
     }
 
     private static string PreviewOfFile(FilePreview file)
@@ -80,9 +76,7 @@ internal static partial class ResultText
             var to = Position(change.AfterStart);
             text.Append("@@ ").Append(from);
             if (!string.Equals(from, to, StringComparison.Ordinal))
-            {
                 text.Append(" -> ").Append(to);
-            }
 
             text.Append('\n');
             AppendHunkLines(text, '-', change.Before);
@@ -95,9 +89,7 @@ internal static partial class ResultText
     private static void AppendHunkLines(StringBuilder text, char prefix, string excerpt)
     {
         if (excerpt.Length == 0)
-        {
             return;
-        }
 
         foreach (var line in excerpt.ReplaceLineEndings("\n").TrimEnd('\n').Split('\n'))
         {
@@ -148,9 +140,7 @@ internal static partial class ResultText
         }
 
         if (receipt.Diagnostics is { } diagnostics)
-        {
             AppendDiagnostics(text, diagnostics);
-        }
     }
 
     private static string Operation(FileOperation operation) =>
@@ -164,9 +154,7 @@ internal static partial class ResultText
         foreach (var block in blocks)
         {
             if (text.Length + block.Length > budget - ClosingReserve)
-            {
                 break;
-            }
 
             text.Append(block);
             shown++;

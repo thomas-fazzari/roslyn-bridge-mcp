@@ -38,19 +38,13 @@ internal static class ToolTelemetry
                 // The argument check rewrites a JSON string into an array, so the arguments are read after it ran
                 var arguments = context.Params?.Arguments;
                 if (tool is not null && ActionOf(tool, arguments) is { } action)
-                {
                     tags.Add(Action, action);
-                }
 
                 if (QueriesOf(arguments) is { } queries)
-                {
                     activity?.SetTag(QueryCount, queries);
-                }
 
                 if (result.IsError is true && ErrorCodeOf(result) is { } code)
-                {
                     tags.Add(BridgeTelemetry.ErrorType, code);
-                }
 
                 var characters = result
                     .Content.OfType<TextContentBlock>()

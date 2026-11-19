@@ -107,14 +107,10 @@ internal sealed partial class LspQueries
     )
     {
         if (FileError(query, fileErrors) is { } fileError)
-        {
             return fileError;
-        }
 
         if (!NeedsLocation(query))
-        {
             return query;
-        }
 
         if (
             locations[(query.Target.Symbol, query.Target.File)]

@@ -81,9 +81,7 @@ internal sealed class WorkspacePaths(string root)
     {
         // Path APIs reject a null character with an ArgumentException, which would read as a bridge bug
         if (string.IsNullOrWhiteSpace(file) || file.Contains('\0', StringComparison.Ordinal))
-        {
             return ToolError.InvalidRequest("Provide a valid workspace file path.");
-        }
 
         var local =
             Uri.TryCreate(file, UriKind.Absolute, out var uri) && uri.IsFile
@@ -92,9 +90,7 @@ internal sealed class WorkspacePaths(string root)
         var fullPath = Path.GetFullPath(local, Root);
         var relative = Relative(fullPath);
         if (IsOutside(relative))
-        {
             return ToolError.InvalidRequest("The path must be inside the workspace.");
-        }
 
         var current = Root;
         foreach (var part in relative.Split(Path.DirectorySeparatorChar))
@@ -128,9 +124,7 @@ internal sealed class WorkspacePaths(string root)
     public static string LocalPath(Uri uri)
     {
         if (!OperatingSystem.IsWindows() || !string.IsNullOrEmpty(uri.Host))
-        {
             return uri.LocalPath;
-        }
 
         var path = Uri.UnescapeDataString(uri.AbsolutePath);
         // Full paths are dictionary keys, so the drive letter must match Path.GetFullPath
@@ -145,9 +139,7 @@ internal sealed class WorkspacePaths(string root)
     public string? TryGetWorkspaceFile(string uri)
     {
         if (!Uri.TryCreate(uri, UriKind.Absolute, out var location) || !location.IsFile)
-        {
             return null;
-        }
 
         var fullPath = Path.GetFullPath(LocalPath(location));
         return IsOutside(Relative(fullPath)) ? null : fullPath;

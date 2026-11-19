@@ -53,9 +53,7 @@ internal sealed class CommandEdits(
     {
         ArgumentNullException.ThrowIfNull(edit);
         if (!TryBeginCallback())
-        {
             return RejectedResponse();
-        }
 
         try
         {
@@ -154,9 +152,7 @@ internal sealed class CommandEdits(
         lock (_admission)
         {
             if (!_accepting)
-            {
                 return false;
-            }
 
             if (_activeCallbacks++ == 0)
             {
@@ -174,9 +170,7 @@ internal sealed class CommandEdits(
         lock (_admission)
         {
             if (--_activeCallbacks == 0)
-            {
                 _callbacksDrained!.TrySetResult();
-            }
         }
     }
 

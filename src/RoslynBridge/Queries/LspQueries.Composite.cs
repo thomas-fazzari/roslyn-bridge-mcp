@@ -23,9 +23,7 @@ internal sealed partial class LspQueries
     {
         var declarations = await DeclarationsAsync(request, cancellationToken);
         if (declarations.IsError(out var error, out var found))
-        {
             return error;
-        }
 
         var parts = new List<SourcePart>();
         var remaining = MaximumSourceCharacters;
@@ -33,9 +31,7 @@ internal sealed partial class LspQueries
         foreach (var part in found)
         {
             if (SourceLines.ReadLines(part.File).IsError(out var readError, out var lines))
-            {
                 return readError;
-            }
 
             var last = Math.Min(part.LastLine, lines.Length);
             var first = DocumentationStart(lines, part.FirstLine);
@@ -69,15 +65,11 @@ internal sealed partial class LspQueries
     {
         var declarations = await DeclarationsAsync(request, cancellationToken);
         if (declarations.IsError(out var error, out var found))
-        {
             return error;
-        }
 
         var ownMembers = await resolver.MembersAsync(found, cancellationToken);
         if (ownMembers.IsError(out var membersError, out var own))
-        {
             return membersError;
-        }
 
         List<SymbolItem> members =
         [
@@ -87,9 +79,7 @@ internal sealed partial class LspQueries
         {
             var inheritedMembers = await InheritedMembersAsync(found[0], own, cancellationToken);
             if (inheritedMembers.IsError(out var inheritedError, out var inherited))
-            {
                 return inheritedError;
-            }
 
             members.AddRange(inherited);
         }
@@ -119,9 +109,7 @@ internal sealed partial class LspQueries
             cancellationToken
         );
         if (positioned.IsError(out var error, out var parameters))
-        {
             return error;
-        }
 
         var preparation = await session.RequestAsync(
             LspMethods.TextDocumentPrepareTypeHierarchy,
@@ -129,43 +117,31 @@ internal sealed partial class LspQueries
             cancellationToken
         );
         if (preparation.IsError(out var prepareError, out var prepared))
-        {
             return prepareError;
-        }
 
         var current = (prepared as JsonArray)?.FirstOrDefault();
         while (current is not null)
         {
             var baseResult = await BaseClassAsync(current, cancellationToken);
             if (baseResult.IsError(out var baseError, out var baseClass))
-            {
                 return baseError;
-            }
 
             if (baseClass is null)
-            {
                 break;
-            }
 
             var baseParts = await BaseDeclarationsAsync(baseClass, cancellationToken);
             if (baseParts.IsError(out var partsError, out var parts))
-            {
                 return partsError;
-            }
 
             if (parts.Count == 0)
-            {
                 break;
-            }
 
             var inheritableMembers = await resolver.InheritableMembersAsync(
                 parts,
                 cancellationToken
             );
             if (inheritableMembers.IsError(out var inheritableError, out var inheritable))
-            {
                 return inheritableError;
-            }
 
             foreach (var member in inheritable)
             {
@@ -201,21 +177,15 @@ internal sealed partial class LspQueries
             cancellationToken
         );
         if (response.IsError(out var error, out var supertypes))
-        {
             return error;
-        }
 
         foreach (var supertype in supertypes as JsonArray ?? [])
         {
             if (supertype.Read<LspSymbol>().IsError(out var invalid, out var symbol))
-            {
                 return invalid;
-            }
 
             if (symbol.Kind == LspSymbolKinds.Class)
-            {
                 return supertype!.DeepClone();
-            }
         }
 
         return (JsonNode?)null;
@@ -230,9 +200,7 @@ internal sealed partial class LspQueries
     )
     {
         if (baseClass.Read<LspSymbol>().IsError(out var error, out var item))
-        {
             return error;
-        }
 
         if (
             item.Uri is not { } uri
@@ -245,14 +213,10 @@ internal sealed partial class LspQueries
 
         var declared = await resolver.DeclarationAtAsync(file, line, cancellationToken);
         if (declared.IsError(out var declarationError, out var declaration))
-        {
             return declarationError;
-        }
 
         if (declaration is null)
-        {
             return new List<SymbolDeclaration>();
-        }
 
         var resolved = await resolver.ResolveAsync(
             declaration.Name,
@@ -261,14 +225,10 @@ internal sealed partial class LspQueries
             cancellationToken
         );
         if (!resolved.IsError(out var resolveError, out var parts))
-        {
             return parts;
-        }
 
         if (resolveError.IsInfrastructureFailure)
-        {
             return resolveError;
-        }
 
         return new List<SymbolDeclaration> { declaration };
     }
@@ -284,22 +244,16 @@ internal sealed partial class LspQueries
     {
         var located = await LocateAsync(request.Target, request.Action, cancellationToken);
         if (located.IsError(out var error, out var location))
-        {
             return error;
-        }
 
         var (file, position) = location;
         var positioned = await PositionParametersAsync(file, position, cancellationToken);
         if (positioned.IsError(out var parametersError, out var parameters))
-        {
             return parametersError;
-        }
 
         var targeted = await TargetsTypeAsync(parameters, cancellationToken);
         if (targeted.IsError(out var typeError, out var targetsType))
-        {
             return typeError;
-        }
 
         // A type has no callers, and its implementations are its subtypes
         LspAction[] actions = targetsType
@@ -332,14 +286,10 @@ internal sealed partial class LspQueries
 
         // Roslyn lists a member that nothing overrides as its own implementation
         if (action is not LspAction.Implementation || section is not Locations implementations)
-        {
             return section;
-        }
 
         if (paths.Resolve(file).IsError(out var error, out var path))
-        {
             return error;
-        }
 
         return Without(implementations, paths.RelativePath(path), position);
     }
@@ -375,17 +325,13 @@ internal sealed partial class LspQueries
             cancellationToken
         );
         if (response.IsError(out var error, out var prepared))
-        {
             return error;
-        }
 
         var symbols = (prepared as JsonArray ?? [])
             .Select(static item => item.Read<LspSymbol>())
             .All();
         if (symbols.IsError(out var invalid, out var items))
-        {
             return invalid;
-        }
 
         var file = paths.TryGetWorkspaceFile(
             parameters["textDocument"]!["uri"]!.GetValue<string>()
@@ -431,14 +377,10 @@ internal sealed partial class LspQueries
         }
 
         if (target is not { File: not null, Line: > 0 and var line })
-        {
             return ToolError.InvalidRequest("Provide symbol, or a file with a one-based line.");
-        }
 
         if (paths.Resolve(target.File).IsError(out var error, out var file))
-        {
             return error;
-        }
 
         var declared = await resolver.DeclarationAtAsync(file, line, cancellationToken);
         return declared switch

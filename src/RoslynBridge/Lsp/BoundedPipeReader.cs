@@ -26,9 +26,7 @@ internal sealed class BoundedPipeReader(PipeReader inner, long maximumBytes) : P
     public override bool TryRead(out ReadResult result)
     {
         if (!inner.TryRead(out result))
-        {
             return false;
-        }
 
         result = Validate(result);
         return true;

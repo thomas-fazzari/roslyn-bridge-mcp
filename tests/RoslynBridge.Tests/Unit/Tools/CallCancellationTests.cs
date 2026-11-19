@@ -109,9 +109,7 @@ public sealed class CallCancellationTests : TempWorkspaceTests
                 server.Handle = async (method, _) =>
                 {
                     if (method is not LspMethods.TextDocumentGetProjectContexts)
-                    {
                         return null;
-                    }
 
                     await cancellation.CancelAsync();
                     return await afterTheWrite.Task;

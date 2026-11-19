@@ -71,9 +71,7 @@ public sealed class ExtensionFallbackTests : TempWorkspaceTests
                 server.Handle = (method, _) =>
                 {
                     if (method is not LspMethods.TextDocumentDispatchExtensionMessage)
-                    {
                         return Task.FromResult(answers.GetValueOrDefault(method));
-                    }
 
                     Interlocked.Increment(ref dispatches);
                     throw new LocalRpcException("The extension failed.") { ErrorCode = errorCode };
@@ -117,9 +115,7 @@ public sealed class ExtensionFallbackTests : TempWorkspaceTests
             [LspMethods.CallHierarchyIncomingCalls] = new JsonArray(IncomingCall(hierarchyCaller)),
         };
         if (activated)
-        {
             answers[LspMethods.ServerActivateExtension] = ActivatedHandlers();
-        }
 
         await using var session = CreateSession(Root, Answering(answers));
         using var tool = CreateTool(Root, session);

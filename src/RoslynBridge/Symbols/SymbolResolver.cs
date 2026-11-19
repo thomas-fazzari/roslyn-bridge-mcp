@@ -34,9 +34,7 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
     )
     {
         if (SymbolName.Parse(text) is not { } requested)
-        {
             return ToolError.InvalidRequest($"'{text}' is not a valid symbol name.");
-        }
 
         var name = SymbolName.BaseName(requested.Segments[^1]);
         List<WorkspaceMatch>? matches = null;
@@ -45,27 +43,21 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
         {
             var candidates = await CandidateMatchesAsync(requested, cancellationToken);
             if (candidates.IsError(out var matchError, out matches))
-            {
                 return matchError;
-            }
 
             files = FilesNamed(matches, name);
         }
         else
         {
             if (paths.Resolve(file).IsError(out var pathError, out var path))
-            {
                 return pathError;
-            }
 
             files = [path];
         }
 
         var symbolFiles = await DocumentSymbolsAsync(files, cancellationToken);
         if (symbolFiles.IsError(out var documentsError, out var documents))
-        {
             return documentsError;
-        }
 
         var declarations = FindDeclarations(documents, requested).ToList();
         if (
@@ -78,9 +70,7 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
 
         var projects = await ProjectsByFileAsync(declarations, cancellationToken);
         if (projects.IsError(out var projectsError, out var projectsByFile))
-        {
             return projectsError;
-        }
 
         var symbols = DistinctSymbols(declarations, projectsByFile);
         if (symbols.Count == 1)
@@ -93,9 +83,7 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
         }
 
         if (symbols.Count == 0)
-        {
             return await NotFoundAsync(text, requested, name, matches, cancellationToken);
-        }
 
         var advice = AmbiguityAdvice(symbols);
         return new ToolError(
@@ -236,9 +224,7 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
     {
         var names = symbols.DistinctBy(symbol => symbol.Name, StringComparer.Ordinal).Count();
         if (names == symbols.Count)
-        {
             return "Send one candidate symbol instead.";
-        }
 
         var namesInFiles = symbols.DistinctBy(symbol => (symbol.Name, symbol.File)).Count();
         return namesInFiles == symbols.Count
@@ -303,9 +289,7 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
 
             var contextLookup = await session.ProjectContextsAsync(uri, cancellationToken);
             if (contextLookup.IsError(out var contextsError, out var contexts))
-            {
                 return contextsError;
-            }
 
             projectsByFile[file] = contexts
                 .Select(context => context.Id)
@@ -379,9 +363,7 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
                 )
             );
             if (responses.Select(ReadSymbols).All().IsError(out var error, out var symbols))
-            {
                 return error;
-            }
 
             documents.AddRange(batch.Zip(symbols));
         }
@@ -400,14 +382,10 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
         foreach (var symbol in symbols)
         {
             if (symbol.Name is not { Length: > 0 } rawName)
-            {
                 continue;
-            }
 
             if (SymbolName.Parse(rawName) is not { } member)
-            {
                 continue;
-            }
 
             var kind = symbol.Kind;
             var children = symbol.Children ?? [];
@@ -484,9 +462,7 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
             cancellationToken
         );
         if (symbolFiles.IsError(out var error, out var documents))
-        {
             return error;
-        }
 
         var found = new Dictionary<(string File, SourcePosition Position), SymbolDeclaration>();
 
@@ -499,9 +475,7 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
                 var declaration = declared.Declaration;
                 var position = (file, new SourcePosition(declaration.Line, declaration.Character));
                 if (wanted.Contains(position))
-                {
                     found.TryAdd(position, declaration);
-                }
             }
         }
 
@@ -538,14 +512,10 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
             cancellationToken
         );
         if (response.IsError(out var requestError, out var symbols))
-        {
             return requestError;
-        }
 
         if (symbols.ReadArray<LspSymbol>().IsError(out var error, out var results))
-        {
             return error;
-        }
 
         var matches = new List<WorkspaceMatch>();
         foreach (var result in results)
@@ -605,16 +575,12 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
         {
             var workspaceMatches = await WorkspaceMatchesAsync(name, cancellationToken);
             if (workspaceMatches.IsError(out var matchError, out matches))
-            {
                 return matchError;
-            }
         }
 
         var containerLookup = await ContainerAsync(requested, name, matches, cancellationToken);
         if (containerLookup.IsError(out var containerError, out var container))
-        {
             return containerError;
-        }
 
         var typeExists = container is { SimilarTypes: null };
         // From other types, only a member with the exact name suggests the caller named the wrong type
@@ -625,9 +591,7 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
             cancellationToken
         );
         if (suggested.IsError(out var suggestionsError, out var suggestions))
-        {
             return suggestionsError;
-        }
 
         if (container is not null)
         {
@@ -678,44 +642,34 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
     )
     {
         if (requested.Segments.Length == 1)
-        {
             return _noContainer;
-        }
 
         var container = new SymbolName([.. requested.Segments[..^1]], Parameters: null);
         var containerName = SymbolName.BaseName(container.Segments[^1]);
         var candidateLookup = await WorkspaceMatchesAsync(containerName, cancellationToken);
         if (candidateLookup.IsError(out var error, out var candidates))
-        {
             return error;
-        }
 
         var symbolFiles = await DocumentSymbolsAsync(
             FilesNamed(candidates, containerName),
             cancellationToken
         );
         if (symbolFiles.IsError(out var documentsError, out var documents))
-        {
             return IsUnreadable(documentsError) ? _noContainer : documentsError;
-        }
 
         var types = FindDeclarations(documents, container).ToList();
         if (types.Count > 0)
         {
             var memberLookup = await MemberMatchesAsync(types, cancellationToken);
             if (memberLookup.IsError(out var membersError, out var members))
-            {
                 return IsUnreadable(membersError) ? _noContainer : membersError;
-            }
 
             return new ContainerLookup(container, members, SimilarTypes: null);
         }
 
         // The container may be a namespace, which declares no members of its own
         if (matches.Exists(match => IsNamed(match, name)))
-        {
             return _noContainer;
-        }
 
         return (
             await SuggestionsAsync(
@@ -778,9 +732,7 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
             .ToList();
         var lookup = await DeclarationsAtAsync(nearest, cancellationToken);
         if (lookup.IsError(out var error, out var declarations))
-        {
             return IsUnreadable(error) ? new List<SymbolItem>() : error;
-        }
 
         return nearest
             .Select(position => declarations.GetValueOrDefault(position))
@@ -853,19 +805,13 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
                 Name.ToLowerInvariant()
             );
             if (string.Equals(Name, requested, StringComparison.OrdinalIgnoreCase))
-            {
                 return new Suggestion(this, NameResemblance.SameName, distance);
-            }
 
             if (Name.Contains(requested, StringComparison.OrdinalIgnoreCase))
-            {
                 return new Suggestion(this, NameResemblance.ContainsName, distance);
-            }
 
             if (distance <= Math.Min(MaximumTypoDistance, requested.Length / 3))
-            {
                 return new Suggestion(this, NameResemblance.Typo, distance);
-            }
 
             return byWords && SharesMostWords(requested, Name)
                 ? new Suggestion(this, NameResemblance.SharedWords, distance)
@@ -909,27 +855,19 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
         {
             var comparison = first.Kind.CompareTo(second.Kind);
             if (comparison != 0)
-            {
                 return comparison;
-            }
 
             comparison = first.Distance.CompareTo(second.Distance);
             if (comparison != 0)
-            {
                 return comparison;
-            }
 
             comparison = string.CompareOrdinal(first.Match.Name, second.Match.Name);
             if (comparison != 0)
-            {
                 return comparison;
-            }
 
             comparison = string.CompareOrdinal(first.Match.File, second.Match.File);
             if (comparison != 0)
-            {
                 return comparison;
-            }
 
             comparison = first.Match.Position.Line.CompareTo(second.Match.Position.Line);
             return comparison != 0

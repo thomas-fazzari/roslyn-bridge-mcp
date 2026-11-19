@@ -99,9 +99,7 @@ internal static class ResultExtensions
             foreach (var result in results)
             {
                 if (result.IsError(out var error, out var value))
-                {
                     return error;
-                }
 
                 values.Add(value);
             }

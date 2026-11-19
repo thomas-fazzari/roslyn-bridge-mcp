@@ -131,9 +131,7 @@ internal sealed partial class RoslynConnection
     {
         Interlocked.Exchange(ref _scanRequested, 1);
         if (await SynchronizeAsync(cancellationToken) is ToolError error)
-        {
             return error;
-        }
 
         using var held = await LockDocumentsAsync(cancellationToken);
         return new Dictionary<string, FileStamp>(_workspaceFiles, StringComparer.Ordinal);
@@ -142,9 +140,7 @@ internal sealed partial class RoslynConnection
     public async Task<Result<string[]>> WorkspaceFilesAsync(CancellationToken cancellationToken)
     {
         if (await SynchronizeAsync(cancellationToken) is ToolError error)
-        {
             return error;
-        }
 
         using var held = await LockDocumentsAsync(cancellationToken);
         return _workspaceFiles.Keys.ToArray();
@@ -156,9 +152,7 @@ internal sealed partial class RoslynConnection
     )
     {
         if (paths.Resolve(file).IsError(out var pathError, out var path))
-        {
             return pathError;
-        }
 
         if (!WorkspacePaths.IsCSharpFile(path))
         {
@@ -168,9 +162,7 @@ internal sealed partial class RoslynConnection
         }
 
         if (ReadDocumentStamp(path) is not { } stamp)
-        {
             return ToolError.InvalidRequest($"The file does not exist: {paths.RelativePath(path)}");
-        }
 
         var uri = new Uri(path).AbsoluteUri;
         if (_documents.TryGetValue(path, out var open))
@@ -185,9 +177,7 @@ internal sealed partial class RoslynConnection
         {
             var closed = await CloseDocumentAsync(_openedOrder.First!.Value, cancellationToken);
             if (closed is ToolError closeError)
-            {
                 return closeError;
-            }
         }
 
         if (
@@ -215,9 +205,7 @@ internal sealed partial class RoslynConnection
             cancellationToken
         );
         if (opened is ToolError openError)
-        {
             return openError;
-        }
 
         _documents.Add(
             path,
@@ -234,9 +222,7 @@ internal sealed partial class RoslynConnection
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (await SynchronizeDocumentAsync(path, cancellationToken) is ToolError error)
-            {
                 return error;
-            }
         }
 
         return await SynchronizeWatchedFilesAsync(cancellationToken);
@@ -276,14 +262,10 @@ internal sealed partial class RoslynConnection
             {
                 var count = await reader.ReadAsync(buffer, cancellationToken);
                 if (count == 0)
-                {
                     return builder.ToString();
-                }
 
                 if (builder.Length + count > MaximumDocumentCharacters)
-                {
                     return _oversizedDocument;
-                }
 
                 builder.Append(buffer, 0, count);
             }
@@ -300,15 +282,11 @@ internal sealed partial class RoslynConnection
     )
     {
         if (ReadDocumentStamp(path) is not { } stamp)
-        {
             return await CloseDocumentAsync(path, cancellationToken);
-        }
 
         var document = _documents[path];
         if (stamp == document.Stamp)
-        {
             return Result.Success;
-        }
 
         if (
             (await ReadDocumentAsync(path, cancellationToken)).IsError(
@@ -318,9 +296,7 @@ internal sealed partial class RoslynConnection
         )
         {
             if (!IsOversized(readError))
-            {
                 return readError;
-            }
 
             // Roslyn reads the file from disk once the document closes
             LogOversizedDocument(logger, path);
@@ -349,9 +325,7 @@ internal sealed partial class RoslynConnection
             cancellationToken
         );
         if (changed is not ToolError)
-        {
             _documents[path] = document with { Text = text, Version = version, Stamp = stamp };
-        }
 
         return changed;
     }
@@ -363,17 +337,13 @@ internal sealed partial class RoslynConnection
     )
     {
         if (_documents.ContainsKey(path) || !WorkspacePaths.IsCSharpFile(path))
-        {
             return Result.Success;
-        }
 
         // Opening the document sends its saved text in order, unlike asynchronous watched-file notifications
         if ((await OpenDocumentCoreAsync(path, cancellationToken)).IsError(out var error, out _))
         {
             if (!IsOversized(error))
-            {
                 return error;
-            }
 
             LogOversizedDocument(logger, path);
             return Result.Success;
@@ -393,9 +363,7 @@ internal sealed partial class RoslynConnection
             cancellationToken
         );
         if (closed is not ToolError && _documents.Remove(path, out var document))
-        {
             _openedOrder.Remove(document.Node);
-        }
 
         return closed;
     }

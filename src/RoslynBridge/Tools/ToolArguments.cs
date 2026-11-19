@@ -57,19 +57,13 @@ internal static class ToolArguments
         foreach (var (name, value) in arguments.ToArray())
         {
             if (!known.TryGetValue(name, out var property))
-            {
                 return UnknownArgument(tool.Name, name, known.Keys);
-            }
 
             if (value.ValueKind is not JsonValueKind.String || !DeclaresArray(property))
-            {
                 continue;
-            }
 
             if (ParseArray(value.GetString()!) is not { } array)
-            {
                 return ToolError.InvalidRequest($"Argument '{name}' must be a JSON array.");
-            }
 
             arguments[name] = array;
         }
@@ -80,9 +74,7 @@ internal static class ToolArguments
     private static ToolError? MissingArgument(Tool tool, IDictionary<string, JsonElement> arguments)
     {
         if (!tool.InputSchema.TryGetProperty("required", out var required))
-        {
             return null;
-        }
 
         var missing = required
             .EnumerateArray()
@@ -101,9 +93,7 @@ internal static class ToolArguments
     {
         var message = $"Unknown argument '{name}' for {tool}.";
         if (Suggest(name, valid) is { } suggestion)
-        {
             message += $" Did you mean '{suggestion}'?";
-        }
 
         return ToolError.InvalidRequest($"{message} Valid arguments: {string.Join(", ", valid)}.");
     }
@@ -139,9 +129,7 @@ internal static class ToolArguments
         {
             var distance = Levenshtein.Distance(lowerName, candidate.ToLowerInvariant());
             if (distance > MaximumTypoDistance)
-            {
                 continue;
-            }
 
             if (distance < best)
             {

@@ -57,9 +57,7 @@ internal sealed partial class ClientCallbacks(
     )
     {
         if (session.ApplyWorkspaceEditAsync is { } apply)
-        {
             return apply(parameters.Edit, cancellationToken);
-        }
 
         return Task.FromResult(
             new ApplyWorkspaceEditResult(
@@ -125,9 +123,7 @@ internal sealed partial class ClientCallbacks(
     public void LogMessage(MessageParams parameters)
     {
         if (!logger.IsEnabled(LogLevel.Debug))
-        {
             return;
-        }
 
         var message = parameters.Message;
         var boundedMessage = message

@@ -104,9 +104,7 @@ public sealed class ToolTelemetryTests : IAsyncDisposable
         _recorder.Dispose();
         _tool?.Dispose();
         if (_session is not null)
-        {
             await _session.DisposeAsync();
-        }
 
         Directory.Delete(_root, recursive: true);
     }

@@ -88,9 +88,7 @@ internal sealed partial class LspChanges(
                 )
                 {
                     if (commandError is EditFailure failure)
-                    {
                         return Failed(result.Merge(failure.Receipt), phase, failure);
-                    }
 
                     return AfterWrites(result, phase, commandError);
                 }
@@ -104,9 +102,7 @@ internal sealed partial class LspChanges(
             // ExecuteCommandAsync synchronizes only the edits of the command's callbacks
             phase = EditApplicationPhase.Synchronize;
             if (await SynchronizeAsync(applied, cancellationToken) is ToolError error)
-            {
                 return AfterWrites(result, phase, error);
-            }
         }
         catch (OperationCanceledException exception) when (result.Operations.Count != 0)
         {
@@ -125,9 +121,7 @@ internal sealed partial class LspChanges(
     )
     {
         if ((await CaptureAsync(cancellationToken)).IsError(out var captureError, out var captured))
-        {
             return captureError;
-        }
 
         var callbacks = new CommandEdits(edits, captured, CaptureAsync, cancellationToken);
         Result<JsonNode?> executed;
@@ -151,9 +145,7 @@ internal sealed partial class LspChanges(
 
         var synchronized = await SynchronizeAsync(result, cancellationToken).OrCancelledAsync();
         if (synchronized is ToolError error)
-        {
             return Failed(result, EditApplicationPhase.Synchronize, error);
-        }
 
         return result with
         {
@@ -168,14 +160,10 @@ internal sealed partial class LspChanges(
     )
     {
         if (string.IsNullOrWhiteSpace(request.NewName))
-        {
             return ToolError.InvalidRequest("Provide newName for the rename.");
-        }
 
         if ((await CaptureAsync(cancellationToken)).IsError(out var captureError, out var snapshot))
-        {
             return captureError;
-        }
 
         if (
             (
@@ -252,29 +240,19 @@ internal sealed partial class LspChanges(
     )
     {
         if (string.IsNullOrWhiteSpace(request.File) || string.IsNullOrWhiteSpace(request.NewName))
-        {
             return ToolError.InvalidRequest("Provide file and newName for rename_file.");
-        }
 
         if (session.Capabilities?["workspace"]?["fileOperations"]?["willRename"] is null)
-        {
             return ToolError.InvalidRequest("Roslyn does not advertise file rename support.");
-        }
 
         if (paths.ToUri(request.File).IsError(out var oldError, out var oldUri))
-        {
             return oldError;
-        }
 
         if (paths.ToUri(request.NewName).IsError(out var newError, out var newUri))
-        {
             return newError;
-        }
 
         if ((await CaptureAsync(cancellationToken)).IsError(out var captureError, out var snapshot))
-        {
             return captureError;
-        }
 
         var parameters = new JsonObject
         {
@@ -338,9 +316,7 @@ internal sealed partial class LspChanges(
                 )
                 : await CompleteAsync(pending, request.Apply, cancellationToken);
         if (request.Apply && result is not ToolError)
-        {
             _pending.Remove(request.ProposalId!);
-        }
 
         return result;
     }
@@ -384,9 +360,7 @@ internal sealed partial class LspChanges(
             .Select(paths.FullPath)
             .ToList();
         if (await session.SynchronizeFilesAsync(written, cancellationToken) is ToolError error)
-        {
             return error;
-        }
 
         string[] created =
         [
@@ -398,9 +372,7 @@ internal sealed partial class LspChanges(
                 .Where(path => WorkspacePaths.IsCSharpFile(path) && File.Exists(path)),
         ];
         if (created.Length == 0)
-        {
             return Result.Success;
-        }
 
         if (
             (await session.WaitForProjectsAsync(created, cancellationToken)).IsError(
@@ -413,9 +385,7 @@ internal sealed partial class LspChanges(
         }
 
         if (outside.Count == 0)
-        {
             return Result.Success;
-        }
 
         _pending.Clear();
         return await session.ReloadAsync(cancellationToken);
@@ -467,9 +437,7 @@ internal sealed partial class LspChanges(
     private static JsonArray ToDocumentChanges(JsonObject edit)
     {
         if (edit["documentChanges"] is JsonArray documentChanges)
-        {
             return (JsonArray)documentChanges.DeepClone();
-        }
 
         var result = new JsonArray();
         if (edit["changes"] is JsonObject changes)

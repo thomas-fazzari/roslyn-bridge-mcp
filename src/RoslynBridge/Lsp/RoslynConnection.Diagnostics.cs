@@ -36,14 +36,10 @@ internal sealed partial class RoslynConnection
             cancellationToken
         );
         if (response.IsError(out var error, out var result))
-        {
             return error;
-        }
 
         if (result.Read<LspDiagnosticReport>().IsError(out var invalid, out var report))
-        {
             return invalid;
-        }
 
         if (previous is not null && report.Kind is UnchangedReport)
         {

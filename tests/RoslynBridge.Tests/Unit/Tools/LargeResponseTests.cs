@@ -139,9 +139,7 @@ public sealed class LargeResponseTests : TempWorkspaceTests
                 server.Handle = async (method, _) =>
                 {
                     if (method is not LspMethods.WorkspaceExecuteCommand)
-                    {
                         return null;
-                    }
 
                     await server.RequestClientAsync(
                         LspMethods.WorkspaceApplyEdit,

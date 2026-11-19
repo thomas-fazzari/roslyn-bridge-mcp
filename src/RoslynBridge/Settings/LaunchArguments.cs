@@ -33,9 +33,7 @@ internal sealed record LaunchArguments
         for (var index = 0; index < args.Length; index += 2)
         {
             if (index + 1 >= args.Length)
-            {
                 throw new InvalidLaunchArgumentsException($"Missing value for {args[index]}.");
-            }
 
             var value = args[index + 1];
             arguments = args[index] switch

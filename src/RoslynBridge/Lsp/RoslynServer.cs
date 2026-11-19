@@ -45,9 +45,7 @@ internal sealed class RoslynProcess(Process process) : IRoslynServer
         startInfo.ArgumentList.Add("--stdio");
 
         if (options.Solution is null && options.Projects.Count == 0)
-        {
             startInfo.ArgumentList.Add("--autoLoadProjects");
-        }
 
         startInfo.ArgumentList.Add("--logLevel");
         startInfo.ArgumentList.Add("Warning");

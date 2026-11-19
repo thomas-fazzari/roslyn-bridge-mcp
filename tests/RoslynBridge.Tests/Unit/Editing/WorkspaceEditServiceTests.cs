@@ -443,9 +443,7 @@ public sealed class WorkspaceEditServiceTests : TempWorkspaceTests
     protected override void Dispose(bool disposing)
     {
         if (disposing)
-        {
             Directory.Delete(_outside, recursive: true);
-        }
 
         base.Dispose(disposing);
     }
