@@ -19,9 +19,7 @@ internal sealed partial class LspQueries
     {
         var lookup = await session.FindReferencesAsync(parameters, cancellationToken);
         if (lookup.IsError(out var error, out var references))
-        {
             return error;
-        }
 
         if (references.Found)
         {
@@ -64,9 +62,7 @@ internal sealed partial class LspQueries
             cancellationToken
         );
         if (response.IsError(out var requestError, out var result))
-        {
             return requestError;
-        }
 
         var located = result.FindLocations(paths, skipGenerated: true);
         return located.Map(locations => new FoundReferences(locations, Written: null));
@@ -92,9 +88,7 @@ internal sealed partial class LspQueries
                 cancellationToken
             );
             if (highlighted.IsError(out var error, out var highlights))
-            {
                 return error;
-            }
 
             accessed = highlights;
         }
@@ -171,9 +165,7 @@ internal sealed partial class LspQueries
     {
         var positioned = await PositionParametersAsync(file, position, cancellationToken);
         if (positioned.IsError(out var error, out var parameters))
-        {
             return error;
-        }
 
         var response = await session.RequestAsync(
             LspMethods.TextDocumentDocumentHighlight,
@@ -181,14 +173,10 @@ internal sealed partial class LspQueries
             cancellationToken
         );
         if (response.IsError(out var requestError, out var result))
-        {
             return requestError;
-        }
 
         if (result.ReadArray<LspHighlight>().IsError(out var readError, out var highlights))
-        {
             return readError;
-        }
 
         var lines = SourceLines.TryReadLines(paths.ResultFilePath(file));
         var reads = StartsOf(highlights, ReadHighlight);

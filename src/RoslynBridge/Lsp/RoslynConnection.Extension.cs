@@ -112,9 +112,7 @@ internal sealed partial class RoslynConnection
         where T : IExtensionAnswer<T>
     {
         if (!_documentHandlersActive)
-        {
             return T.NotFound;
-        }
 
         var dispatched = await RequestAsync(
             LspMethods.TextDocumentDispatchExtensionMessage,
@@ -129,9 +127,7 @@ internal sealed partial class RoslynConnection
         if (dispatched.IsError(out var error, out var result))
         {
             if (IsCancelled(error))
-            {
                 return T.NotFound;
-            }
 
             if (error is { Code: ErrorCodes.Lsp })
             {
@@ -174,9 +170,7 @@ internal sealed partial class RoslynConnection
         {
             // A server without the extension handlers reports an unknown method
             if (error is not { Code: ErrorCodes.Lsp })
-            {
                 return error;
-            }
 
             LogExtensionUnavailable(logger, error.Message);
             return Result.Success;
@@ -185,16 +179,12 @@ internal sealed partial class RoslynConnection
         var unregistered = Unregistered(result?["documentMessageHandlers"], _documentMessages);
         _documentHandlersActive = unregistered.Count == 0;
         if (!_documentHandlersActive)
-        {
             LogExtensionUnavailable(logger, ActivationError(result, unregistered));
-        }
 
         unregistered = Unregistered(result?["workspaceMessageHandlers"], _workspaceMessages);
         _workspaceHandlersActive = unregistered.Count == 0;
         if (_documentHandlersActive && !_workspaceHandlersActive)
-        {
             LogUnusedUnavailable(logger, ActivationError(result, unregistered));
-        }
 
         return Result.Success;
     }

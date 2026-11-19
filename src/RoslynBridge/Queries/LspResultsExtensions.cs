@@ -34,9 +34,7 @@ internal static class LspResultsExtensions
         {
             var entries = (result as JsonArray ?? []).Select(entry => RelatedSymbol(entry, paths));
             if (entries.All().IsError(out var error, out var related))
-            {
                 return error;
-            }
 
             var items = related
                 .OrderBy(item => item.File, StringComparer.Ordinal)
@@ -72,9 +70,7 @@ internal static class LspResultsExtensions
                 _ => ToolError.InvalidLspData("Roslyn returned an invalid location result."),
             };
             if (read.IsError(out var error, out var locations))
-            {
                 return error;
-            }
 
             return locations.FindLocations(paths, skipGenerated);
         }
@@ -89,9 +85,7 @@ internal static class LspResultsExtensions
             foreach (var location in locations)
             {
                 if (location.ResolvedUri is not { } uri)
-                {
                     return ToolError.InvalidLspData("Roslyn returned a location without a URI.");
-                }
 
                 if (location.ResolvedRange is not { } range)
                 {
@@ -185,14 +179,10 @@ internal static class LspResultsExtensions
     private static Result<SymbolItem> RelatedSymbol(JsonNode? entry, WorkspacePaths paths)
     {
         if (entry.Read<LspCall>().IsError(out var error, out var call))
-        {
             return error;
-        }
 
         if ((call.From ?? call.To) is not { } symbol)
-        {
             return entry.Read<LspSymbol>().Map(found => Symbol(found, paths));
-        }
 
         return Symbol(symbol, paths) with
         {
@@ -234,9 +224,7 @@ internal static class LspResultsExtensions
         foreach (var symbol in symbols)
         {
             if (remaining == 0)
-            {
                 break;
-            }
 
             if (skipped > 0)
             {
@@ -255,9 +243,7 @@ internal static class LspResultsExtensions
             var item = Symbol(symbol, paths, parent);
             // A document symbol range covers the whole declaration, while selectionRange is its name
             if (symbol is { SelectionRange: not null, Range: { } range })
-            {
                 item = item with { End = range.End.OneBased };
-            }
 
             if (symbol.Children is { Length: > 0 } children)
             {
@@ -295,9 +281,7 @@ internal static class LspResultsExtensions
     {
         var member = SymbolName.Parse(name);
         if (member is null || type is null)
-        {
             return member;
-        }
 
         return SymbolName.Parse(type)?.Append(member);
     }
@@ -306,9 +290,7 @@ internal static class LspResultsExtensions
     private static string? ContainingType(string? container)
     {
         if (container?.StartsWith("in ", StringComparison.Ordinal) is not true)
-        {
             return null;
-        }
 
         var project = container.IndexOf(" (project ", StringComparison.Ordinal);
         return project < 0 ? container[3..] : container[3..project];

@@ -260,9 +260,7 @@ public sealed class LspToolTests : TempWorkspaceTests
                 server.Handle = (method, _) =>
                 {
                     if (method is not LspMethods.TextDocumentGetProjectContexts)
-                    {
                         return Task.FromResult<JsonNode?>(FakeDiagnosticServer.FullReport([]));
-                    }
 
                     contextRequests++;
                     return Task.FromResult<JsonNode?>(
@@ -705,9 +703,7 @@ public sealed class LspToolTests : TempWorkspaceTests
                 server.Handle = (method, _) =>
                 {
                     if (method is LspMethods.WorkspaceSymbol)
-                    {
                         Interlocked.Increment(ref symbolRequests);
-                    }
 
                     return Task.FromResult<JsonNode?>(null);
                 }

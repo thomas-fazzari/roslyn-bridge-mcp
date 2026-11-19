@@ -248,9 +248,7 @@ internal sealed partial class RoslynConnection(
             }
         );
         if (initialized.IsError(out var error, out var result))
-        {
             return error;
-        }
 
         Capabilities = result?["capabilities"]?.AsObject();
 
@@ -263,9 +261,7 @@ internal sealed partial class RoslynConnection(
         }
 
         if (await OpenConfiguredProjectsAsync(cancellationToken) is ToolError openError)
-        {
             return openError;
-        }
 
         var initializationOrDisconnect = Task.WhenAny(callbacks.Initialized, rpc.Completion);
 
@@ -282,15 +278,11 @@ internal sealed partial class RoslynConnection(
         }
 
         if (ScanWorkspace(cancellationToken).IsError(out var scanError, out var files))
-        {
             return scanError;
-        }
 
         _workspaceFiles = files;
         if (await ActivateExtensionAsync(cancellationToken) is ToolError activationError)
-        {
             return activationError;
-        }
 
         LogWorkspaceLoaded(logger, _workspaceFiles.Count);
         return Result.Success;
@@ -337,9 +329,7 @@ internal sealed partial class RoslynConnection(
 
         await _lifetime.CancelAsync();
         if (_stderrTask is not null)
-        {
             await _stderrTask;
-        }
 
         server.Dispose();
         _lifetime.Dispose();
@@ -349,9 +339,7 @@ internal sealed partial class RoslynConnection(
     private async Task ShutdownAsync()
     {
         if (server.HasExited)
-        {
             return;
-        }
 
         using var timeout = new CancellationTokenSource(_shutdownTimeout);
         try
@@ -377,9 +365,7 @@ internal sealed partial class RoslynConnection(
         }
 
         if (!server.HasExited)
-        {
             server.Kill();
-        }
 
         await server.WaitForExitAsync(CancellationToken.None);
     }
@@ -393,24 +379,18 @@ internal sealed partial class RoslynConnection(
             {
                 var count = await reader.ReadAsync(buffer, cancellationToken);
                 if (count == 0)
-                {
                     return;
-                }
 
                 var message = new string(buffer, 0, count);
                 lock (_stderrLock)
                 {
                     _stderrTail.Append(message);
                     if (_stderrTail.Length > StderrTailCharacters)
-                    {
                         _stderrTail.Remove(0, _stderrTail.Length - StderrTailCharacters);
-                    }
                 }
 
                 if (logger.IsEnabled(LogLevel.Debug))
-                {
                     LogStderr(logger, message);
-                }
             }
         }
         catch (Exception exception)

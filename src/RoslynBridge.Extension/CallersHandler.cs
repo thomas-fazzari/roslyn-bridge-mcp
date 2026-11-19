@@ -26,14 +26,10 @@ internal sealed class CallersHandler
     )
     {
         if (context.Solution.GetDocument(context.TextDocument.Id) is not { } document)
-        {
             return _notFound;
-        }
 
         if (await document.GetPositionAsync(message, cancellationToken) is not { } position)
-        {
             return _notFound;
-        }
 
         var symbol = await SymbolFinder.FindSymbolAtPositionAsync(
             document,
@@ -42,9 +38,7 @@ internal sealed class CallersHandler
         );
         // callHierarchy keeps handling the other symbols, such as fields and types
         if (symbol?.Kind is not (SymbolKind.Method or SymbolKind.Property or SymbolKind.Event))
-        {
             return _notFound;
-        }
 
         var solution = document.Project.Solution;
         var callers = await SymbolFinder.FindCallersAsync(symbol, solution, cancellationToken);

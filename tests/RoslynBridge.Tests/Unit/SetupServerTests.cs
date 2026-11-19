@@ -57,9 +57,7 @@ public sealed class SetupServerTests : TempWorkspaceTests
     protected override void Dispose(bool disposing)
     {
         if (disposing)
-        {
             _output.Dispose();
-        }
 
         base.Dispose(disposing);
     }

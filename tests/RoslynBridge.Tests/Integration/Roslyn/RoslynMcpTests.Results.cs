@@ -80,9 +80,7 @@ public sealed partial class RoslynMcpTests
             line.StartsWith("truncated:", StringComparison.Ordinal)
         );
         if (line is null)
-        {
             return -1;
-        }
 
         var start = line.IndexOf(marker, StringComparison.Ordinal) + marker.Length;
         return int.Parse(

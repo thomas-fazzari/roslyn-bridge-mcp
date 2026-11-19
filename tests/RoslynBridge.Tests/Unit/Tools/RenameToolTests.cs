@@ -159,9 +159,7 @@ public sealed class RenameToolTests : TempWorkspaceTests
                 server.Handle = (method, _) =>
                 {
                     if (method is LspMethods.TextDocumentGetProjectContexts)
-                    {
                         server.Crash();
-                    }
 
                     return Task.FromResult<JsonNode?>(null);
                 };

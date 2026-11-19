@@ -21,9 +21,7 @@ internal static class FakeDiagnosticServer
                 Handle = (method, parameters) =>
                 {
                     if (method is not LspMethods.TextDocumentDiagnostic)
-                    {
                         return Task.FromResult<JsonNode?>(null);
-                    }
 
                     var previous = parameters?["previousResultId"]?.GetValue<string>();
                     sent.Enqueue(previous);

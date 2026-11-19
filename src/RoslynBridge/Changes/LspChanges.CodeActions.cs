@@ -22,17 +22,13 @@ internal sealed partial class LspChanges
     )
     {
         if ((await CaptureAsync(cancellationToken)).IsError(out var captureError, out var snapshot))
-        {
             return captureError;
-        }
 
         var target = request.Diagnostic is null
             ? await SelectionAsync(request, cancellationToken)
             : await DiagnosticRangeAsync(request, cancellationToken);
         if (target.IsError(out var targetError, out var parameters))
-        {
             return targetError;
-        }
 
         var versioned = await WithDocumentVersionsAsync(snapshot, cancellationToken);
         // Roslyn computes the diagnostics in the range itself, so the context stays empty
@@ -43,9 +39,7 @@ internal sealed partial class LspChanges
             cancellationToken
         );
         if (listed.IsError(out var requestError, out var response))
-        {
             return requestError;
-        }
 
         var choices = new List<CodeActionChoice>();
         foreach (var action in (response as JsonArray ?? []).OfType<JsonObject>())
@@ -132,14 +126,10 @@ internal sealed partial class LspChanges
             cancellationToken
         );
         if (position.IsError(out var error, out var parameters))
-        {
             return error;
-        }
 
         if (!HasValidEnd(request))
-        {
             return ToolError.InvalidRequest("The selection end must follow its start.");
-        }
 
         var start = parameters["position"]!;
         parameters.Remove("position");
@@ -182,9 +172,7 @@ internal sealed partial class LspChanges
 
         var reported = await session.DiagnosticReportAsync(uri, cancellationToken);
         if (reported.IsError(out var reportError, out var report))
-        {
             return reportError;
-        }
 
         var diagnostic = (report.Items ?? [])
             .Where(item =>
@@ -246,9 +234,7 @@ internal sealed partial class LspChanges
     {
         var title = action["title"]?.GetValue<string>() ?? string.Empty;
         if (data?["CodeActionPath"] is not JsonArray { Count: > 1 } path)
-        {
             return title;
-        }
 
         return string.Join(
             " > ",
@@ -294,14 +280,10 @@ internal sealed partial class LspChanges
             _ => action,
         };
         if (resolution.IsError(out var error, out var resolved))
-        {
             return error;
-        }
 
         if (resolved is not JsonObject value)
-        {
             return ToolError.InvalidLspData("Roslyn could not resolve the code action.");
-        }
 
         var command = value["command"] switch
         {

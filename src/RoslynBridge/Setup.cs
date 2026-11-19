@@ -46,9 +46,7 @@ internal static class Setup
         output.WriteLine($".NET: {root}");
         var server = FindOrInstallServer(locator, root, output, RunToCompletion);
         if (server is null)
-        {
             return 1;
-        }
 
         output.WriteLine($"Roslyn: {server}");
         output.WriteLine();
@@ -98,9 +96,7 @@ internal static class Setup
 
         var launcher = Quote(processPath);
         if (!unix || hostRoots.Any(root => SamePath(root, dotnetRoot)))
-        {
             return launcher;
-        }
 
         return $"/usr/bin/env DOTNET_ROOT={Quote(dotnetRoot)} {launcher}";
     }
@@ -109,9 +105,7 @@ internal static class Setup
     private static string[] HostRoots()
     {
         if (OperatingSystem.IsWindows())
-        {
             return [];
-        }
 
         var architecture = RuntimeInformation.ProcessArchitecture.ToString().ToLowerInvariant();
         var registered = (string[])
@@ -155,9 +149,7 @@ internal static class Setup
 
             var installed = GlobalToolVersion(tools);
             if (string.Equals(installed, ServerVersion, StringComparison.OrdinalIgnoreCase))
-            {
                 return server;
-            }
 
             output.WriteLine(
                 $"Updating the Roslyn language server from version {installed ?? "unknown"} to {ServerVersion}..."
@@ -205,9 +197,7 @@ internal static class Setup
     {
         var store = Path.Combine(tools, ".store", RoslynLocator.ServerName);
         if (!Directory.Exists(store))
-        {
             return null;
-        }
 
         return Directory.GetDirectories(store) is [var version] ? Path.GetFileName(version) : null;
     }
@@ -242,9 +232,7 @@ internal static class Setup
             startInfo.CreateNoWindow = true;
             using var process = Process.Start(startInfo);
             if (process is null)
-            {
                 return false;
-            }
 
             if (!process.WaitForExit(_versionTimeout))
             {

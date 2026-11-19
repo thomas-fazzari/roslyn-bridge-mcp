@@ -18,9 +18,7 @@ internal sealed partial class LspQueries
     )
     {
         if (request.Query is not null)
-        {
             return ToolError.InvalidRequest("unused takes file, not query.");
-        }
 
         if (
             SelectFiles(request.File, cancellationToken)
@@ -51,26 +49,18 @@ internal sealed partial class LspQueries
         }
 
         if (await session.SynchronizeNewFilesAsync(files, cancellationToken) is ToolError syncError)
-        {
             return syncError;
-        }
 
         var unused = await session.FindUnusedAsync(files, cancellationToken);
         if (unused.IsError(out var error, out var found))
-        {
             return error;
-        }
 
         if (found.Read<UnusedReport>().IsError(out var invalid, out var report))
-        {
             return invalid;
-        }
 
         var entries = report.Symbols;
         if (entries.SelectMany(entry => entry.Via).Any(user => user < 0 || user >= entries.Length))
-        {
             return ToolError.InvalidLspData("Roslyn returned an unused symbol index out of range.");
-        }
 
         List<int> page =
         [
@@ -85,9 +75,7 @@ internal sealed partial class LspQueries
             cancellationToken
         );
         if (naming.IsError(out var namesError, out var names))
-        {
             return namesError;
-        }
 
         var item = named.Zip(names).ToDictionary(entry => entry.First, entry => entry.Second);
 

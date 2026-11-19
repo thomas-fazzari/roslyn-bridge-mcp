@@ -29,26 +29,18 @@ internal static class ByRefAccess
         var before = WithoutQualifier(line[..Math.Min(position.Character - 1, line.Length)])
             .TrimEnd();
         if (EndsWithKeyword(before, "out"))
-        {
             return ByRefUse.Write;
-        }
 
         if (!EndsWithKeyword(before, "ref"))
-        {
             return ByRefUse.None;
-        }
 
         var call = before[..^"ref".Length].TrimEnd();
         if (!call.EndsWith('('))
-        {
             return ByRefUse.ReadWrite;
-        }
 
         call = call[..^1].TrimEnd();
         if (_readers.Any(name => call.EndsWith(name, StringComparison.Ordinal)))
-        {
             return ByRefUse.Read;
-        }
 
         return _writers.Any(name => call.EndsWith(name, StringComparison.Ordinal))
             ? ByRefUse.Write
@@ -58,9 +50,7 @@ internal static class ByRefAccess
     private static string WithoutQualifier(string text)
     {
         if (!text.EndsWith('.'))
-        {
             return text;
-        }
 
         var end = text.Length - 1;
         while (end > 0 && IsNameCharacter(text[end - 1]))

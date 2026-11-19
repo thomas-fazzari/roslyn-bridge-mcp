@@ -21,9 +21,7 @@ public sealed class SessionStartupTests : TempWorkspaceTests
             TestCt
         );
         if (!OperatingSystem.IsWindows())
-        {
             File.SetUnixFileMode(server, UnixFileMode.UserRead | UnixFileMode.UserExecute);
-        }
         await using var session = CreateSession(
             Root,
             RoslynProcess.Start,

@@ -24,14 +24,10 @@ internal sealed partial class LspQueries
     {
         var symbolCheck = await HasSymbolAsync(parameters, cancellationToken);
         if (symbolCheck.IsError(out var error, out var hasSymbol))
-        {
             return error;
-        }
 
         if (hasSymbol)
-        {
             return null;
-        }
 
         if (
             parameters["position"]
@@ -51,9 +47,7 @@ internal sealed partial class LspQueries
         );
         var nearest = await NearestSymbolHintAsync(uri, file, position, cancellationToken);
         if (nearest.IsError(out var hintError, out var hint))
-        {
             return hintError;
-        }
 
         return new ToolError(ErrorCodes.SymbolNotFound, message + hint);
     }
@@ -75,9 +69,7 @@ internal sealed partial class LspQueries
     {
         var lines = SourceLines.TryReadLines(file);
         if (lines is null || position.Line >= lines.Length)
-        {
             return NoNearestHint;
-        }
 
         var line = lines[position.Line];
         var candidates = Names(line)
@@ -93,9 +85,7 @@ internal sealed partial class LspQueries
             };
             var symbolCheck = await HasSymbolAsync(candidate, cancellationToken);
             if (symbolCheck.IsError(out var error, out var hasSymbol))
-            {
                 return error;
-            }
 
             if (hasSymbol)
             {
@@ -116,9 +106,7 @@ internal sealed partial class LspQueries
         for (var index = 0; index < line.Length; index++)
         {
             if (!IsNameStart(line[index]))
-            {
                 continue;
-            }
 
             var start = index;
             while (index + 1 < line.Length && IsNamePart(line[index + 1]))
@@ -133,9 +121,7 @@ internal sealed partial class LspQueries
     private static int Distance((int Start, int Length) name, int character)
     {
         if (character < name.Start)
-        {
             return name.Start - character;
-        }
 
         var last = name.Start + name.Length - 1;
         return character > last ? character - last : 0;

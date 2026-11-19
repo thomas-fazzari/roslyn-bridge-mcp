@@ -26,9 +26,7 @@ internal static class LspConversions
         {
             var text = await document.GetTextAsync(cancellationToken);
             if (request.Line >= text.Lines.Count)
-            {
                 return null;
-            }
 
             var line = text.Lines[request.Line];
             return request.Character > line.Span.Length ? null : line.Start + request.Character;

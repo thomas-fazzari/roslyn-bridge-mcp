@@ -100,9 +100,7 @@ internal sealed class UnusedHandler
                 var model = await document.GetSemanticModelAsync(cancellationToken);
                 var root = await document.GetSyntaxRootAsync(cancellationToken);
                 if (model is null || root?.HasGeneratedHeader is not false)
-                {
                     continue;
-                }
 
                 var declarations = root.DescendantNodes(node => node.HoldsDeclarations)
                     .Where(node => node.IsDeclaration);
@@ -120,9 +118,7 @@ internal sealed class UnusedHandler
 
                     var isEntryPoint = SymbolEqualityComparer.Default.Equals(symbol, entryPoint);
                     if (isEntryPoint || symbol.HasFrameworkAttribute)
-                    {
                         reached.UnionWith(symbol.ContainingTypeKeys);
-                    }
 
                     if (
                         isEntryPoint
@@ -245,9 +241,7 @@ internal sealed class UnusedHandler
             for (var index = 0; index < uses.Length; index++)
             {
                 if (!dead[index] || !uses[index].Any(use => !use.Test && IsLive(use, dead)))
-                {
                     continue;
-                }
 
                 // A used member keeps its types, as an extension method keeps its static class
                 dead[index] = false;
@@ -300,9 +294,7 @@ internal sealed class UnusedHandler
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (!dead[index] || PositionOf(index) is not { } target)
-            {
                 continue;
-            }
 
             testsOnly[target] |= uses[index].Any(use => use.Test && IsLive(use, dead));
             var users = uses[index]
@@ -312,9 +304,7 @@ internal sealed class UnusedHandler
             foreach (var user in users)
             {
                 if (user is { } position && position != target)
-                {
                     via[target].Add(position);
-                }
             }
         }
 
@@ -330,16 +320,12 @@ internal sealed class UnusedHandler
         int? PositionOf(int index)
         {
             if (positions.TryGetValue(index, out var position))
-            {
                 return position;
-            }
 
             foreach (var container in containers[index])
             {
                 if (positions.TryGetValue(container, out var outer))
-                {
                     return outer;
-                }
             }
 
             return null;

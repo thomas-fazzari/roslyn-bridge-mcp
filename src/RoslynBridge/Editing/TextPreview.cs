@@ -16,9 +16,7 @@ internal static class TextPreview
     {
         var changes = new List<TextChange>();
         if (StringComparer.Ordinal.Equals(before, after))
-        {
             return (changes, false);
-        }
 
         var window = ChangedWindow(before, after);
         var oldText = before[window.Start..window.BeforeEnd];
@@ -99,9 +97,7 @@ internal static class TextPreview
         var oldLines = TextEdits.GetLines(oldText);
         var newLines = TextEdits.GetLines(newText);
         if (oldLines.Count != newLines.Count)
-        {
             return null;
-        }
 
         var blocks = new List<LineBlock>();
         int? changedFrom = null;
@@ -228,9 +224,7 @@ internal static class TextPreview
             if (TextEdits.IsLineBreak(text[index]))
             {
                 if (text[index] == '\r' && index + 1 < offset && text[index + 1] == '\n')
-                {
                     index++;
-                }
 
                 line++;
                 character = 1;

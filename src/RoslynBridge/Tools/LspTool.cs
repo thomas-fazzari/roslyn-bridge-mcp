@@ -78,9 +78,7 @@ internal sealed partial class LspTool(
     {
         // status answers while another call holds the gate
         if (request is StatusRequest)
-        {
             return Response(Status());
-        }
 
         var policy = request.Policy;
         var queued = Stopwatch.GetTimestamp();
@@ -99,9 +97,7 @@ internal sealed partial class LspTool(
             );
             var resolution = await ResolveFilesAsync(request, timeout.Token);
             if (resolution.IsError(out var fileError, out var resolved))
-            {
                 return Failure(fileError);
-            }
 
             var dispatched = await DispatchAsync(
                 resolved.Request,
@@ -109,9 +105,7 @@ internal sealed partial class LspTool(
                 timeout.Token
             );
             if (dispatched.IsError(out var error, out var result))
-            {
                 return ReportFailure(policy.Action, error, cancellationToken);
-            }
 
             if (logger.IsEnabled(LogLevel.Debug))
             {
@@ -170,14 +164,10 @@ internal sealed partial class LspTool(
             .Append("\nfailed step: ")
             .Append(failure.Phase.ToString().ToLowerInvariant());
         if (failure.FailedPath is { } path)
-        {
             text.Append(", path ").Append(path);
-        }
 
         if (failure.FailedOperation is { } operation)
-        {
             text.Append(", operation ").Append(operation);
-        }
 
         text.Append('\n')
             .Append(
@@ -215,9 +205,7 @@ internal sealed partial class LspTool(
         }
 
         if (error.IsInfrastructureFailure)
-        {
             OperationFailed(logger, action, error.Code, error.Message);
-        }
 
         return Failure(error);
     }
@@ -231,9 +219,7 @@ internal sealed partial class LspTool(
     )
     {
         if (result is not EditReceipt { Synchronized: true } receipt)
-        {
             return result;
-        }
 
         string[] files =
         [
@@ -243,9 +229,7 @@ internal sealed partial class LspTool(
                 .Where(path => WorkspacePaths.IsCSharpFile(path) && File.Exists(path)),
         ];
         if (files.Length is 0 or > MaximumCheckedFiles)
-        {
             return receipt;
-        }
 
         // The edit is already applied, so a failed check returns the receipt without diagnostics
         var checkedFiles = await queries
@@ -280,14 +264,10 @@ internal sealed partial class LspTool(
     )
     {
         if (request.Page.Limit is < 1 or > Paging.MaximumLimit)
-        {
             return ToolError.InvalidRequest($"Limit must be between 1 and {Paging.MaximumLimit}.");
-        }
 
         if (request.Page.Offset < 0)
-        {
             return ToolError.InvalidRequest("Offset must not be negative.");
-        }
 
         if (request is BulkRequest { Queries.Count: < 1 or > BulkRequest.MaximumQueries })
         {
@@ -300,9 +280,7 @@ internal sealed partial class LspTool(
         if (policy.StartsServer)
         {
             if (await session.EnsureStartedAsync(cancellationToken) is ToolError startError)
-            {
                 return startError;
-            }
 
             if (
                 !policy.SynchronizesItself
@@ -374,9 +352,7 @@ internal sealed partial class LspTool(
     )
     {
         if (string.IsNullOrWhiteSpace(request.Method))
-        {
             return ToolError.InvalidRequest("Provide the LSP method for action=request.");
-        }
 
         if (IsManagedMethod(request.Method))
         {

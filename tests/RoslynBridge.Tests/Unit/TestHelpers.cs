@@ -59,9 +59,7 @@ internal static class TestHelpers
     public static T Succeeded<T>(this Result<T> result)
     {
         if (result.IsError(out var error, out var value))
-        {
             Assert.Fail($"Expected a value, got the error {error.Code}: {error.Message}");
-        }
 
         return value;
     }
@@ -84,9 +82,7 @@ internal static class TestHelpers
     {
         var text = ResponseText(response);
         if (!text.StartsWith("error ", StringComparison.Ordinal))
-        {
             return null;
-        }
 
         var end = text.IndexOfAny([' ', ':'], "error ".Length);
         return text["error ".Length..end];

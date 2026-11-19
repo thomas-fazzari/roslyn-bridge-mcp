@@ -53,20 +53,14 @@ internal sealed class ReferencesHandler
     )
     {
         if (context.Solution.GetDocument(context.TextDocument.Id) is not { } document)
-        {
             return _notFound;
-        }
 
         if (await document.GetPositionAsync(message, cancellationToken) is not { } position)
-        {
             return _notFound;
-        }
 
         // On a literal, Roslyn lists its occurrences instead of references
         if (await TouchesLiteralAsync(document, position, cancellationToken))
-        {
             return _notFound;
-        }
 
         var symbol = await SymbolFinder.FindSymbolAtPositionAsync(
             document,
@@ -74,9 +68,7 @@ internal sealed class ReferencesHandler
             cancellationToken
         );
         if (symbol is null)
-        {
             return _notFound;
-        }
 
         var referenced = await FindReferencesAsync(
             symbol,
@@ -107,16 +99,12 @@ internal sealed class ReferencesHandler
             }
 
             if (reference.Document.FilePath is not { } filePath)
-            {
                 continue;
-            }
 
             var found = new LspLocation(filePath.ToLspUri(), location.ToLspRange());
             locations.Add(found);
             if (_isWrittenTo.GetValue(reference) is true)
-            {
                 written.Add(found);
-            }
         }
 
         return new ReferencesResponse(Found: true, locations, written, generated);
@@ -141,9 +129,7 @@ internal sealed class ReferencesHandler
     {
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root is null)
-        {
             return false;
-        }
 
         return root.FindToken(position).IsLiteralTouching(position)
             || (position > 0 && root.FindToken(position - 1).IsLiteralTouching(position));

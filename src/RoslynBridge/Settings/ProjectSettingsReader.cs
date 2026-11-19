@@ -21,9 +21,7 @@ internal static class ProjectSettingsReader
     {
         var path = Path.Combine(root, ProjectSettings.FileName);
         if (!File.Exists(path))
-        {
             return new ProjectSettings();
-        }
 
         ProjectSettings settings;
         try
