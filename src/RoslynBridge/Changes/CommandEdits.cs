@@ -78,9 +78,12 @@ internal sealed class CommandEdits(
 
             try
             {
-                return IsAcceptingEdits()
-                    ? await ApplyAndCaptureAsync(edit, linked.Token)
-                    : RejectedResponse();
+                if (!IsAcceptingEdits())
+                    return RejectedResponse();
+
+                return WorkspaceEdit.Parse(edit).IsError(out var parseError, out var parsed)
+                    ? FailCallback(parseError, EditApplicationPhase.Write, applied: false)
+                    : await ApplyAndCaptureAsync(parsed, linked.Token);
             }
             finally
             {
@@ -114,7 +117,7 @@ internal sealed class CommandEdits(
     }
 
     private async Task<ApplyWorkspaceEditResult> ApplyAndCaptureAsync(
-        JsonObject edit,
+        WorkspaceEdit edit,
         CancellationToken token
     )
     {

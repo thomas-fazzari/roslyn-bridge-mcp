@@ -9,9 +9,9 @@ internal static class TextEdits
 {
     internal const int MaximumTextEditCount = 10_000;
 
-    public static Result<string> Apply(string source, TextEdit?[] edits)
+    public static Result<string> Apply(string source, IReadOnlyList<TextEdit> edits)
     {
-        if (edits.Length > MaximumTextEditCount)
+        if (edits.Count > MaximumTextEditCount)
         {
             return ToolError.InvalidRequest(
                 $"The edit exceeds {MaximumTextEditCount} text changes."
@@ -68,21 +68,11 @@ internal static class TextEdits
     internal static bool IsLineBreak(char character) =>
         character is '\r' or '\n' or '\u0085' or '\u2028' or '\u2029';
 
-    private static Result<Change> Parse(TextEdit? edit, int index, List<LineSpan> lines)
-    {
-        if (edit is null)
-            return ToolError.InvalidLspData("Missing text edit.");
-
-        if (
-            GetOffset(edit.Range.Start, lines) is not { } start
-            || GetOffset(edit.Range.End, lines) is not { } end
-        )
-        {
-            return ToolError.InvalidLspData("The text edit position is outside the document.");
-        }
-
-        return new Change(start, end, edit.NewText, index);
-    }
+    private static Result<Change> Parse(TextEdit edit, int index, List<LineSpan> lines) =>
+        GetOffset(edit.Range.Start, lines) is not { } start
+        || GetOffset(edit.Range.End, lines) is not { } end
+            ? ToolError.InvalidLspData("The text edit position is outside the document.")
+            : new Change(start, end, edit.NewText, index);
 
     /// <summary>
     /// Null for a position outside the document.

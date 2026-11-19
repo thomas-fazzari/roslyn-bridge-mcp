@@ -10,7 +10,7 @@ namespace RoslynBridge.Changes;
 internal sealed record PendingChange(
     LspAction Action,
     WorkspaceSnapshot Snapshot,
-    JsonObject? Edit,
+    WorkspaceEdit Edit,
     JsonObject? Command,
     IReadOnlyList<CodeActionChoice>? Actions = null
 )
