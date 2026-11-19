@@ -68,6 +68,10 @@ internal sealed class WorkspacePaths(string root)
 
     public string Root { get; } = Path.TrimEndingDirectorySeparator(Path.GetFullPath(root));
 
+    public static bool IsCSharpFile(string path) =>
+        path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)
+        || path.EndsWith(".csx", StringComparison.OrdinalIgnoreCase);
+
     public string RootUri => new Uri(Root + Path.DirectorySeparatorChar).AbsoluteUri;
 
     public string Resolve(string file)

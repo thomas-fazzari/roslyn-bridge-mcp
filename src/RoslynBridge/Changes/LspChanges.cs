@@ -346,7 +346,7 @@ internal sealed partial class LspChanges(
                     operation.Kind is FileOperation.Create or FileOperation.Rename
                 )
                 .Select(operation => paths.Resolve(operation.Path))
-                .Where(path => RoslynSession.IsCSharpFile(path) && File.Exists(path)),
+                .Where(path => WorkspacePaths.IsCSharpFile(path) && File.Exists(path)),
         ];
         if (
             created.Length != 0

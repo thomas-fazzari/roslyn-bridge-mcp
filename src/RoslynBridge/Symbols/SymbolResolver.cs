@@ -321,7 +321,7 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
     {
         var documents = new List<(string File, LspSymbol[] Symbols)>();
         // Batches stay within the open documents the session keeps
-        foreach (var batch in files.Chunk(RoslynSession.MaximumOpenDocuments))
+        foreach (var batch in files.Chunk(RoslynConnection.MaximumOpenDocuments))
         {
             var uris = await session.OpenDocumentsAsync(batch, cancellationToken);
             var symbols = await Task.WhenAll(

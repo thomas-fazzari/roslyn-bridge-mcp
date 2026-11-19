@@ -49,8 +49,8 @@ public sealed class ExtensionFallbackTests : TempWorkspaceTests
     }
 
     [Theory]
-    [InlineData(RoslynSession.RequestCancelledCode, 2)]
-    [InlineData(RoslynSession.ServerCancelledCode, 2)]
+    [InlineData(RoslynConnection.RequestCancelledCode, 2)]
+    [InlineData(RoslynConnection.ServerCancelledCode, 2)]
     [InlineData(HandlerFailureCode, 1)]
     public async Task DispatchFailureDisablesTheExtensionUnlessRoslynCancelledAsync(
         int errorCode,
@@ -189,8 +189,8 @@ public sealed class ExtensionFallbackTests : TempWorkspaceTests
         new()
         {
             ["documentMessageHandlers"] = new JsonArray(
-                JsonValue.Create(RoslynSession.ReferencesMessage),
-                JsonValue.Create(RoslynSession.CallersMessage)
+                JsonValue.Create(RoslynConnection.ReferencesMessage),
+                JsonValue.Create(RoslynConnection.CallersMessage)
             ),
         };
 }

@@ -265,7 +265,10 @@ public sealed partial class RoslynMcpTests
         var started = Stopwatch.GetTimestamp();
         var again = await workspace.CallAsync(request);
 
-        Stopwatch.GetElapsedTime(started).Should().BeLessThan(RoslynSession.ProjectAttachTimeout);
+        Stopwatch
+            .GetElapsedTime(started)
+            .Should()
+            .BeLessThan(RoslynConnection.ProjectAttachTimeout);
         again.Should().Contain("incomplete:");
     }
 

@@ -87,6 +87,24 @@ public sealed class SessionDocumentTests : TempWorkspaceTests
             .Contain((uri, FileDeleted));
     }
 
+    [Fact]
+    public async Task FileWatchRegisteredDuringShutdownStaysWithItsProcessAsync()
+    {
+        var servers = new List<FakeRoslynServer>();
+        await using var session = CreateSession(Root, FakeServer(servers.Add));
+        await session.EnsureStartedAsync(TestCt);
+        servers[0].OnShutdown = () => RegisterWatchedFilesAsync(servers[0]);
+        session.RequireReload();
+        await session.EnsureStartedAsync(TestCt);
+
+        var path = await WriteFileAsync(Root, "Added.cs", "class Added {}");
+        await session.SynchronizeFilesAsync([path], TestCt);
+
+        (await ReceivedAsync(session, servers[1], LspMethods.WorkspaceDidChangeWatchedFiles))
+            .Should()
+            .BeEmpty();
+    }
+
     private static Task<JsonNode?> RegisterWatchedFilesAsync(FakeRoslynServer server) =>
         server.RequestClientAsync(
             LspMethods.ClientRegisterCapability,

@@ -69,7 +69,7 @@ public sealed class CallCancellationTests : TempWorkspaceTests
                     method is LspMethods.TextDocumentReferences
                         ? throw new LocalRpcException("The request was cancelled.")
                         {
-                            ErrorCode = RoslynSession.RequestCancelledCode,
+                            ErrorCode = RoslynConnection.RequestCancelledCode,
                         }
                         : Task.FromResult<JsonNode?>(null)
             )

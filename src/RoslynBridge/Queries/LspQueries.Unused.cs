@@ -31,7 +31,9 @@ internal sealed partial class LspQueries
         }
 
         if (
-            files.FirstOrDefault(file => !RoslynSession.IsCSharpFile(file) || !File.Exists(file)) is
+            files.FirstOrDefault(file =>
+                !WorkspacePaths.IsCSharpFile(file) || !File.Exists(file)
+            ) is
             { } missing
         )
         {

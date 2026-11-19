@@ -27,7 +27,7 @@ public sealed class ClientCallbacksTests : TempWorkspaceTests
     }
 
     private static ClientCallbacks CreateCallbacks(RoslynSession session, WorkspacePaths paths) =>
-        new(session, paths, NullLogger<RoslynSession>.Instance, new TaskCompletionSource());
+        new(session, paths, NullLogger.Instance);
 
     private static JsonObject RenameClassEdit(string source) =>
         WorkspaceChanges(source, TextEdit(0, 6, 0, 12, "After"));

@@ -5,7 +5,7 @@ using RoslynBridge.Telemetry;
 
 namespace RoslynBridge.Lsp;
 
-internal sealed partial class RoslynSession
+internal sealed partial class RoslynConnection
 {
     private const string UnchangedReport = "unchanged";
 
@@ -46,6 +46,4 @@ internal sealed partial class RoslynSession
         _diagnosticReports[uri] = report;
         return report;
     }
-
-    private void ClearDiagnosticReports() => _diagnosticReports.Clear();
 }

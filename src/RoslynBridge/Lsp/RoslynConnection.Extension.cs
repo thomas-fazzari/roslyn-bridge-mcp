@@ -6,7 +6,7 @@ using StreamJsonRpc;
 
 namespace RoslynBridge.Lsp;
 
-internal sealed partial class RoslynSession
+internal sealed partial class RoslynConnection
 {
     internal const string ReferencesMessage = "RoslynBridge.Extension.ReferencesHandler";
     internal const string CallersMessage = "RoslynBridge.Extension.CallersHandler";

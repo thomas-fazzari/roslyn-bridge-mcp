@@ -228,7 +228,7 @@ internal sealed partial class LspTool(
             .. receipt
                 .Operations.Select(operation => paths.Resolve(operation.Path))
                 .Distinct(StringComparer.Ordinal)
-                .Where(path => RoslynSession.IsCSharpFile(path) && File.Exists(path)),
+                .Where(path => WorkspacePaths.IsCSharpFile(path) && File.Exists(path)),
         ];
         if (files.Length is 0 or > MaximumCheckedFiles)
         {
@@ -388,7 +388,7 @@ internal sealed partial class LspTool(
         if (
             request.Parameters?["textDocument"]?["uri"] is JsonValue uri
             && uri.TryGetValue<string>(out var documentUri)
-            && RoslynSession.IsCSharpFile(documentUri)
+            && WorkspacePaths.IsCSharpFile(documentUri)
         )
         {
             await session.OpenDocumentAsync(documentUri, cancellationToken);

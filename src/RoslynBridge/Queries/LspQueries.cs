@@ -117,7 +117,7 @@ internal sealed partial class LspQueries(
     {
         await session.SynchronizeNewFilesAsync(files, cancellationToken);
         var scanned = new List<ScannedFile>(files.Count);
-        foreach (var batch in files.Chunk(RoslynSession.MaximumOpenDocuments))
+        foreach (var batch in files.Chunk(RoslynConnection.MaximumOpenDocuments))
         {
             scanned.AddRange(await ScanAsync(batch, cancellationToken));
         }
@@ -545,7 +545,7 @@ internal sealed partial class LspQueries(
         return matcher
             .Match(paths.Root, paths.EnumerateFiles().Select(static file => file.Path))
             .Files.Select(match => Path.GetFullPath(match.Path, paths.Root))
-            .Where(RoslynSession.IsCSharpFile)
+            .Where(WorkspacePaths.IsCSharpFile)
             .Order(StringComparer.Ordinal);
     }
 
