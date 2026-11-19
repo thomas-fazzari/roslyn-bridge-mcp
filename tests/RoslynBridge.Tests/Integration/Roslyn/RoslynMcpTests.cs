@@ -33,6 +33,7 @@ public sealed partial class RoslynMcpTests
     private const string StepTestSymbol = "Counter.Step";
     private const string UnusedFixture = "Unused";
     private const string UnusedKeptFixture = "UnusedKept";
+    private const string MultiTargetFixture = "MultiTarget";
     private const string LeftoversTestFile = "Application/Leftovers.cs";
     private const string LeftoverChecksTestFile = "Checks/LeftoverChecks.cs";
     private const string KeptTestFile = "Application/Kept.cs";
@@ -375,6 +376,22 @@ public sealed partial class RoslynMcpTests
                   calls 7:59
                 """
             );
+    }
+
+    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    public async Task ListsEachCallerOnceInAMultiTargetedProjectAsync()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var workspace = await RoslynTestWorkspace.CreateAsync(
+            cancellationToken,
+            overlay: MultiTargetFixture
+        );
+
+        var callers = await workspace.CallAsync(
+            new LspRequest { Action = LspAction.Callers, Symbol = "Greeter.Greet" }
+        );
+
+        callers.Should().HaveSingleLocation(ConsumerTestFile);
     }
 
     [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]

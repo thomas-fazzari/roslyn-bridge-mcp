@@ -203,11 +203,13 @@ internal sealed partial class LspQueries(
         CancellationToken cancellationToken
     )
     {
-        var (related, accesses, prepared) =
+        var callers =
             request.Action is LspAction.Callers
-            && await session.FindCallersAsync(position, cancellationToken) is { } calls
-                ? (calls, 0, true)
-                : await ExpandHierarchyAsync(request.Action, position, cancellationToken);
+                ? await session.FindCallersAsync(position, cancellationToken)
+                : ExtensionCallers.NotFound;
+        var (related, accesses, prepared) = callers.Found
+            ? (callers.Calls, 0, true)
+            : await ExpandHierarchyAsync(request.Action, position, cancellationToken);
 
         var result = await NameSymbolsAsync(
             related.ToRelatedSymbols(paths, request.Limit, request.Offset) with

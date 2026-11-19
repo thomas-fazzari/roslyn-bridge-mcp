@@ -30,29 +30,29 @@ internal sealed partial class RoslynSession
     /// Finds references inside Roslyn, without the batching delay of textDocument/references.
     /// </summary>
     /// <param name="parameters">The textDocument and zero-based position of the request.</param>
-    /// <returns>
-    /// LSP locations and a count of generated references, or null when the caller must ask
-    /// textDocument/references.
-    /// </returns>
-    public Task<JsonNode?> FindReferencesAsync(
+    public Task<ExtensionReferences> FindReferencesAsync(
         JsonObject parameters,
         CancellationToken cancellationToken
-    ) => DispatchDocumentMessageAsync(ReferencesMessage, parameters, cancellationToken);
+    ) =>
+        DispatchDocumentMessageAsync<ExtensionReferences>(
+            ReferencesMessage,
+            parameters,
+            cancellationToken
+        );
 
     /// <summary>
     /// Finds callers inside Roslyn, with the calls through base and interface members.
     /// </summary>
     /// <param name="parameters">The textDocument and zero-based position of the request.</param>
-    /// <returns>
-    /// LSP incoming calls, or null when the caller must ask callHierarchy/incomingCalls.
-    /// </returns>
-    public async Task<JsonArray?> FindCallersAsync(
+    public Task<ExtensionCallers> FindCallersAsync(
         JsonObject parameters,
         CancellationToken cancellationToken
     ) =>
-        (await DispatchDocumentMessageAsync(CallersMessage, parameters, cancellationToken))?[
-            "calls"
-        ] as JsonArray;
+        DispatchDocumentMessageAsync<ExtensionCallers>(
+            CallersMessage,
+            parameters,
+            cancellationToken
+        );
 
     /// <summary>
     /// Finds the declarations of some files that no live code uses.
@@ -106,15 +106,16 @@ internal sealed partial class RoslynSession
             : UnusedFailure(ExtensionError(result));
     }
 
-    private async Task<JsonNode?> DispatchDocumentMessageAsync(
+    private async Task<T> DispatchDocumentMessageAsync<T>(
         string messageName,
         JsonObject parameters,
         CancellationToken cancellationToken
     )
+        where T : IExtensionAnswer<T>
     {
         if (!_documentHandlersActive)
         {
-            return null;
+            return T.NotFound;
         }
 
         JsonNode? result;
@@ -135,22 +136,30 @@ internal sealed partial class RoslynSession
         catch (RemoteInvocationException exception)
             when (exception.ErrorCode is RequestCancelledCode or ServerCancelledCode)
         {
-            return null;
+            return T.NotFound;
         }
         catch (RemoteRpcException exception)
         {
             DisableDocumentHandlers(exception.Message);
-            return null;
+            return T.NotFound;
         }
 
         if (ExtensionResponse(result) is not { } response)
         {
             DisableDocumentHandlers(ExtensionError(result));
-            return null;
+            return T.NotFound;
         }
 
-        var found = JsonNode.Parse(response);
-        return found?["found"]?.GetValue<bool>() is true ? found : null;
+        try
+        {
+            return JsonSerializer.Deserialize<T>(response, LspJson.Options)
+                ?? throw new JsonException("The response is null.");
+        }
+        catch (JsonException exception)
+        {
+            DisableDocumentHandlers(exception.Message);
+            return T.NotFound;
+        }
     }
 
     private async Task ActivateExtensionAsync(CancellationToken cancellationToken)

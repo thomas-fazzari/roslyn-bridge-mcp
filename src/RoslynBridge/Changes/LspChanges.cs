@@ -71,10 +71,9 @@ internal sealed partial class LspChanges(
             );
         }
 
-        var result = await edits.ApplyAsync(edit, change.Snapshot, cancellationToken);
-        var phase = change.Command is null
-            ? EditApplicationPhase.Synchronize
-            : EditApplicationPhase.Command;
+        var applied = await edits.ApplyAsync(edit, change.Snapshot, cancellationToken);
+        var result = applied;
+        var phase = EditApplicationPhase.Command;
         try
         {
             if (change.Command is not null)
@@ -86,10 +85,10 @@ internal sealed partial class LspChanges(
                     CommandResult = commandResult.CommandResult,
                 };
             }
-            else
-            {
-                await SynchronizeAsync(result, cancellationToken);
-            }
+
+            // ExecuteCommandAsync synchronizes only the edits of the command's callbacks
+            phase = EditApplicationPhase.Synchronize;
+            await SynchronizeAsync(applied, cancellationToken);
         }
         catch (EditApplicationException exception)
         {
