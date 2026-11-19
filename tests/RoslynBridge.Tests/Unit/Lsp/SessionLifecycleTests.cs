@@ -14,7 +14,7 @@ public sealed class SessionLifecycleTests : TempWorkspaceTests
     {
         var servers = new List<FakeRoslynServer>();
         await using var session = CreateSession(Root, FakeServer(servers.Add));
-        await session.EnsureStartedAsync(TestCt);
+        (await session.EnsureStartedAsync(TestCt)).ErrorCode().Should().BeNull();
         await servers[0].WriteErrorAsync("Unhandled exception: out of memory", TestCt);
         servers[0].Handle = (_, _) =>
         {
@@ -22,22 +22,19 @@ public sealed class SessionLifecycleTests : TempWorkspaceTests
             return Task.FromResult<JsonNode?>(null);
         };
 
-        var failure = await FluentActions.Awaiting(Request).Should().ThrowAsync<IOException>();
-        failure.Which.Message.Should().Contain("out of memory");
+        var failure = await session.RequestAsync(
+            LspMethods.WorkspaceSymbol,
+            new JsonObject { ["query"] = "Greeter" },
+            TestCt
+        );
+        failure.ErrorCode().Should().Be(ErrorCodes.Io);
+        (failure is ToolError error ? error.Message : null).Should().Contain("out of memory");
         session.IsRunning.Should().BeFalse();
 
-        await session.EnsureStartedAsync(TestCt);
+        (await session.EnsureStartedAsync(TestCt)).ErrorCode().Should().BeNull();
 
         servers.Should().HaveCount(2);
         session.IsRunning.Should().BeTrue();
-        return;
-
-        Task Request() =>
-            session.RequestAsync(
-                LspMethods.WorkspaceSymbol,
-                new JsonObject { ["query"] = "Greeter" },
-                TestCt
-            );
     }
 
     [Fact]
@@ -46,7 +43,7 @@ public sealed class SessionLifecycleTests : TempWorkspaceTests
         var target = Path.Combine(Root, "Target.cs");
         await File.WriteAllTextAsync(target, "class Target {}", TestCt);
         await using var session = CreateSession(Root, FakeServer());
-        await session.EnsureStartedAsync(TestCt);
+        (await session.EnsureStartedAsync(TestCt)).ErrorCode().Should().BeNull();
         var link = Path.Combine(Root, "Link.cs");
         try
         {
@@ -58,8 +55,8 @@ public sealed class SessionLifecycleTests : TempWorkspaceTests
         }
 
         // The watcher reports the link asynchronously, so send it directly
-        await session.SynchronizeFilesAsync([link], TestCt);
-        await session.SynchronizeAsync(TestCt);
+        (await session.SynchronizeFilesAsync([link], TestCt)).ErrorCode().Should().BeNull();
+        (await session.SynchronizeAsync(TestCt)).ErrorCode().Should().BeNull();
 
         (await session.CopyDocumentVersionsAsync(TestCt)).Should().NotContainKey(link);
     }

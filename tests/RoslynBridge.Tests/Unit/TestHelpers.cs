@@ -3,15 +3,11 @@
 
 using Microsoft.Extensions.Logging.Abstractions;
 using ModelContextProtocol.Protocol;
-using RoslynBridge.Changes;
 using RoslynBridge.Editing;
 using RoslynBridge.Lsp;
-using RoslynBridge.Queries;
 using RoslynBridge.Results;
 using RoslynBridge.Settings;
-using RoslynBridge.Symbols;
 using RoslynBridge.Tests.Fakes;
-using RoslynBridge.Tools;
 
 namespace RoslynBridge.Tests.Unit;
 
@@ -33,7 +29,7 @@ internal static class TestHelpers
 
     public static SettingsMonitor Monitor(BridgeOptions options) => new(() => options);
 
-    public static LspTool CreateTool(
+    public static ToolClient CreateTool(
         string root,
         RoslynSession session,
         BridgeOptions? options = null,
@@ -41,25 +37,34 @@ internal static class TestHelpers
     )
     {
         settings ??= Monitor(options ?? new BridgeOptions { WorkspaceRoot = root });
-        var paths = new WorkspacePaths(root);
-        var queries = new LspQueries(session, paths, new SymbolResolver(session, paths));
-        return new LspTool(
-            settings,
-            paths,
-            session,
-            queries,
-            new LspChanges(session, paths, new WorkspaceEditService(paths), queries),
-            NullLogger<LspTool>.Instance
-        );
+        return new ToolClient(root, session, settings);
     }
 
     public static WorkspaceSnapshot Snapshot(string root) =>
         new(
             new WorkspacePaths(root)
-                .EnumerateWatchedFiles()
+                .EnumerateWatchedFiles(TestCt)
+                .Succeeded()
                 .ToDictionary(file => file.Path, file => file.Stamp, StringComparer.Ordinal),
             new Dictionary<string, int>(StringComparer.Ordinal)
         );
+
+    // Null for a success, so an assertion on the code fails when no error came back
+    public static string? ErrorCode<T>(this Result<T> result) =>
+        result is ToolError error ? error.Code : null;
+
+    public static string? ErrorCode(this Result result) =>
+        result is ToolError error ? error.Code : null;
+
+    public static T Succeeded<T>(this Result<T> result)
+    {
+        if (result.IsError(out var error, out var value))
+        {
+            Assert.Fail($"Expected a value, got the error {error.Code}: {error.Message}");
+        }
+
+        return value;
+    }
 
     public static RoslynLauncher FakeServer(Action<FakeRoslynServer>? configure = null) =>
         (_, _) =>

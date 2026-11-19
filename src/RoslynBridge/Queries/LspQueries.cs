@@ -18,7 +18,7 @@ internal sealed partial class LspQueries(
     private const int MaximumDiagnosticFiles = 1000;
 
     public async Task<Result<ToolResult>> NavigationAsync(
-        LspRequest request,
+        NavigationRequest request,
         CancellationToken cancellationToken
     )
     {
@@ -42,17 +42,14 @@ internal sealed partial class LspQueries(
             return await ImpactAsync(request, cancellationToken);
         }
 
-        var position = await PositionAsync(request, cancellationToken);
-        if (position.Error is { } error)
+        var positioned = await PositionAsync(request.Target, request.Action, cancellationToken);
+        if (positioned.IsError(out var error, out var position))
         {
             return error;
         }
 
-        var result = await NavigateAtAsync(request, position.Value, cancellationToken);
-        if (
-            IsEmpty(result)
-            && await MissingSymbolAsync(position.Value, cancellationToken) is { } missing
-        )
+        var result = await NavigateAtAsync(request, position, cancellationToken);
+        if (IsEmpty(result) && await MissingSymbolAsync(position, cancellationToken) is { } missing)
         {
             return missing;
         }
@@ -60,44 +57,71 @@ internal sealed partial class LspQueries(
         return result;
     }
 
-    public async Task<SymbolList> SymbolsAsync(
-        LspRequest request,
+    public async Task<Result<SymbolList>> SymbolsAsync(
+        SymbolsRequest request,
         CancellationToken cancellationToken
     )
     {
         if (request.File is null)
         {
             var query = request.Query ?? string.Empty;
-            var symbols = await session.RequestAsync(
+            var response = await session.RequestAsync(
                 LspMethods.WorkspaceSymbol,
                 new JsonObject { ["query"] = query },
                 cancellationToken
             );
+            if (response.IsError(out var error, out var found))
+            {
+                return error;
+            }
+
             // Roslyn returns fuzzy matches in file order, so exact and prefix matches come first
-            var ranked = LspJson
-                .ReadArray<LspSymbol>(symbols)
-                .OrderBy(symbol => MatchRank(symbol.Name, query))
-                .ThenBy(symbol => symbol.Location?.Uri, StringComparer.Ordinal)
-                .ThenBy(symbol => symbol.Location?.Range?.Start)
-                .ToArray();
-            return ranked.ToSymbolList(paths, request.Limit, request.Offset);
+            return found
+                .ReadArray<LspSymbol>()
+                .Map(read =>
+                    read.OrderBy(symbol => MatchRank(symbol.Name, query))
+                        .ThenBy(symbol => symbol.Location?.Uri, StringComparer.Ordinal)
+                        .ThenBy(symbol => symbol.Location?.Range?.Start)
+                        .ToArray()
+                        .ToSymbolList(paths, request.Page.Limit, request.Page.Offset)
+                );
         }
 
-        var uri = await session.OpenDocumentAsync(request.File, cancellationToken);
-        var documentSymbols = await session.RequestAsync(
+        if (
+            (await session.OpenDocumentAsync(request.File, cancellationToken)).IsError(
+                out var openError,
+                out var uri
+            )
+        )
+        {
+            return openError;
+        }
+
+        var symbolsResponse = await session.RequestAsync(
             LspMethods.TextDocumentDocumentSymbol,
             LspParameters.Document(uri),
             cancellationToken
         );
-        return documentSymbols.ToSymbolList(paths, request.Limit, request.Offset);
+        if (symbolsResponse.IsError(out var symbolsError, out var documentSymbols))
+        {
+            return symbolsError;
+        }
+
+        var (limit, offset) = request.Page;
+        return documentSymbols.ToSymbolList(paths, limit, offset);
     }
 
     public async Task<Result<DiagnosticReport>> DiagnosticsAsync(
-        LspRequest request,
+        DiagnosticsRequest request,
         CancellationToken cancellationToken
     )
     {
-        var files = SelectFiles(request.File).Take(MaximumDiagnosticFiles + 1).ToArray();
+        if (SelectFiles(request.File, cancellationToken).IsError(out var error, out var selected))
+        {
+            return error;
+        }
+
+        var files = selected.Take(MaximumDiagnosticFiles + 1).ToArray();
         if (files.Length > MaximumDiagnosticFiles)
         {
             return ToolError.InvalidRequest(
@@ -109,39 +133,55 @@ internal sealed partial class LspQueries(
     }
 
     /// <param name="files">Full paths of C# files.</param>
-    public async Task<DiagnosticReport> DiagnosticsAsync(
+    public async Task<Result<DiagnosticReport>> DiagnosticsAsync(
         IReadOnlyCollection<string> files,
-        LspRequest request,
+        DiagnosticsRequest request,
         CancellationToken cancellationToken
     )
     {
-        await session.SynchronizeNewFilesAsync(files, cancellationToken);
+        if (await session.SynchronizeNewFilesAsync(files, cancellationToken) is ToolError error)
+        {
+            return error;
+        }
+
         var scanned = new List<ScannedFile>(files.Count);
         foreach (var batch in files.Chunk(RoslynConnection.MaximumOpenDocuments))
         {
-            scanned.AddRange(await ScanAsync(batch, cancellationToken));
+            if (
+                (await ScanAsync(batch, cancellationToken)).IsError(
+                    out var scanError,
+                    out var batchFiles
+                )
+            )
+            {
+                return scanError;
+            }
+
+            scanned.AddRange(batchFiles);
         }
 
         return Report(scanned, request);
     }
 
+    /// <param name="action">Decides whether the symbol resolves to a type, and whether a usage moves to its declaration.</param>
     public async Task<Result<JsonObject>> PositionAsync(
-        LspRequest request,
+        SymbolTarget target,
+        LspAction action,
         CancellationToken cancellationToken
     )
     {
-        var location = await LocateAsync(request, cancellationToken);
-        if (location.Error is { } error)
+        var located = await LocateAsync(target, action, cancellationToken);
+        if (located.IsError(out var error, out var location))
         {
             return error;
         }
 
-        var (file, position) = location.Value;
+        var (file, position) = location;
         return await PositionParametersAsync(file, position, cancellationToken);
     }
 
     private async Task<Result<ToolResult>> NavigateAtAsync(
-        LspRequest request,
+        NavigationRequest request,
         JsonObject parameters,
         CancellationToken cancellationToken
     )
@@ -153,13 +193,18 @@ internal sealed partial class LspQueries(
 
         if (request.Action is LspAction.References || request.Action.IsAccess)
         {
-            var found = await ReferencesAsync(parameters, cancellationToken);
+            var lookup = await ReferencesAsync(parameters, cancellationToken);
+            if (lookup.IsError(out var error, out var found))
+            {
+                return error;
+            }
+
             if (request.Action.IsAccess)
             {
                 return await AccessAsync(request, found, cancellationToken);
             }
 
-            var references = found.Locations.Page(request.Limit, request.Offset);
+            var references = found.Locations.Page(request.Page.Limit, request.Page.Offset);
             return request.Context ? SourceLines.Add(references, paths) : references;
         }
 
@@ -174,51 +219,82 @@ internal sealed partial class LspQueries(
             ),
         };
 
-        var result = await session.RequestAsync(method, parameters, cancellationToken);
+        var response = await session.RequestAsync(method, parameters, cancellationToken);
+        if (response.IsError(out var requestError, out var result))
+        {
+            return requestError;
+        }
+
         if (request.Action is LspAction.Hover)
         {
             return new HoverText(result.ToHoverText());
         }
 
         // A generated partial, such as a regex generator's, lists its type a second time
-        var locations = result.ToLocations(
+        return result.ToLocations(
             paths,
-            request.Limit,
+            request.Page.Limit,
             skipGenerated: request.Action is LspAction.Implementation,
-            offset: request.Offset
-        );
-        return request.Context ? SourceLines.Add(locations, paths) : locations;
+            offset: request.Page.Offset
+        ) switch
+        {
+            ToolError locationsError => locationsError,
+            Locations locations when request.Context => SourceLines.Add(locations, paths),
+            Locations locations => locations,
+        };
     }
 
     private static bool IsEmpty(Result<ToolResult> result) =>
-        result.Error is null
-        && result.Value
+        result
             is Locations { Total: 0, Generated: 0 }
                 or SymbolList { Total: 0 }
                 or HoverText { Text: "" };
 
-    private async Task<SymbolList> HierarchyAsync(
-        LspRequest request,
+    private async Task<Result<ToolResult>> HierarchyAsync(
+        NavigationRequest request,
         JsonObject position,
         CancellationToken cancellationToken
     )
     {
-        var callers =
+        var callersLookup =
             request.Action is LspAction.Callers
                 ? await session.FindCallersAsync(position, cancellationToken)
                 : ExtensionCallers.NotFound;
-        var (related, accesses, prepared) = callers.Found
-            ? (callers.Calls, 0, true)
-            : await ExpandHierarchyAsync(request.Action, position, cancellationToken);
+        if (callersLookup.IsError(out var callersError, out var callers))
+        {
+            return callersError;
+        }
 
-        var result = await NameSymbolsAsync(
-            related.ToRelatedSymbols(paths, request.Limit, request.Offset) with
+        var expansion = callers.Found
+            ? new Hierarchy(callers.Calls, Accesses: 0, Prepared: true)
+            : await ExpandHierarchyAsync(request.Action, position, cancellationToken);
+        if (expansion.IsError(out var hierarchyError, out var hierarchy))
+        {
+            return hierarchyError;
+        }
+
+        if (
+            hierarchy
+                .Related.ToRelatedSymbols(paths, request.Page.Limit, request.Page.Offset)
+                .IsError(out var symbolsError, out var symbols)
+        )
+        {
+            return symbolsError;
+        }
+
+        var naming = await NameSymbolsAsync(
+            symbols with
             {
-                Accesses = accesses,
-                Hierarchy = prepared ? request.Action : null,
+                Accesses = hierarchy.Accesses,
+                Hierarchy = hierarchy.Prepared ? request.Action : null,
             },
             cancellationToken
         );
+        if (naming.IsError(out var namesError, out var result))
+        {
+            return namesError;
+        }
+
         if (!request.Context)
         {
             return result;
@@ -232,8 +308,7 @@ internal sealed partial class LspQueries(
         return SourceLines.Add(result, paths, callSiteFile);
     }
 
-    /// <returns>Prepared is false when Roslyn found no symbol to expand.</returns>
-    private async Task<(JsonArray Related, int Accesses, bool Prepared)> ExpandHierarchyAsync(
+    private async Task<Result<Hierarchy>> ExpandHierarchyAsync(
         LspAction action,
         JsonObject position,
         CancellationToken cancellationToken
@@ -257,22 +332,40 @@ internal sealed partial class LspQueries(
         };
         var related = new JsonArray();
         var accesses = 0;
-        var items = await session.RequestAsync(prepare, position, cancellationToken) as JsonArray;
-
-        foreach (var item in items ?? [])
+        var preparation = await session.RequestAsync(prepare, position, cancellationToken);
+        if (preparation.IsError(out var error, out var prepared))
         {
-            var expanded = await session.RequestAsync(
+            return error;
+        }
+
+        var items = prepared as JsonArray ?? [];
+        foreach (var item in items)
+        {
+            var expansion = await session.RequestAsync(
                 expand,
                 new JsonObject { ["item"] = item!.DeepClone() },
                 cancellationToken
             );
+            if (expansion.IsError(out var expandError, out var expanded))
+            {
+                return expandError;
+            }
+
             foreach (var entry in expanded as JsonArray ?? [])
             {
+                if (action is not LspAction.Callees)
+                {
+                    related.Add(entry!.DeepClone());
+                    continue;
+                }
+
                 // Outgoing calls also list property, field and constant accesses, which hide the calls
-                if (
-                    action is LspAction.Callees
-                    && !LspSymbolKinds.IsInvocable(entry.Read<LspCall>().To?.Kind)
-                )
+                if (entry.Read<LspCall>().IsError(out var callError, out var call))
+                {
+                    return callError;
+                }
+
+                if (!LspSymbolKinds.IsInvocable(call.To?.Kind))
                 {
                     accesses++;
                     continue;
@@ -282,39 +375,47 @@ internal sealed partial class LspQueries(
             }
         }
 
-        return (related, accesses, items is { Count: > 0 });
+        return new Hierarchy(related, accesses, Prepared: items.Count > 0);
     }
 
-    private async Task<SymbolList> NameSymbolsAsync(
+    private async Task<Result<SymbolList>> NameSymbolsAsync(
         SymbolList symbols,
         CancellationToken cancellationToken
-    ) => symbols with { Items = await NameSymbolsAsync(symbols.Items, cancellationToken) };
+    ) =>
+        (await NameSymbolsAsync(symbols.Items, cancellationToken)).Map(items =>
+            symbols with
+            {
+                Items = items,
+            }
+        );
 
     /// <summary>
     /// Items without a declaration in a workspace file keep Roslyn's name.
     /// </summary>
-    private async Task<List<SymbolItem>> NameSymbolsAsync(
+    private async Task<Result<List<SymbolItem>>> NameSymbolsAsync(
         IReadOnlyList<SymbolItem> items,
         CancellationToken cancellationToken
     )
     {
         var keys = items.Select(DeclarationKey).ToList();
-        var names = await resolver.NamesAsync(
-            keys.Where(key => key.HasValue).Select(key => key!.Value),
-            cancellationToken
+        return (
+            await resolver.NamesAsync(
+                keys.Where(key => key.HasValue).Select(key => key!.Value),
+                cancellationToken
+            )
+        ).Map(names =>
+            items
+                .Zip(keys, (item, key) =>
+                    key is { } found && names.TryGetValue(found, out var name)
+                        ? item with
+                        {
+                            Name = name,
+                            Detail = null,
+                        }
+                        : item
+                )
+                .ToList()
         );
-        return
-        [
-            .. items.Zip(keys, (item, key) =>
-                key is { } found && names.TryGetValue(found, out var name)
-                    ? item with
-                    {
-                        Name = name,
-                        Detail = null,
-                    }
-                    : item
-            ),
-        ];
     }
 
     private static int MatchRank(string name, string query)
@@ -337,26 +438,45 @@ internal sealed partial class LspQueries(
             ? (path, position)
             : null;
 
-    private async Task<IEnumerable<ScannedFile>> ScanAsync(
+    private async Task<Result<List<ScannedFile>>> ScanAsync(
         string[] batch,
         CancellationToken cancellationToken
     )
     {
         // Each open discards diagnostics of earlier solution versions, so the batch opens before any pull
-        var uris = await session.OpenDocumentsAsync(batch, cancellationToken);
+        if (
+            (await session.OpenDocumentsAsync(batch, cancellationToken)).IsError(
+                out var openError,
+                out var uris
+            )
+        )
+        {
+            return openError;
+        }
 
-        var miscellaneous = await session.WaitForProjectsAsync(batch, cancellationToken);
+        var projects = await session.WaitForProjectsAsync(batch, cancellationToken);
+        if (projects.IsError(out var waitError, out var miscellaneous))
+        {
+            return waitError;
+        }
+
         var reports = await Task.WhenAll(
             uris.Select(uri => session.DiagnosticReportAsync(uri, cancellationToken))
         );
-        return batch.Select(
-            (file, index) =>
-                new ScannedFile(file, reports[index].Items ?? [], miscellaneous.Contains(file))
-        );
+        return reports
+            .All()
+            .Map(read =>
+                batch
+                    .Zip(read, (file, report) =>
+                        new ScannedFile(file, report.Items ?? [], miscellaneous.Contains(file))
+                    )
+                    .ToList()
+            );
     }
 
-    private DiagnosticReport Report(List<ScannedFile> scanned, LspRequest request)
+    private DiagnosticReport Report(List<ScannedFile> scanned, DiagnosticsRequest request)
     {
+        var (limit, offset) = request.Page;
         var ids = request.Ids is { Count: > 0 }
             ? request.Ids.ToHashSet(StringComparer.OrdinalIgnoreCase)
             : null;
@@ -390,7 +510,7 @@ internal sealed partial class LspQueries(
         }
 
         var codes = request.Summary ? Summarize(found) : [];
-        var listed = request.Summary ? [] : found.Skip(request.Offset).Take(request.Limit);
+        var listed = request.Summary ? [] : found.Skip(offset).Take(limit);
         return new DiagnosticReport(
             scanned.Count,
             [
@@ -401,15 +521,11 @@ internal sealed partial class LspQueries(
                         [.. group.Select(entry => entry.Diagnostic)]
                     )),
             ],
-            [.. codes.Skip(request.Offset).Take(request.Limit)],
+            [.. codes.Skip(offset).Take(limit)],
             found.Select(entry => entry.File).Distinct(StringComparer.Ordinal).Count(),
             found.Count,
             belowSeverity,
-            LspRequest.NextOffset(
-                request.Offset,
-                request.Limit,
-                request.Summary ? codes.Count : found.Count
-            ),
+            Paging.NextOffset(offset, limit, request.Summary ? codes.Count : found.Count),
             [
                 .. scanned
                     .Where(file => file.Miscellaneous)
@@ -433,28 +549,43 @@ internal sealed partial class LspQueries(
                 .ThenBy(summary => summary.Example.Code, StringComparer.Ordinal),
         ];
 
-    private async Task<JsonObject> PositionParametersAsync(
+    private async Task<Result<JsonObject>> PositionParametersAsync(
         string file,
         SourcePosition position,
         CancellationToken cancellationToken
     )
     {
-        var parameters = LspParameters.Document(
-            await session.OpenDocumentAsync(file, cancellationToken)
-        );
-        var lineCount = SourceLines.ReadLines(paths.Resolve(file)).Length;
-        if (position.Line > lineCount)
+        if (
+            (await session.OpenDocumentAsync(file, cancellationToken)).IsError(
+                out var openError,
+                out var uri
+            )
+        )
         {
-            throw new ToolErrorException(
-                ToolError.InvalidRequest(
-                    string.Create(
-                        CultureInfo.InvariantCulture,
-                        $"Line {position.Line} is past the end of {paths.RelativePath(paths.Resolve(file))}, which has {lineCount} lines."
-                    )
+            return openError;
+        }
+
+        if (paths.Resolve(file).IsError(out var pathError, out var path))
+        {
+            return pathError;
+        }
+
+        if (SourceLines.ReadLines(path).IsError(out var readError, out var lines))
+        {
+            return readError;
+        }
+
+        if (position.Line > lines.Length)
+        {
+            return ToolError.InvalidRequest(
+                string.Create(
+                    CultureInfo.InvariantCulture,
+                    $"Line {position.Line} is past the end of {paths.RelativePath(path)}, which has {lines.Length} lines."
                 )
             );
         }
 
+        var parameters = LspParameters.Document(uri);
         parameters["position"] = new JsonObject
         {
             ["line"] = position.Line - 1,
@@ -467,86 +598,112 @@ internal sealed partial class LspQueries(
     /// A hierarchy or impact request moves a usage position to its declaration.
     /// </summary>
     private async Task<Result<(string File, SourcePosition Position)>> LocateAsync(
-        LspRequest request,
+        SymbolTarget target,
+        LspAction action,
         CancellationToken cancellationToken
     )
     {
-        if (request.Symbol is not null)
+        if (target.Symbol is not null)
         {
-            if (request is not { Line: null, Character: null, EndLine: null, EndCharacter: null })
+            if (target is not { Line: null, Character: null })
             {
                 return ToolError.InvalidRequest(
                     "Pass symbol with an optional file, or a file with a line and character."
                 );
             }
 
-            var resolved = await resolver.ResolveAsync(
-                request.Symbol,
-                request.File,
-                request.Action.TakesType,
-                cancellationToken
-            );
-            if (resolved.Error is { } error)
-            {
-                return error;
-            }
-
-            var declaration = resolved.Value[0];
-            return (declaration.File, new SourcePosition(declaration.Line, declaration.Character));
+            return (
+                await resolver.ResolveAsync(
+                    target.Symbol,
+                    target.File,
+                    action.TakesType,
+                    cancellationToken
+                )
+            ).Map(found => (found[0].File, new SourcePosition(found[0].Line, found[0].Character)));
         }
 
-        if (request is not { File: not null, Line: > 0, Character: > 0 })
+        if (target is not { File: not null, Line: > 0, Character: > 0 })
         {
             return ToolError.InvalidRequest(
                 "Provide symbol, or a file with a one-based line and character."
             );
         }
 
-        var position = new SourcePosition(request.Line.Value, request.Character.Value);
-        return request.Action.IsHierarchy || request.Action is LspAction.Impact
-            ? await DeclarationOfAsync(request.File, position, cancellationToken)
-            : (request.File, position);
+        var position = new SourcePosition(target.Line.Value, target.Character.Value);
+        return action.IsHierarchy || action is LspAction.Impact
+            ? await DeclarationOfAsync(target.File, position, cancellationToken)
+            : (target.File, position);
     }
 
     /// <summary>
     /// Roslyn prepares no call hierarchy at a member access such as <c>value.Method()</c>.
     /// Returns the position itself without a single workspace declaration.
     /// </summary>
-    private async Task<(string File, SourcePosition Position)> DeclarationOfAsync(
+    private async Task<Result<(string File, SourcePosition Position)>> DeclarationOfAsync(
         string file,
         SourcePosition position,
         CancellationToken cancellationToken
     )
     {
-        var definitions = (
-            await session.RequestAsync(
-                LspMethods.TextDocumentDefinition,
-                await PositionParametersAsync(file, position, cancellationToken),
-                cancellationToken
-            )
-        ).FindLocations(paths, skipGenerated: false);
-        return
-            definitions.Positions is [var (found, declaration)]
+        var positioned = await PositionParametersAsync(file, position, cancellationToken);
+        if (positioned.IsError(out var error, out var parameters))
+        {
+            return error;
+        }
+
+        var response = await session.RequestAsync(
+            LspMethods.TextDocumentDefinition,
+            parameters,
+            cancellationToken
+        );
+        if (response.IsError(out var requestError, out var definition))
+        {
+            return requestError;
+        }
+
+        if (
+            definition
+                .FindLocations(paths, skipGenerated: false)
+                .IsError(out var invalid, out var locations)
+        )
+        {
+            return invalid;
+        }
+
+        if (
+            locations.Positions is [var (found, declaration)]
             && paths.ResultFilePath(found) is { } declared
-            ? (declared, declaration)
-            : (file, position);
+        )
+        {
+            return (declared, declaration);
+        }
+
+        return (file, position);
     }
 
-    private IEnumerable<string> SelectFiles(string? file)
+    private Result<List<string>> SelectFiles(string? file, CancellationToken cancellationToken)
     {
         var patterns = file is null or "*" ? ["**/*.cs"] : ExpandBraces(file);
         if (patterns.TrueForAll(pattern => pattern.IndexOfAny(['*', '?']) < 0))
         {
-            return patterns.Select(paths.Resolve).Distinct(StringComparer.Ordinal);
+            return patterns
+                .Select(paths.Resolve)
+                .All()
+                .Map(resolved => resolved.Distinct(StringComparer.Ordinal).ToList());
         }
 
         var matcher = new Matcher(StringComparison.Ordinal);
         matcher.AddIncludePatterns(patterns);
-        return matcher
-            .Match(paths.Root, paths.EnumerateFiles().Select(static file => file.Path))
-            .Files.Select(match => Path.GetFullPath(match.Path, paths.Root))
-            .Where(WorkspacePaths.IsCSharpFile)
-            .Order(StringComparer.Ordinal);
+        return paths
+            .EnumerateFiles(cancellationToken)
+            .Map(files =>
+                matcher
+                    .Match(paths.Root, files.Select(static file => file.Path))
+                    .Files.Select(match => Path.GetFullPath(match.Path, paths.Root))
+                    .Where(WorkspacePaths.IsCSharpFile)
+                    .Order(StringComparer.Ordinal)
+                    .ToList()
+            );
     }
 
     // The matcher has no brace alternatives, so `src/{A,B}.cs` becomes one pattern per alternative
@@ -590,4 +747,7 @@ internal sealed partial class LspQueries(
     }
 
     private sealed record ScannedFile(string Path, LspDiagnostic[] Reported, bool Miscellaneous);
+
+    /// <param name="Prepared">False when Roslyn found no symbol to expand.</param>
+    private readonly record struct Hierarchy(JsonArray Related, int Accesses, bool Prepared);
 }

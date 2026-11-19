@@ -57,7 +57,7 @@ internal sealed partial class RoslynConnection
     private void OnWatcherError(object sender, ErrorEventArgs args) =>
         Interlocked.Exchange(ref _scanRequested, 1);
 
-    private async Task SynchronizeWatchedFilesAsync(CancellationToken cancellationToken)
+    private async Task<Result> SynchronizeWatchedFilesAsync(CancellationToken cancellationToken)
     {
         var changedPaths = _pendingFiles
             .Keys.Where(path => _pendingFiles.TryRemove(path, out _))
@@ -65,37 +65,61 @@ internal sealed partial class RoslynConnection
 
         var scanRequested = Interlocked.Exchange(ref _scanRequested, 0) != 0;
         var rescan = scanRequested || RequiresRescan(changedPaths);
+        // A failed or canceled synchronization sends the same changes again on the next call
+        Result synchronized;
         try
         {
-            if (rescan)
-            {
-                var current = ScanWorkspace(cancellationToken);
-                await NotifyFileChangesAsync(
-                    current,
-                    changedPaths.ToHashSet(StringComparer.Ordinal),
-                    cancellationToken
-                );
-
-                _workspaceFiles = current;
-            }
-            else if (changedPaths.Count > 0)
-            {
-                await SynchronizeChangedPathsAsync(changedPaths, cancellationToken);
-            }
+            synchronized = rescan
+                ? await RescanAsync(changedPaths, cancellationToken)
+                : await SynchronizeChangedPathsAsync(changedPaths, cancellationToken);
         }
-        catch
+        catch (OperationCanceledException)
         {
-            if (scanRequested)
-            {
-                Interlocked.Exchange(ref _scanRequested, 1);
-            }
-
-            foreach (var path in changedPaths)
-            {
-                _pendingFiles[path] = 0;
-            }
-
+            Requeue(changedPaths, scanRequested);
             throw;
+        }
+
+        if (synchronized is ToolError)
+        {
+            Requeue(changedPaths, scanRequested);
+        }
+
+        return synchronized;
+    }
+
+    private async Task<Result> RescanAsync(
+        List<string> changedPaths,
+        CancellationToken cancellationToken
+    )
+    {
+        if (ScanWorkspace(cancellationToken).IsError(out var error, out var current))
+        {
+            return error;
+        }
+
+        var notified = await NotifyFileChangesAsync(
+            current,
+            changedPaths.ToHashSet(StringComparer.Ordinal),
+            cancellationToken
+        );
+        if (notified is not ToolError)
+        {
+            _workspaceFiles = current;
+        }
+
+        return notified;
+    }
+
+    private void Requeue(List<string> changedPaths, bool scanRequested)
+    {
+        if (scanRequested)
+        {
+            Interlocked.Exchange(ref _scanRequested, 1);
+        }
+
+        foreach (var path in changedPaths)
+        {
+            _pendingFiles[path] = 0;
         }
     }
 
@@ -135,11 +159,16 @@ internal sealed partial class RoslynConnection
         return directories;
     }
 
-    private async Task SynchronizeChangedPathsAsync(
+    private async Task<Result> SynchronizeChangedPathsAsync(
         List<string> changedPaths,
         CancellationToken cancellationToken
     )
     {
+        if (changedPaths.Count == 0)
+        {
+            return Result.Success;
+        }
+
         var updates = new Dictionary<string, FileStamp?>(StringComparer.Ordinal);
         var changes = new List<FileChange>();
         foreach (var path in changedPaths)
@@ -163,7 +192,10 @@ internal sealed partial class RoslynConnection
             updates.Add(path, current);
         }
 
-        await SendFileChangesAsync(changes, cancellationToken);
+        if (await SendFileChangesAsync(changes, cancellationToken) is ToolError error)
+        {
+            return error;
+        }
 
         foreach (var (path, stamp) in updates)
         {
@@ -176,9 +208,11 @@ internal sealed partial class RoslynConnection
                 _workspaceFiles.Remove(path);
             }
         }
+
+        return Result.Success;
     }
 
-    private async Task SendFileChangesAsync(
+    private async Task<Result> SendFileChangesAsync(
         List<FileChange> changes,
         CancellationToken cancellationToken
     )
@@ -187,7 +221,7 @@ internal sealed partial class RoslynConnection
         {
             if (callbacks.WatchesFiles)
             {
-                await NotifyAsync(
+                var notified = await NotifyAsync(
                     LspMethods.WorkspaceDidChangeWatchedFiles,
                     new JsonObject
                     {
@@ -197,6 +231,10 @@ internal sealed partial class RoslynConnection
                     },
                     cancellationToken
                 );
+                if (notified is ToolError notifyError)
+                {
+                    return notifyError;
+                }
             }
 
             foreach (var change in batch)
@@ -212,9 +250,17 @@ internal sealed partial class RoslynConnection
                     _createdFiles[change.Path] = 0;
                 }
 
-                await SynchronizeClosedDocumentAsync(change.Path, cancellationToken);
+                if (
+                    await SynchronizeClosedDocumentAsync(change.Path, cancellationToken)
+                    is ToolError error
+                )
+                {
+                    return error;
+                }
             }
         }
+
+        return Result.Success;
     }
 
     // On Windows, Roslyn checks a created or deleted file against the project globs with a lowercase drive

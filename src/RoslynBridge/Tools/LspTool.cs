@@ -12,7 +12,6 @@ using RoslynBridge.Requests;
 using RoslynBridge.Results;
 using RoslynBridge.Settings;
 using RoslynBridge.Telemetry;
-using StreamJsonRpc;
 
 namespace RoslynBridge.Tools;
 
@@ -65,18 +64,25 @@ internal sealed partial class LspTool(
         LspMethods.TextDocumentRangeFormatting,
     }.ToFrozenSet(StringComparer.Ordinal);
 
+    private static readonly ToolError _timedOut = new(
+        ErrorCodes.Timeout,
+        "The LSP operation timed out. No successful result is available."
+    );
+
     private readonly SemaphoreSlim _gate = new(1, 1);
 
     public async Task<CallToolResult> ExecuteAsync(
-        LspRequest request,
+        ToolRequest request,
         CancellationToken cancellationToken
     )
     {
-        if (request.Action is LspAction.Status)
+        // status answers while another call holds the gate
+        if (request is StatusRequest)
         {
             return Response(Status());
         }
 
+        var policy = request.Policy;
         var queued = Stopwatch.GetTimestamp();
         await _gate.WaitAsync(cancellationToken);
         var started = Stopwatch.GetTimestamp();
@@ -87,54 +93,37 @@ internal sealed partial class LspTool(
         {
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             timeout.CancelAfter(
-                session.IsReady && !MayRestartServer(request)
+                session.IsReady && !policy.MayRestart
                     ? settings.CurrentValue.RequestTimeout
                     : settings.CurrentValue.StartupTimeout + settings.CurrentValue.RequestTimeout
             );
-            var resolved = await ResolveFilesAsync(request, timeout.Token);
-            if (resolved.Error is { } fileError)
+            var resolution = await ResolveFilesAsync(request, timeout.Token);
+            if (resolution.IsError(out var fileError, out var resolved))
             {
                 return Failure(fileError);
             }
 
-            var result = await DispatchAsync(
-                resolved.Value.Request,
-                resolved.Value.FileErrors,
+            var dispatched = await DispatchAsync(
+                resolved.Request,
+                resolved.FileErrors,
                 timeout.Token
             );
-            if (result.Error is { } error)
+            if (dispatched.IsError(out var error, out var result))
             {
-                return Failure(error);
+                return ReportFailure(policy.Action, error, cancellationToken);
             }
 
             if (logger.IsEnabled(LogLevel.Debug))
             {
                 var elapsedMilliseconds = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
-                OperationCompleted(logger, request.Action, elapsedMilliseconds);
+                OperationCompleted(logger, policy.Action, elapsedMilliseconds);
             }
 
-            return Response(result.Value, resolved.Value.Files);
-        }
-        catch (EditApplicationException exception)
-        {
-            return ReportApplicationFailure(request.Action, exception, cancellationToken);
+            return Response(result, resolved.Files);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            return Failure(
-                new ToolError(
-                    ErrorCodes.Timeout,
-                    "The LSP operation timed out. No successful result is available."
-                )
-            );
-        }
-        catch (RemoteInvocationException exception)
-        {
-            return Failure(new ToolError(ErrorCodes.Lsp, exception.Message), exception.ErrorCode);
-        }
-        catch (Exception exception) when (ToolFailures.IsReported(exception))
-        {
-            return ReportFailure(request.Action, exception);
+            return Failure(_timedOut);
         }
         finally
         {
@@ -164,29 +153,28 @@ internal sealed partial class LspTool(
             );
     }
 
-    internal static CallToolResult ApplicationFailure(
-        EditApplicationException exception,
+    internal static CallToolResult Failure(ToolError failure) =>
+        Text(ResultText.Error(failure), isError: true);
+
+    private static CallToolResult ApplicationFailure(
+        EditFailure failure,
         bool cancellationRequested
     )
     {
-        var cause = exception.InnerException!;
-        var code = cause switch
-        {
-            OperationCanceledException => cancellationRequested
-                ? ErrorCodes.Cancelled
-                : ErrorCodes.Timeout,
-            _ => ToolFailures.FailureCode(cause),
-        };
-        var message = cause.Message[..Math.Min(cause.Message.Length, MaximumErrorCharacters)];
-        var text = new StringBuilder(ResultText.Error(new ToolError(code, message), rpcCode: null))
+        var code =
+            failure.Code is ErrorCodes.Cancelled
+                ? CancellationCode(cancellationRequested)
+                : failure.Code;
+        var message = failure.Message[..Math.Min(failure.Message.Length, MaximumErrorCharacters)];
+        var text = new StringBuilder(ResultText.Error(new ToolError(code, message)))
             .Append("\nfailed step: ")
-            .Append(exception.Phase.ToString().ToLowerInvariant());
-        if (exception.FailedPath is { } path)
+            .Append(failure.Phase.ToString().ToLowerInvariant());
+        if (failure.FailedPath is { } path)
         {
             text.Append(", path ").Append(path);
         }
 
-        if (exception.FailedOperation is { } operation)
+        if (failure.FailedOperation is { } operation)
         {
             text.Append(", operation ").Append(operation);
         }
@@ -194,20 +182,44 @@ internal sealed partial class LspTool(
         text.Append('\n')
             .Append(
                 ResultText.Render(
-                    exception.Result,
+                    failure.Receipt,
                     ResultText.MaximumResponseCharacters - text.Length
                 )
             );
         return Text(text.ToString(), isError: true);
     }
 
-    internal static CallToolResult Failure(ToolError failure, int? rpcCode = null) =>
-        Text(ResultText.Error(failure, rpcCode), isError: true);
+    private static string CancellationCode(bool cancellationRequested) =>
+        cancellationRequested ? ErrorCodes.Cancelled : ErrorCodes.Timeout;
 
-    private CallToolResult ReportFailure(LspAction action, Exception exception)
+    private CallToolResult ReportFailure(
+        LspAction action,
+        ToolError error,
+        CancellationToken cancellationToken
+    )
     {
-        OperationFailed(logger, action, exception);
-        return Failure(ToolFailures.ToError(exception));
+        if (error is EditFailure failure)
+        {
+            // Files changed outside the bridge's synchronization, so Roslyn starts again from disk
+            changes.Clear();
+            session.RequireReload();
+            OperationFailed(logger, action, failure.Code, failure.Message);
+            return ApplicationFailure(failure, cancellationToken.IsCancellationRequested);
+        }
+
+        // A cancellation without written files ends the call as an exception would
+        if (error.Code is ErrorCodes.Cancelled)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Failure(_timedOut);
+        }
+
+        if (error.IsInfrastructureFailure)
+        {
+            OperationFailed(logger, action, error.Code, error.Message);
+        }
+
+        return Failure(error);
     }
 
     /// <summary>
@@ -218,7 +230,7 @@ internal sealed partial class LspTool(
         CancellationToken cancellationToken
     )
     {
-        if (result.Value is not EditReceipt { Synchronized: true } receipt)
+        if (result is not EditReceipt { Synchronized: true } receipt)
         {
             return result;
         }
@@ -226,7 +238,7 @@ internal sealed partial class LspTool(
         string[] files =
         [
             .. receipt
-                .Operations.Select(operation => paths.Resolve(operation.Path))
+                .Operations.Select(operation => paths.FullPath(operation.Path))
                 .Distinct(StringComparer.Ordinal)
                 .Where(path => WorkspacePaths.IsCSharpFile(path) && File.Exists(path)),
         ];
@@ -235,121 +247,116 @@ internal sealed partial class LspTool(
             return receipt;
         }
 
-        try
-        {
-            return receipt with
-            {
-                Diagnostics = await queries.DiagnosticsAsync(
-                    files,
-                    new LspRequest { Action = LspAction.Diagnostics },
-                    cancellationToken
-                ),
-            };
-        }
         // The edit is already applied, so a failed check returns the receipt without diagnostics
-        catch (Exception exception)
-            when (ToolFailures.IsReported(exception) || exception is OperationCanceledException)
+        var checkedFiles = await queries
+            .DiagnosticsAsync(
+                files,
+                new DiagnosticsRequest(
+                    File: null,
+                    DiagnosticSeverity.Warning,
+                    Ids: null,
+                    Summary: false,
+                    Paging.Default
+                ),
+                cancellationToken
+            )
+            .OrCancelledAsync();
+        if (checkedFiles.IsError(out var error, out var report))
         {
-            OperationFailed(logger, LspAction.Diagnostics, exception);
+            OperationFailed(logger, LspAction.Diagnostics, error.Code, error.Message);
             return receipt;
         }
+
+        return receipt with
+        {
+            Diagnostics = report,
+        };
     }
-
-    private CallToolResult ReportApplicationFailure(
-        LspAction action,
-        EditApplicationException exception,
-        CancellationToken cancellationToken
-    )
-    {
-        changes.Clear();
-        session.RequireReload();
-        OperationFailed(logger, action, exception);
-        return ApplicationFailure(exception, cancellationToken.IsCancellationRequested);
-    }
-
-    private static bool MayRestartServer(LspRequest request) =>
-        request.Action is LspAction.Reload || request.Apply;
-
-    // Diagnostics and a new edit synchronize Roslyn themselves, so an earlier synchronization repeats work
-    private static bool SynchronizesBeforeFirstRead(LspRequest request) =>
-        request.Action is LspAction.Diagnostics
-        || (request.ProposalId is null && request.Action.IsChange);
 
     private async Task<Result<ToolResult>> DispatchAsync(
-        LspRequest request,
+        ToolRequest request,
         IReadOnlyDictionary<string, ToolError> fileErrors,
         CancellationToken cancellationToken
     )
     {
-        if (request.Limit is < 1 or > LspRequest.MaximumResultLimit)
+        if (request.Page.Limit is < 1 or > Paging.MaximumLimit)
         {
-            return ToolError.InvalidRequest(
-                $"Limit must be between 1 and {LspRequest.MaximumResultLimit}."
-            );
+            return ToolError.InvalidRequest($"Limit must be between 1 and {Paging.MaximumLimit}.");
         }
 
-        if (request.Offset < 0)
+        if (request.Page.Offset < 0)
         {
             return ToolError.InvalidRequest("Offset must not be negative.");
         }
 
-        if (
-            request.Action is LspAction.Bulk
-            && request.Queries.Count is < 1 or > LspRequest.MaximumBulkQueries
-        )
+        if (request is BulkRequest { Queries.Count: < 1 or > BulkRequest.MaximumQueries })
         {
             return ToolError.InvalidRequest(
-                $"Queries must hold between 1 and {LspRequest.MaximumBulkQueries} items."
+                $"Queries must hold between 1 and {BulkRequest.MaximumQueries} items."
             );
         }
 
-        if (request.Action is LspAction.Reload)
+        var policy = request.Policy;
+        if (policy.StartsServer)
         {
-            BridgeOptions reloaded;
-            try
+            if (await session.EnsureStartedAsync(cancellationToken) is ToolError startError)
             {
-                reloaded = settings.Reload();
-            }
-            catch (InvalidSettingsException exception)
-            {
-                return new ToolError(ErrorCodes.InvalidSettings, exception.Message);
+                return startError;
             }
 
-            changes.Clear();
-            paths.Exclude(reloaded.Exclude);
-            await session.ReloadAsync(cancellationToken);
-            return Status();
+            if (
+                !policy.SynchronizesItself
+                && await session.SynchronizeAsync(cancellationToken) is ToolError syncError
+            )
+            {
+                return syncError;
+            }
         }
 
-        await session.EnsureStartedAsync(cancellationToken);
-        if (!SynchronizesBeforeFirstRead(request))
+        return request switch
         {
-            await session.SynchronizeAsync(cancellationToken);
-        }
-
-        return request.Action switch
-        {
-            LspAction.Capabilities => new JsonResult(session.Capabilities?.DeepClone()),
-            LspAction.Diagnostics => (
-                await queries.DiagnosticsAsync(request, cancellationToken)
+            StatusRequest => Status(),
+            ReloadRequest => await ReloadAsync(cancellationToken),
+            CapabilitiesRequest => new JsonResult(session.Capabilities?.DeepClone()),
+            DiagnosticsRequest diagnostics => (
+                await queries.DiagnosticsAsync(diagnostics, cancellationToken)
             ).AsToolResult(),
-            LspAction.Symbols when request.Unused => await queries.UnusedAsync(
-                request,
+            SymbolsRequest { Unused: true } symbols => await queries.UnusedAsync(
+                symbols,
                 cancellationToken
             ),
-            LspAction.Symbols => await queries.SymbolsAsync(request, cancellationToken),
-            LspAction.Bulk => await queries.BulkAsync(request, fileErrors, cancellationToken),
-            _ when request.Action.IsNavigation => await queries.NavigationAsync(
-                request,
+            SymbolsRequest symbols => (
+                await queries.SymbolsAsync(symbols, cancellationToken)
+            ).AsToolResult(),
+            BulkRequest bulk => await queries.BulkAsync(bulk, fileErrors, cancellationToken),
+            NavigationRequest navigation => await queries.NavigationAsync(
+                navigation,
                 cancellationToken
             ),
-            _ when request.Action.IsChange => await WithDiagnosticsAsync(
-                await changes.ExecuteAsync(request, cancellationToken),
+            EditRequest edit => await WithDiagnosticsAsync(
+                await changes.ExecuteAsync(edit, cancellationToken),
                 cancellationToken
             ),
-            LspAction.Request => await RawRequestAsync(request, cancellationToken),
-            _ => throw new InvalidOperationException($"Unsupported LSP action: {request.Action}."),
+            RawLspRequest raw => await RawRequestAsync(raw, cancellationToken),
         };
+    }
+
+    private async Task<Result<ToolResult>> ReloadAsync(CancellationToken cancellationToken)
+    {
+        BridgeOptions reloaded;
+        try
+        {
+            reloaded = settings.Reload();
+        }
+        catch (InvalidSettingsException exception)
+        {
+            return new ToolError(ErrorCodes.InvalidSettings, exception.Message);
+        }
+
+        changes.Clear();
+        paths.Exclude(reloaded.Exclude);
+        var restarted = await session.ReloadAsync(cancellationToken);
+        return restarted is ToolError error ? error : Status();
     }
 
     private SessionStatus Status() =>
@@ -362,7 +369,7 @@ internal sealed partial class LspTool(
         );
 
     private async Task<Result<ToolResult>> RawRequestAsync(
-        LspRequest request,
+        RawLspRequest request,
         CancellationToken cancellationToken
     )
     {
@@ -389,19 +396,25 @@ internal sealed partial class LspTool(
             request.Parameters?["textDocument"]?["uri"] is JsonValue uri
             && uri.TryGetValue<string>(out var documentUri)
             && WorkspacePaths.IsCSharpFile(documentUri)
+            && (await session.OpenDocumentAsync(documentUri, cancellationToken)).IsError(
+                out var error,
+                out _
+            )
         )
         {
-            await session.OpenDocumentAsync(documentUri, cancellationToken);
+            return error;
         }
 
         if (request.Method is LspMethods.WorkspaceExecuteCommand)
         {
-            return await changes.ExecuteCommandAsync(request.Parameters ?? [], cancellationToken);
+            return (
+                await changes.ExecuteCommandAsync(request.Parameters ?? [], cancellationToken)
+            ).AsToolResult();
         }
 
-        return new JsonResult(
+        return (
             await session.RequestAsync(request.Method, request.Parameters, cancellationToken)
-        );
+        ).Map<ToolResult>(answer => new JsonResult(answer));
     }
 
     private static bool IsManagedMethod(string method)
@@ -433,10 +446,11 @@ internal sealed partial class LspTool(
         double elapsedMilliseconds
     );
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "LSP {Action} failed")]
+    [LoggerMessage(Level = LogLevel.Warning, Message = "LSP {Action} failed with {Code}: {Reason}")]
     private static partial void OperationFailed(
         ILogger logger,
         LspAction action,
-        Exception exception
+        string code,
+        string reason
     );
 }

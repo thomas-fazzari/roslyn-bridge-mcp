@@ -1,7 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Thomas Fazzari
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-using System.Runtime.ExceptionServices;
 using RoslynBridge.Editing;
 using RoslynBridge.Lsp;
 using RoslynBridge.Queries;
@@ -30,27 +29,21 @@ internal sealed partial class LspChanges(
     public void Clear() => _pending.Clear();
 
     public async Task<Result<ToolResult>> ExecuteAsync(
-        LspRequest request,
+        EditRequest request,
         CancellationToken cancellationToken
-    )
-    {
-        if (request.ProposalId is not null)
+    ) =>
+        request switch
         {
-            return await UseProposalAsync(request, cancellationToken);
-        }
-
-        return request.Action switch
-        {
-            LspAction.Rename => await RenameAsync(request, cancellationToken),
-            LspAction.RenameFile => await RenameFileAsync(request, cancellationToken),
-            LspAction.CodeActions => await CodeActionsAsync(request, cancellationToken),
-            _ => throw new InvalidOperationException(
-                $"Unsupported change action: {request.Action}."
+            { ProposalId: not null } => await UseProposalAsync(request, cancellationToken),
+            RenameRequest rename => await RenameAsync(rename, cancellationToken),
+            RenameFileRequest renameFile => await RenameFileAsync(renameFile, cancellationToken),
+            CodeActionsRequest codeActions => await CodeActionsAsync(
+                codeActions,
+                cancellationToken
             ),
         };
-    }
 
-    internal async Task<ToolResult> CompleteAsync(
+    internal async Task<Result<ToolResult>> CompleteAsync(
         PendingChange change,
         bool apply,
         CancellationToken cancellationToken
@@ -59,19 +52,27 @@ internal sealed partial class LspChanges(
         var edit = change.Edit ?? [];
         if (!apply)
         {
-            var (files, snapshot) = await edits.PreviewAsync(
-                edit,
-                change.Snapshot,
-                cancellationToken
-            );
-            return new ProposalPreview(
-                Remember(change with { Snapshot = snapshot }),
-                files,
-                change.Command?.DeepClone()
-            );
+            return await edits.PreviewAsync(edit, change.Snapshot, cancellationToken) switch
+            {
+                ToolError previewError => previewError,
+                EditPreview preview => new ProposalPreview(
+                    Remember(change with { Snapshot = preview.Snapshot }),
+                    preview.Files,
+                    change.Command?.DeepClone()
+                ),
+            };
         }
 
-        var applied = await edits.ApplyAsync(edit, change.Snapshot, cancellationToken);
+        if (
+            (await edits.ApplyAsync(edit, change.Snapshot, cancellationToken)).IsError(
+                out var applyError,
+                out var applied
+            )
+        )
+        {
+            return applyError;
+        }
+
         var result = applied;
         var phase = EditApplicationPhase.Command;
         try
@@ -79,25 +80,37 @@ internal sealed partial class LspChanges(
             if (change.Command is not null)
             {
                 result = result with { CommandExecuted = false };
-                var commandResult = await ExecuteCommandAsync(change.Command, cancellationToken);
-                result = result.Merge(commandResult) with
+                if (
+                    (await ExecuteCommandAsync(change.Command, cancellationToken)).IsError(
+                        out var commandError,
+                        out var commandReceipt
+                    )
+                )
                 {
-                    CommandResult = commandResult.CommandResult,
+                    if (commandError is EditFailure failure)
+                    {
+                        return Failed(result.Merge(failure.Receipt), phase, failure);
+                    }
+
+                    return AfterWrites(result, phase, commandError);
+                }
+
+                result = result.Merge(commandReceipt) with
+                {
+                    CommandResult = commandReceipt.CommandResult,
                 };
             }
 
             // ExecuteCommandAsync synchronizes only the edits of the command's callbacks
             phase = EditApplicationPhase.Synchronize;
-            await SynchronizeAsync(applied, cancellationToken);
+            if (await SynchronizeAsync(applied, cancellationToken) is ToolError error)
+            {
+                return AfterWrites(result, phase, error);
+            }
         }
-        catch (EditApplicationException exception)
+        catch (OperationCanceledException exception) when (result.Operations.Count != 0)
         {
-            throw ApplicationFailure(result.Merge(exception.Result), exception.Phase, exception);
-        }
-        // A failure before any write leaves the workspace unchanged, so it needs no reload
-        catch (Exception exception) when (result.Operations.Count != 0)
-        {
-            throw ApplicationFailure(result, phase, exception);
+            return Failed(result, phase, ToolError.Cancelled(exception));
         }
 
         return result with
@@ -106,54 +119,40 @@ internal sealed partial class LspChanges(
         };
     }
 
-    public async Task<EditReceipt> ExecuteCommandAsync(
+    public async Task<Result<EditReceipt>> ExecuteCommandAsync(
         JsonObject command,
         CancellationToken cancellationToken
     )
     {
-        var snapshot = await CaptureAsync(cancellationToken);
-        var callbacks = new CommandEdits(edits, snapshot, CaptureAsync, cancellationToken);
-        JsonNode? commandResult = null;
-        Exception? failure = null;
-        var commandExecuted = false;
+        if ((await CaptureAsync(cancellationToken)).IsError(out var captureError, out var captured))
+        {
+            return captureError;
+        }
+
+        var callbacks = new CommandEdits(edits, captured, CaptureAsync, cancellationToken);
+        Result<JsonNode?> executed;
         using (session.HandleWorkspaceEdits(callbacks.ApplyAsync))
         {
-            try
-            {
-                commandResult = await session.RequestAsync(
-                    LspMethods.WorkspaceExecuteCommand,
-                    command,
-                    cancellationToken
-                );
-                commandExecuted = true;
-            }
-            catch (Exception exception)
-            {
-                failure = exception;
-            }
+            executed = await session
+                .RequestAsync(LspMethods.WorkspaceExecuteCommand, command, cancellationToken)
+                .OrCancelledAsync();
         }
 
         await callbacks.DisposeAsync();
 
-        var result = callbacks.Result with { CommandExecuted = commandExecuted };
-        failure = callbacks.Failure ?? failure;
-        if (failure is not null)
+        var executeFailed = executed.IsError(out var executeError, out var commandResult);
+        var result = callbacks.Result with { CommandExecuted = !executeFailed };
+        if ((callbacks.Failure ?? executeError) is { } commandError)
         {
-            if (callbacks.HasChanges)
-            {
-                throw ApplicationFailure(result, EditApplicationPhase.Command, failure);
-            }
-
-            ExceptionDispatchInfo.Throw(failure);
+            return callbacks.HasChanges
+                ? Failed(result, EditApplicationPhase.Command, commandError)
+                : commandError;
         }
 
-        try
+        var synchronized = await SynchronizeAsync(result, cancellationToken).OrCancelledAsync();
+        if (synchronized is ToolError error)
         {
-            await SynchronizeAsync(result, cancellationToken);
-        }
-        catch (Exception exception)
-        {
-            throw ApplicationFailure(result, EditApplicationPhase.Synchronize, exception);
+            return Failed(result, EditApplicationPhase.Synchronize, error);
         }
 
         return result with
@@ -164,7 +163,7 @@ internal sealed partial class LspChanges(
     }
 
     private async Task<Result<ToolResult>> RenameAsync(
-        LspRequest request,
+        RenameRequest request,
         CancellationToken cancellationToken
     )
     {
@@ -173,29 +172,40 @@ internal sealed partial class LspChanges(
             return ToolError.InvalidRequest("Provide newName for the rename.");
         }
 
-        var snapshot = await CaptureAsync(cancellationToken);
-        var position = await queries.PositionAsync(request, cancellationToken);
-        if (position.Error is { } error)
+        if ((await CaptureAsync(cancellationToken)).IsError(out var captureError, out var snapshot))
+        {
+            return captureError;
+        }
+
+        if (
+            (
+                await queries.PositionAsync(request.Target, request.Action, cancellationToken)
+            ).IsError(out var error, out var parameters)
+        )
         {
             return error;
         }
 
-        var parameters = position.Value;
         parameters["newName"] = request.NewName;
-        snapshot = await WithDocumentVersionsAsync(snapshot, cancellationToken);
-        if (
-            await session.RequestAsync(LspMethods.TextDocumentRename, parameters, cancellationToken)
-            is not JsonObject edit
-        )
-        {
-            return await RenameRefusalAsync(parameters, request.NewName, cancellationToken);
-        }
-
-        return await CompleteAsync(
-            new PendingChange(request.Action, snapshot, edit, Command: null),
-            request.Apply,
+        var versioned = await WithDocumentVersionsAsync(snapshot, cancellationToken);
+        return await session.RequestAsync(
+            LspMethods.TextDocumentRename,
+            parameters,
             cancellationToken
-        );
+        ) switch
+        {
+            ToolError renameError => renameError,
+            JsonObject edit => await CompleteAsync(
+                new PendingChange(request.Action, versioned, edit, Command: null),
+                request.Apply,
+                cancellationToken
+            ),
+            JsonNode or null => await RenameRefusalAsync(
+                parameters,
+                request.NewName,
+                cancellationToken
+            ),
+        };
     }
 
     // Roslyn returns no edit both for a position without a symbol and for a name it rejects
@@ -211,12 +221,19 @@ internal sealed partial class LspChanges(
             ["position"] = parameters["position"]!.DeepClone(),
         };
         if (
-            await session.RequestAsync(
-                LspMethods.TextDocumentPrepareRename,
-                position,
-                cancellationToken
-            ) is JsonObject
+            (
+                await session.RequestAsync(
+                    LspMethods.TextDocumentPrepareRename,
+                    position,
+                    cancellationToken
+                )
+            ).IsError(out var error, out var prepared)
         )
+        {
+            return error;
+        }
+
+        if (prepared is JsonObject)
         {
             return ToolError.InvalidRequest(
                 $"Roslyn rejects '{newName}' as the new name. Pass one valid C# identifier, without dots."
@@ -230,7 +247,7 @@ internal sealed partial class LspChanges(
     }
 
     private async Task<Result<ToolResult>> RenameFileAsync(
-        LspRequest request,
+        RenameFileRequest request,
         CancellationToken cancellationToken
     )
     {
@@ -244,21 +261,39 @@ internal sealed partial class LspChanges(
             return ToolError.InvalidRequest("Roslyn does not advertise file rename support.");
         }
 
-        var oldUri = paths.ToUri(request.File);
-        var newUri = paths.ToUri(request.NewName);
-        var snapshot = await CaptureAsync(cancellationToken);
+        if (paths.ToUri(request.File).IsError(out var oldError, out var oldUri))
+        {
+            return oldError;
+        }
+
+        if (paths.ToUri(request.NewName).IsError(out var newError, out var newUri))
+        {
+            return newError;
+        }
+
+        if ((await CaptureAsync(cancellationToken)).IsError(out var captureError, out var snapshot))
+        {
+            return captureError;
+        }
+
         var parameters = new JsonObject
         {
             ["files"] = new JsonArray(new JsonObject { ["oldUri"] = oldUri, ["newUri"] = newUri }),
         };
-        var edit =
-            await session.RequestAsync(
-                LspMethods.WorkspaceWillRenameFiles,
-                parameters,
-                cancellationToken
-            ) as JsonObject
-            ?? [];
-        var changes = ToDocumentChanges(edit);
+        if (
+            (
+                await session.RequestAsync(
+                    LspMethods.WorkspaceWillRenameFiles,
+                    parameters,
+                    cancellationToken
+                )
+            ).IsError(out var renameError, out var renamed)
+        )
+        {
+            return renameError;
+        }
+
+        var changes = ToDocumentChanges(renamed as JsonObject ?? []);
         changes.Add(
             (JsonNode)
                 new JsonObject
@@ -268,7 +303,7 @@ internal sealed partial class LspChanges(
                     ["newUri"] = newUri,
                 }
         );
-        edit = new JsonObject { ["documentChanges"] = changes };
+        var edit = new JsonObject { ["documentChanges"] = changes };
         return await CompleteAsync(
             new PendingChange(request.Action, snapshot, edit, Command: null),
             request.Apply,
@@ -277,7 +312,7 @@ internal sealed partial class LspChanges(
     }
 
     private async Task<Result<ToolResult>> UseProposalAsync(
-        LspRequest request,
+        EditRequest request,
         CancellationToken cancellationToken
     )
     {
@@ -292,10 +327,17 @@ internal sealed partial class LspChanges(
             );
         }
 
-        var result = pending.Actions is not null
-            ? await SelectActionAsync(pending, request, cancellationToken)
-            : await CompleteAsync(pending, request.Apply, cancellationToken);
-        if (request.Apply && result.Error is null)
+        // Only a code action listing holds actions
+        var result =
+            request is CodeActionsRequest codeActions && pending.Actions is not null
+                ? await SelectActionAsync(
+                    pending,
+                    codeActions.ActionIndex,
+                    request.Apply,
+                    cancellationToken
+                )
+                : await CompleteAsync(pending, request.Apply, cancellationToken);
+        if (request.Apply && result is not ToolError)
         {
             _pending.Remove(request.ProposalId!);
         }
@@ -303,31 +345,35 @@ internal sealed partial class LspChanges(
         return result;
     }
 
-    private static EditApplicationException ApplicationFailure(
-        EditReceipt result,
+    /// <summary>
+    /// Keeps the step, path and operation of an earlier failure.
+    /// </summary>
+    private static EditFailure Failed(
+        EditReceipt receipt,
         EditApplicationPhase phase,
-        Exception exception
+        ToolError error
     ) =>
-        exception is EditApplicationException application
-            ? new EditApplicationException(
-                result,
-                application.Phase,
-                application.FailedPath,
-                application.FailedOperation,
-                application.InnerException!
-            )
-            : new EditApplicationException(
-                result,
-                phase,
-                failedPath: null,
-                failedOperation: null,
-                exception
-            );
+        error is EditFailure failure
+            ? failure with
+            {
+                Receipt = receipt,
+            }
+            : new EditFailure(error, receipt, phase);
+
+    // A failure before any write leaves the workspace unchanged, so it needs no reload
+    private static ToolError AfterWrites(
+        EditReceipt receipt,
+        EditApplicationPhase phase,
+        ToolError error
+    ) => receipt.Operations.Count == 0 ? error : Failed(receipt, phase, error);
 
     /// <summary>
     /// Reloads Roslyn when a created C# file stays outside every project.
     /// </summary>
-    private async Task SynchronizeAsync(EditReceipt receipt, CancellationToken cancellationToken)
+    private async Task<Result> SynchronizeAsync(
+        EditReceipt receipt,
+        CancellationToken cancellationToken
+    )
     {
         var written = receipt
             .Operations.SelectMany(operation =>
@@ -335,9 +381,12 @@ internal sealed partial class LspChanges(
                     ? [operation.Path, oldPath]
                     : (string[])[operation.Path]
             )
-            .Select(paths.Resolve)
+            .Select(paths.FullPath)
             .ToList();
-        await session.SynchronizeFilesAsync(written, cancellationToken);
+        if (await session.SynchronizeFilesAsync(written, cancellationToken) is ToolError error)
+        {
+            return error;
+        }
 
         string[] created =
         [
@@ -345,30 +394,47 @@ internal sealed partial class LspChanges(
                 .Operations.Where(operation =>
                     operation.Kind is FileOperation.Create or FileOperation.Rename
                 )
-                .Select(operation => paths.Resolve(operation.Path))
+                .Select(operation => paths.FullPath(operation.Path))
                 .Where(path => WorkspacePaths.IsCSharpFile(path) && File.Exists(path)),
         ];
+        if (created.Length == 0)
+        {
+            return Result.Success;
+        }
+
         if (
-            created.Length != 0
-            && (await session.WaitForProjectsAsync(created, cancellationToken)).Count != 0
+            (await session.WaitForProjectsAsync(created, cancellationToken)).IsError(
+                out var waitError,
+                out var outside
+            )
         )
         {
-            _pending.Clear();
-            await session.ReloadAsync(cancellationToken);
+            return waitError;
         }
+
+        if (outside.Count == 0)
+        {
+            return Result.Success;
+        }
+
+        _pending.Clear();
+        return await session.ReloadAsync(cancellationToken);
     }
 
     /// <summary>
     /// Call before the first Roslyn read of a change.
     /// </summary>
-    private async Task<WorkspaceSnapshot> CaptureAsync(CancellationToken cancellationToken)
-    {
-        var files = await session.SynchronizeWorkspaceAsync(cancellationToken);
-        return new WorkspaceSnapshot(
-            files,
-            await session.CopyDocumentVersionsAsync(cancellationToken)
-        );
-    }
+    private async Task<Result<WorkspaceSnapshot>> CaptureAsync(
+        CancellationToken cancellationToken
+    ) =>
+        await session.SynchronizeWorkspaceAsync(cancellationToken) switch
+        {
+            ToolError error => error,
+            Dictionary<string, FileStamp> files => new WorkspaceSnapshot(
+                files,
+                await session.CopyDocumentVersionsAsync(cancellationToken)
+            ),
+        };
 
     // Opening a document after the capture changes versions, so they are recorded again before the edit request
     private async Task<WorkspaceSnapshot> WithDocumentVersionsAsync(

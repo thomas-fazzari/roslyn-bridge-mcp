@@ -27,7 +27,7 @@ public sealed class WorkspacePathsTests : TempWorkspaceTests
         );
         var paths = new WorkspacePaths(Root);
 
-        paths.EnumerateFiles().Select(file => file.Path).Should().Equal(source);
+        paths.EnumerateFiles(TestCt).Succeeded().Select(file => file.Path).Should().Equal(source);
     }
 
     [Theory]
@@ -42,7 +42,7 @@ public sealed class WorkspacePathsTests : TempWorkspaceTests
         );
         var paths = new WorkspacePaths(Root);
 
-        paths.EnumerateFiles().Select(file => file.Path).Should().Equal(source);
+        paths.EnumerateFiles(TestCt).Succeeded().Select(file => file.Path).Should().Equal(source);
         paths.IsWatchedDirectory(directory).Should().BeTrue();
     }
 
@@ -61,7 +61,12 @@ public sealed class WorkspacePathsTests : TempWorkspaceTests
         {
             var paths = new WorkspacePaths(Root);
 
-            paths.EnumerateFiles().Select(file => file.Path).Should().Equal(source);
+            paths
+                .EnumerateFiles(TestCt)
+                .Succeeded()
+                .Select(file => file.Path)
+                .Should()
+                .Equal(source);
         }
         finally
         {
@@ -101,17 +106,12 @@ public sealed class WorkspacePathsTests : TempWorkspaceTests
     }
 
     [Fact]
-    public void ResolveReportsAPathWithANullCharacterAsAnInvalidRequest()
-    {
-        FluentActions
-            .Invoking(Resolve)
+    public void ResolveReportsAPathWithANullCharacterAsAnInvalidRequest() =>
+        new WorkspacePaths(Root)
+            .Resolve("src/A\0.cs")
+            .ErrorCode()
             .Should()
-            .Throw<ToolErrorException>()
-            .Which.Error.Code.Should()
             .Be(ErrorCodes.InvalidRequest);
-
-        string Resolve() => new WorkspacePaths(Root).Resolve("src/A\0.cs");
-    }
 
     [Theory]
     [InlineData(false)]
@@ -140,18 +140,11 @@ public sealed class WorkspacePathsTests : TempWorkspaceTests
             Assert.Skip("Creating a symbolic link needs privileges on this platform.");
         }
 
-        FluentActions
-            .Invoking(Resolve)
+        new WorkspacePaths(Root)
+            .Resolve(linkDirectory ? Path.Combine("Linked", "Source.cs") : "Linked.cs")
+            .ErrorCode()
             .Should()
-            .Throw<ToolErrorException>()
-            .Which.Error.Code.Should()
             .Be(ErrorCodes.InvalidRequest);
-        return;
-
-        string Resolve() =>
-            new WorkspacePaths(Root).Resolve(
-                linkDirectory ? Path.Combine("Linked", "Source.cs") : "Linked.cs"
-            );
     }
 
     [Fact]
@@ -170,9 +163,9 @@ public sealed class WorkspacePathsTests : TempWorkspaceTests
         var paths = new WorkspacePaths(Root);
 
         paths.Exclude([samples]);
-        var first = paths.EnumerateFiles().Select(file => file.Path).ToList();
+        var first = paths.EnumerateFiles(TestCt).Succeeded().ConvertAll(file => file.Path);
         paths.Exclude([vendor]);
-        var second = paths.EnumerateFiles().Select(file => file.Path).ToList();
+        var second = paths.EnumerateFiles(TestCt).Succeeded().ConvertAll(file => file.Path);
 
         first.Should().BeEquivalentTo([kept, inVendor]);
         second.Should().BeEquivalentTo([kept, inSamples]);

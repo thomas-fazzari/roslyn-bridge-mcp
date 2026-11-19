@@ -92,7 +92,7 @@ public sealed class LargeResponseTests : TempWorkspaceTests
         // One location per file, so each location takes a line of about 160 characters
         var locations = new JsonArray([
             .. Enumerable
-                .Range(0, LspRequest.MaximumResultLimit)
+                .Range(0, Paging.MaximumLimit)
                 .Select(index =>
                     Location(
                         Path.Combine(
@@ -121,7 +121,7 @@ public sealed class LargeResponseTests : TempWorkspaceTests
                 File = SourceFile,
                 Line = 1,
                 Character = 7,
-                Limit = LspRequest.MaximumResultLimit,
+                Limit = Paging.MaximumLimit,
             },
             TestCt
         );

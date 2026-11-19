@@ -46,32 +46,38 @@ internal sealed class EditTool(LspTool lsp)
         [Description("Apply the proposal. Without it, the call only returns a preview.")]
             bool apply = false,
         [Description("Also list suppress or configure code actions.")] bool all = false,
-        [Description(ToolDescriptions.Limit)] int limit = LspRequest.DefaultResultLimit,
+        [Description(ToolDescriptions.Limit)] int limit = Paging.DefaultLimit,
         CancellationToken cancellationToken = default
     ) =>
         lsp.ExecuteAsync(
-            new LspRequest
+            action switch
             {
-                Limit = limit,
-                Action = action switch
-                {
-                    EditAction.Rename => LspAction.Rename,
-                    EditAction.RenameFile => LspAction.RenameFile,
-                    EditAction.CodeActions => LspAction.CodeActions,
-                    _ => throw new ArgumentOutOfRangeException(nameof(action)),
-                },
-                Symbol = symbol,
-                File = file,
-                Line = line,
-                Character = character,
-                EndLine = endLine,
-                EndCharacter = endCharacter,
-                NewName = newName,
-                Diagnostic = diagnostic,
-                ActionIndex = actionIndex,
-                ProposalId = proposalId,
-                Apply = apply,
-                All = all,
+                EditAction.Rename => new RenameRequest(
+                    new SymbolTarget(symbol, file, line, character),
+                    newName,
+                    proposalId,
+                    apply,
+                    new Paging(limit, 0)
+                ),
+                EditAction.RenameFile => new RenameFileRequest(
+                    file,
+                    newName,
+                    proposalId,
+                    apply,
+                    new Paging(limit, 0)
+                ),
+                EditAction.CodeActions => new CodeActionsRequest(
+                    new SymbolTarget(symbol, file, line, character),
+                    endLine,
+                    endCharacter,
+                    diagnostic,
+                    actionIndex,
+                    all,
+                    new Paging(limit, 0),
+                    proposalId,
+                    apply
+                ),
+                _ => throw new ArgumentOutOfRangeException(nameof(action)),
             },
             cancellationToken
         );

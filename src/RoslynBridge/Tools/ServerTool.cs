@@ -31,19 +31,13 @@ internal sealed class ServerTool(LspTool lsp)
         CancellationToken cancellationToken = default
     ) =>
         lsp.ExecuteAsync(
-            new LspRequest
+            action switch
             {
-                Action = action switch
-                {
-                    ServerAction.Status => LspAction.Status,
-                    ServerAction.Capabilities => LspAction.Capabilities,
-                    ServerAction.Reload => LspAction.Reload,
-                    ServerAction.Request => LspAction.Request,
-                    _ => throw new ArgumentOutOfRangeException(nameof(action)),
-                },
-                Method = method,
-                Parameters = parameters,
-                Apply = apply,
+                ServerAction.Status => new StatusRequest(),
+                ServerAction.Capabilities => new CapabilitiesRequest(),
+                ServerAction.Reload => new ReloadRequest(),
+                ServerAction.Request => new RawLspRequest(method, parameters, apply),
+                _ => throw new ArgumentOutOfRangeException(nameof(action)),
             },
             cancellationToken
         );

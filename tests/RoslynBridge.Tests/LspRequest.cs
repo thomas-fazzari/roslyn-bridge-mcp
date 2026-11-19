@@ -1,14 +1,16 @@
 // SPDX-FileCopyrightText: 2026 Thomas Fazzari
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-namespace RoslynBridge.Requests;
+using RoslynBridge.Requests;
+using RoslynBridge.Tools;
 
+namespace RoslynBridge.Tests;
+
+/// <summary>
+/// The arguments of one tool call, with the action naming the tool that owns it.
+/// </summary>
 internal sealed record LspRequest
 {
-    internal const int DefaultResultLimit = 50;
-    internal const int MaximumResultLimit = 250;
-    internal const int MaximumBulkQueries = 16;
-
     public required LspAction Action { get; init; }
 
     public string? File { get; init; }
@@ -47,21 +49,22 @@ internal sealed record LspRequest
 
     public JsonObject? Parameters { get; init; }
 
-    /// <summary>
-    /// The bulk request's limit, offset and context apply to each of them.
-    /// </summary>
     public IReadOnlyList<LspRequest> Queries { get; init; } = [];
 
-    public DiagnosticSeverity Severity { get; init; } = DiagnosticSeverity.Warning;
+    /// <summary>
+    /// Without it, the diagnostics tool uses the project setting.
+    /// </summary>
+    public DiagnosticSeverity? Severity { get; init; }
 
     public IReadOnlyList<string>? Ids { get; init; }
 
     public bool Summary { get; init; }
 
-    public int Limit { get; init; } = DefaultResultLimit;
+    public int Limit { get; init; } = Paging.DefaultLimit;
 
     public int Offset { get; init; }
 
-    internal static int? NextOffset(int offset, int limit, int total) =>
-        offset < total - limit ? offset + limit : null;
+    public bool IsNavigation => Enum.TryParse<NavigationAction>(Action.ToString(), out _);
+
+    public bool IsEdit => Enum.TryParse<EditAction>(Action.ToString(), out _);
 }

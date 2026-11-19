@@ -56,30 +56,25 @@ internal static class SourceLines
     /// <summary>
     /// Returns null when the file cannot be read.
     /// </summary>
-    public static string[]? TryReadLines(string? file)
-    {
-        if (file is null)
-        {
-            return null;
-        }
+    public static string[]? TryReadLines(string? file) =>
+        file is not null && ReadLines(file) is string[] lines ? lines : null;
 
+    public static Result<string[]> ReadLines(string file)
+    {
+        string source;
         try
         {
-            return ReadLines(file);
+            source = File.ReadAllText(file);
         }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        catch (Exception exception) when (ToolError.IsIo(exception))
         {
-            return null;
+            return ToolError.Io(exception.Message);
         }
-    }
 
-    public static string[] ReadLines(string file)
-    {
-        var source = File.ReadAllText(file);
-        return
-        [
-            .. TextEdits.GetLines(source).Select(line => source.Substring(line.Start, line.Length)),
-        ];
+        return TextEdits
+            .GetLines(source)
+            .Select(line => source.Substring(line.Start, line.Length))
+            .ToArray();
     }
 
     private static Dictionary<int, string>? LinesOf(

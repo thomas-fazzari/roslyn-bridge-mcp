@@ -24,7 +24,7 @@ public sealed class CommandEditsTests : TempWorkspaceTests
             _ =>
             {
                 captureCalls++;
-                throw new IOException("capture failed");
+                return Task.FromResult<Result<WorkspaceSnapshot>>(ToolError.Io("capture failed"));
             },
             TestCt
         );
@@ -36,9 +36,10 @@ public sealed class CommandEditsTests : TempWorkspaceTests
 
         acknowledgement.Applied.Should().BeTrue();
         captureCalls.Should().Be(1);
-        commandEdits.Failure.Should().BeOfType<EditApplicationException>();
-        ((EditApplicationException)commandEdits.Failure!)
-            .Phase.Should()
+        commandEdits
+            .Failure.Should()
+            .BeOfType<EditFailure>()
+            .Which.Phase.Should()
             .Be(EditApplicationPhase.Synchronize);
         commandEdits.Result.FileCount.Should().Be(1);
         commandEdits.Result.Operations[0].Path.Should().Be(SourceFile);
@@ -63,7 +64,7 @@ public sealed class CommandEditsTests : TempWorkspaceTests
         await using var commandEdits = new CommandEdits(
             service,
             snapshot,
-            _ => Task.FromResult(Snapshot(Root)),
+            _ => Task.FromResult<Result<WorkspaceSnapshot>>(Snapshot(Root)),
             TestCt
         );
 
@@ -105,7 +106,7 @@ public sealed class CommandEditsTests : TempWorkspaceTests
         );
         var captureCalls = 0;
 
-        async Task<WorkspaceSnapshot> CaptureAsync(CancellationToken token)
+        async Task<Result<WorkspaceSnapshot>> CaptureAsync(CancellationToken token)
         {
             if (Interlocked.Increment(ref captureCalls) == 1)
             {
@@ -154,7 +155,7 @@ public sealed class CommandEditsTests : TempWorkspaceTests
         var captureStarted = new TaskCompletionSource(
             TaskCreationOptions.RunContinuationsAsynchronously
         );
-        async Task<WorkspaceSnapshot> CaptureAsync(CancellationToken token)
+        async Task<Result<WorkspaceSnapshot>> CaptureAsync(CancellationToken token)
         {
             captureStarted.SetResult();
             await Task.Delay(Timeout.InfiniteTimeSpan, token);
@@ -178,9 +179,9 @@ public sealed class CommandEditsTests : TempWorkspaceTests
         // Stop waits for the callback's work, not for its task, which completes just after
         commandEdits
             .Failure.Should()
-            .BeOfType<EditApplicationException>()
-            .Which.InnerException.Should()
-            .BeAssignableTo<OperationCanceledException>();
+            .BeOfType<EditFailure>()
+            .Which.Code.Should()
+            .Be(ErrorCodes.Cancelled);
         commandEdits.Result.Applied.Should().BeTrue();
         commandEdits.Result.FileCount.Should().Be(1);
         (await pending).Applied.Should().BeTrue();

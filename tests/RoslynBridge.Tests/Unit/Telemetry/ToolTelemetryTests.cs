@@ -26,7 +26,7 @@ public sealed class ToolTelemetryTests : IAsyncDisposable
         .FullName;
     private readonly TelemetryRecorder _recorder = new();
     private RoslynSession? _session;
-    private LspTool? _tool;
+    private ToolClient? _tool;
 
     [Fact(Timeout = TimeoutMilliseconds)]
     public async Task RecordsASuccessfulCallAndNestsItsRoslynRequestsAsync()
@@ -96,10 +96,7 @@ public sealed class ToolTelemetryTests : IAsyncDisposable
             .Contain(BridgeTelemetry.ErrorType, ErrorCodes.Lsp);
         var request = _recorder.Span(LspMethods.TextDocumentReferences);
         request.Status.Should().Be(ActivityStatusCode.Error);
-        request
-            .GetTagItem(BridgeTelemetry.ErrorType)
-            .Should()
-            .Be(typeof(RemoteInvocationException).FullName);
+        request.GetTagItem(BridgeTelemetry.ErrorType).Should().Be(ErrorCodes.Lsp);
     }
 
     public async ValueTask DisposeAsync()
@@ -150,6 +147,6 @@ public sealed class ToolTelemetryTests : IAsyncDisposable
             })
         );
         _tool = CreateTool(_root, _session);
-        return ToolServer.StartAsync(_tool, cancellationToken);
+        return ToolServer.StartAsync(_tool.Lsp, cancellationToken);
     }
 }

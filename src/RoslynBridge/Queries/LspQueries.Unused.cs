@@ -13,7 +13,7 @@ internal sealed partial class LspQueries
     /// The types and members of the selected files that no live code uses, in file and position order.
     /// </summary>
     public async Task<Result<ToolResult>> UnusedAsync(
-        LspRequest request,
+        SymbolsRequest request,
         CancellationToken cancellationToken
     )
     {
@@ -22,7 +22,15 @@ internal sealed partial class LspQueries
             return ToolError.InvalidRequest("unused takes file, not query.");
         }
 
-        var files = SelectFiles(request.File).Take(MaximumDiagnosticFiles + 1).ToArray();
+        if (
+            SelectFiles(request.File, cancellationToken)
+                .IsError(out var selectError, out var selected)
+        )
+        {
+            return selectError;
+        }
+
+        var files = selected.Take(MaximumDiagnosticFiles + 1).ToArray();
         if (files.Length > MaximumDiagnosticFiles)
         {
             return ToolError.InvalidRequest(
@@ -42,14 +50,22 @@ internal sealed partial class LspQueries
             );
         }
 
-        await session.SynchronizeNewFilesAsync(files, cancellationToken);
-        var found = await session.FindUnusedAsync(files, cancellationToken);
-        if (found.Error is { } error)
+        if (await session.SynchronizeNewFilesAsync(files, cancellationToken) is ToolError syncError)
+        {
+            return syncError;
+        }
+
+        var unused = await session.FindUnusedAsync(files, cancellationToken);
+        if (unused.IsError(out var error, out var found))
         {
             return error;
         }
 
-        var report = found.Value.Read<UnusedReport>();
+        if (found.Read<UnusedReport>().IsError(out var invalid, out var report))
+        {
+            return invalid;
+        }
+
         var entries = report.Symbols;
         if (entries.SelectMany(entry => entry.Via).Any(user => user < 0 || user >= entries.Length))
         {
@@ -58,13 +74,21 @@ internal sealed partial class LspQueries
 
         List<int> page =
         [
-            .. Enumerable.Range(0, entries.Length).Skip(request.Offset).Take(request.Limit),
+            .. Enumerable
+                .Range(0, entries.Length)
+                .Skip(request.Page.Offset)
+                .Take(request.Page.Limit),
         ];
         List<int> named = [.. page.Concat(page.SelectMany(index => entries[index].Via)).Distinct()];
-        var names = await NameSymbolsAsync(
+        var naming = await NameSymbolsAsync(
             [.. named.Select(index => entries[index].Symbol.ToSymbolItem(paths))],
             cancellationToken
         );
+        if (naming.IsError(out var namesError, out var names))
+        {
+            return namesError;
+        }
+
         var item = named.Zip(names).ToDictionary(entry => entry.First, entry => entry.Second);
 
         return new UnusedSymbols(
@@ -76,7 +100,7 @@ internal sealed partial class LspQueries
                 )),
             ],
             entries.Length,
-            LspRequest.NextOffset(request.Offset, request.Limit, entries.Length),
+            Paging.NextOffset(request.Page.Offset, request.Page.Limit, entries.Length),
             files.Length,
             report.Skipped,
             [.. report.Unmatched.Select(paths.RelativePath)]

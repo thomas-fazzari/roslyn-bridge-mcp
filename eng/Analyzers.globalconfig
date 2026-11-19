@@ -81,6 +81,8 @@ dotnet_diagnostic.CA1014.severity = none
 dotnet_diagnostic.CA1031.severity = none
 dotnet_diagnostic.CA1032.severity = none
 dotnet_diagnostic.CA1308.severity = none
+# Reports "always true" for every type pattern on a C# 15 union (e.g. `result is ToolError error`)
+dotnet_diagnostic.CA1508.severity = none
 dotnet_diagnostic.CA1515.severity = none
 dotnet_diagnostic.CA1711.severity = none
 dotnet_diagnostic.CA1812.severity = none

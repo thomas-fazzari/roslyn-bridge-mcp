@@ -15,6 +15,10 @@ internal sealed partial class RoslynConnection
     private const int FileChanged = 2;
     private const int FileDeleted = 3;
 
+    private static readonly ToolError _oversizedDocument = ToolError.InvalidRequest(
+        "The file exceeds the one million UTF-16 code unit limit."
+    );
+
     // Held for document state and its notifications, never across a Roslyn request or wait
     private readonly SemaphoreSlim _documentLock = new(1, 1);
 
@@ -39,7 +43,11 @@ internal sealed partial class RoslynConnection
         );
     }
 
-    public async Task<string> OpenDocumentAsync(string file, CancellationToken cancellationToken)
+    /// <returns>The document URI.</returns>
+    public async Task<Result<string>> OpenDocumentAsync(
+        string file,
+        CancellationToken cancellationToken
+    )
     {
         using var held = await LockDocumentsAsync(cancellationToken);
         return await OpenDocumentCoreAsync(file, cancellationToken);
@@ -48,7 +56,7 @@ internal sealed partial class RoslynConnection
     /// <summary>
     /// Opens the documents one at a time, so their versions stay in order.
     /// </summary>
-    public async Task<List<string>> OpenDocumentsAsync(
+    public async Task<Result<List<string>>> OpenDocumentsAsync(
         IReadOnlyCollection<string> files,
         CancellationToken cancellationToken
     )
@@ -57,13 +65,23 @@ internal sealed partial class RoslynConnection
         var uris = new List<string>(files.Count);
         foreach (var file in files)
         {
-            uris.Add(await OpenDocumentCoreAsync(file, cancellationToken));
+            if (
+                (await OpenDocumentCoreAsync(file, cancellationToken)).IsError(
+                    out var error,
+                    out var uri
+                )
+            )
+            {
+                return error;
+            }
+
+            uris.Add(uri);
         }
 
         return uris;
     }
 
-    public Task SynchronizeAsync(CancellationToken cancellationToken) =>
+    public Task<Result> SynchronizeAsync(CancellationToken cancellationToken) =>
         BridgeTelemetry.TraceAsync(
             "roslyn_bridge.workspace.sync",
             BridgeTelemetry.SyncDuration,
@@ -73,7 +91,7 @@ internal sealed partial class RoslynConnection
     /// <summary>
     /// Sends files the bridge changed without waiting for the file watcher.
     /// </summary>
-    public async Task SynchronizeFilesAsync(
+    public Task<Result> SynchronizeFilesAsync(
         IEnumerable<string> files,
         CancellationToken cancellationToken
     )
@@ -83,14 +101,14 @@ internal sealed partial class RoslynConnection
             QueueFile(file);
         }
 
-        await SynchronizeAsync(cancellationToken);
+        return SynchronizeAsync(cancellationToken);
     }
 
     /// <summary>
     /// Announces requested files that the file watcher has not reported yet.
     /// Without the creation notice, Roslyn keeps a new file outside its project.
     /// </summary>
-    public async Task SynchronizeNewFilesAsync(
+    public async Task<Result> SynchronizeNewFilesAsync(
         IEnumerable<string> files,
         CancellationToken cancellationToken
     )
@@ -101,47 +119,57 @@ internal sealed partial class RoslynConnection
             unknown = [.. files.Where(file => !_workspaceFiles.ContainsKey(file))];
         }
 
-        await SynchronizeFilesAsync(unknown, cancellationToken);
+        return await SynchronizeFilesAsync(unknown, cancellationToken);
     }
 
     /// <summary>
     /// Sends every difference from what Roslyn last received. Returns the stamps Roslyn now has.
     /// </summary>
-    public async Task<Dictionary<string, FileStamp>> SynchronizeWorkspaceAsync(
+    public async Task<Result<Dictionary<string, FileStamp>>> SynchronizeWorkspaceAsync(
         CancellationToken cancellationToken
     )
     {
         Interlocked.Exchange(ref _scanRequested, 1);
-        await SynchronizeAsync(cancellationToken);
+        if (await SynchronizeAsync(cancellationToken) is ToolError error)
+        {
+            return error;
+        }
+
         using var held = await LockDocumentsAsync(cancellationToken);
         return new Dictionary<string, FileStamp>(_workspaceFiles, StringComparer.Ordinal);
     }
 
-    public async Task<string[]> WorkspaceFilesAsync(CancellationToken cancellationToken)
+    public async Task<Result<string[]>> WorkspaceFilesAsync(CancellationToken cancellationToken)
     {
-        await SynchronizeAsync(cancellationToken);
+        if (await SynchronizeAsync(cancellationToken) is ToolError error)
+        {
+            return error;
+        }
+
         using var held = await LockDocumentsAsync(cancellationToken);
-        return [.. _workspaceFiles.Keys];
+        return _workspaceFiles.Keys.ToArray();
     }
 
-    private async Task<string> OpenDocumentCoreAsync(
+    private async Task<Result<string>> OpenDocumentCoreAsync(
         string file,
         CancellationToken cancellationToken
     )
     {
-        var path = paths.Resolve(file);
+        if (paths.Resolve(file).IsError(out var pathError, out var path))
+        {
+            return pathError;
+        }
+
         if (!WorkspacePaths.IsCSharpFile(path))
         {
-            throw new ToolErrorException(
-                ToolError.InvalidRequest($"Only C# files can be opened: {paths.RelativePath(path)}")
+            return ToolError.InvalidRequest(
+                $"Only C# files can be opened: {paths.RelativePath(path)}"
             );
         }
 
         if (ReadDocumentStamp(path) is not { } stamp)
         {
-            throw new ToolErrorException(
-                ToolError.InvalidRequest($"The file does not exist: {paths.RelativePath(path)}")
-            );
+            return ToolError.InvalidRequest($"The file does not exist: {paths.RelativePath(path)}");
         }
 
         var uri = new Uri(path).AbsoluteUri;
@@ -155,13 +183,24 @@ internal sealed partial class RoslynConnection
 
         if (_documents.Count >= MaximumOpenDocuments)
         {
-            var oldest = _openedOrder.First
-                ?? throw new InvalidOperationException("The open document order is empty.");
-            await CloseDocumentAsync(oldest.Value, cancellationToken);
+            var closed = await CloseDocumentAsync(_openedOrder.First!.Value, cancellationToken);
+            if (closed is ToolError closeError)
+            {
+                return closeError;
+            }
         }
 
-        var text = await ReadDocumentAsync(path, cancellationToken);
-        await NotifyAsync(
+        if (
+            (await ReadDocumentAsync(path, cancellationToken)).IsError(
+                out var readError,
+                out var text
+            )
+        )
+        {
+            return readError;
+        }
+
+        var opened = await NotifyAsync(
             LspMethods.TextDocumentDidOpen,
             new JsonObject
             {
@@ -175,6 +214,10 @@ internal sealed partial class RoslynConnection
             },
             cancellationToken
         );
+        if (opened is ToolError openError)
+        {
+            return openError;
+        }
 
         _documents.Add(
             path,
@@ -184,16 +227,19 @@ internal sealed partial class RoslynConnection
         return uri;
     }
 
-    private async Task SynchronizeAllAsync(CancellationToken cancellationToken)
+    private async Task<Result> SynchronizeAllAsync(CancellationToken cancellationToken)
     {
         using var held = await LockDocumentsAsync(cancellationToken);
         foreach (var path in _documents.Keys.ToArray())
         {
             cancellationToken.ThrowIfCancellationRequested();
-            await SynchronizeDocumentAsync(path, cancellationToken);
+            if (await SynchronizeDocumentAsync(path, cancellationToken) is ToolError error)
+            {
+                return error;
+            }
         }
 
-        await SynchronizeWatchedFilesAsync(cancellationToken);
+        return await SynchronizeWatchedFilesAsync(cancellationToken);
     }
 
     private static FileStamp? ReadDocumentStamp(string path)
@@ -202,88 +248,99 @@ internal sealed partial class RoslynConnection
         return file.Exists ? new FileStamp(file.Length, file.LastWriteTimeUtc) : null;
     }
 
-    private static async Task<string> ReadDocumentAsync(
+    private static async Task<Result<string>> ReadDocumentAsync(
         string path,
         CancellationToken cancellationToken
     )
     {
-        await using var stream = new FileStream(
-            path,
-            new FileStreamOptions
-            {
-                Access = FileAccess.Read,
-                Mode = FileMode.Open,
-                Share = FileShare.ReadWrite | FileShare.Delete,
-                Options = FileOptions.Asynchronous | FileOptions.SequentialScan,
-            }
-        );
-        using var reader = new StreamReader(
-            stream,
-            Encoding.UTF8,
-            detectEncodingFromByteOrderMarks: true
-        );
-        var builder = new StringBuilder();
-        var buffer = new char[DocumentReadBufferCharacters];
-        while (true)
+        try
         {
-            var count = await reader.ReadAsync(buffer, cancellationToken);
-            if (count == 0)
+            await using var stream = new FileStream(
+                path,
+                new FileStreamOptions
+                {
+                    Access = FileAccess.Read,
+                    Mode = FileMode.Open,
+                    Share = FileShare.ReadWrite | FileShare.Delete,
+                    Options = FileOptions.Asynchronous | FileOptions.SequentialScan,
+                }
+            );
+            using var reader = new StreamReader(
+                stream,
+                Encoding.UTF8,
+                detectEncodingFromByteOrderMarks: true
+            );
+            var builder = new StringBuilder();
+            var buffer = new char[DocumentReadBufferCharacters];
+            while (true)
             {
-                return builder.ToString();
-            }
+                var count = await reader.ReadAsync(buffer, cancellationToken);
+                if (count == 0)
+                {
+                    return builder.ToString();
+                }
 
-            if (builder.Length + count > MaximumDocumentCharacters)
-            {
-                throw new InvalidDataException(
-                    "The document exceeded the one million UTF-16 code unit limit."
-                );
-            }
+                if (builder.Length + count > MaximumDocumentCharacters)
+                {
+                    return _oversizedDocument;
+                }
 
-            builder.Append(buffer, 0, count);
+                builder.Append(buffer, 0, count);
+            }
+        }
+        catch (Exception exception) when (ToolError.IsIo(exception))
+        {
+            return ToolError.Io(exception.Message);
         }
     }
 
-    private async Task SynchronizeDocumentAsync(string path, CancellationToken cancellationToken)
+    private async Task<Result> SynchronizeDocumentAsync(
+        string path,
+        CancellationToken cancellationToken
+    )
     {
         if (ReadDocumentStamp(path) is not { } stamp)
         {
-            await CloseDocumentAsync(path, cancellationToken);
-            return;
+            return await CloseDocumentAsync(path, cancellationToken);
         }
 
         var document = _documents[path];
         if (stamp == document.Stamp)
         {
-            return;
+            return Result.Success;
         }
 
-        string text;
-        try
+        if (
+            (await ReadDocumentAsync(path, cancellationToken)).IsError(
+                out var readError,
+                out var text
+            )
+        )
         {
-            text = await ReadDocumentAsync(path, cancellationToken);
-        }
-        catch (InvalidDataException)
-        {
+            if (!IsOversized(readError))
+            {
+                return readError;
+            }
+
             // Roslyn reads the file from disk once the document closes
             LogOversizedDocument(logger, path);
-            await CloseDocumentAsync(path, cancellationToken);
-            return;
+            return await CloseDocumentAsync(path, cancellationToken);
         }
 
         if (string.Equals(document.Text, text, StringComparison.Ordinal))
         {
             _documents[path] = document with { Stamp = stamp };
-            return;
+            return Result.Success;
         }
 
         var version = document.Version + 1;
-        await NotifyAsync(
+        var changed = await NotifyAsync(
             LspMethods.TextDocumentDidChange,
             new JsonObject
             {
                 ["textDocument"] = new JsonObject
                 {
-                    ["uri"] = paths.ToUri(path),
+                    ["uri"] = new Uri(path).AbsoluteUri,
                     ["version"] = version,
                 },
                 // A change without a range replaces the whole document
@@ -291,37 +348,43 @@ internal sealed partial class RoslynConnection
             },
             cancellationToken
         );
-        _documents[path] = document with { Text = text, Version = version, Stamp = stamp };
+        if (changed is not ToolError)
+        {
+            _documents[path] = document with { Text = text, Version = version, Stamp = stamp };
+        }
+
+        return changed;
     }
 
     // The path comes from the workspace walk or the watcher. Opening it runs the symlink check
-    private async Task SynchronizeClosedDocumentAsync(
+    private async Task<Result> SynchronizeClosedDocumentAsync(
         string path,
         CancellationToken cancellationToken
     )
     {
         if (_documents.ContainsKey(path) || !WorkspacePaths.IsCSharpFile(path))
         {
-            return;
+            return Result.Success;
         }
 
         // Opening the document sends its saved text in order, unlike asynchronous watched-file notifications
-        try
+        if ((await OpenDocumentCoreAsync(path, cancellationToken)).IsError(out var error, out _))
         {
-            await OpenDocumentCoreAsync(path, cancellationToken);
-        }
-        catch (InvalidDataException)
-        {
+            if (!IsOversized(error))
+            {
+                return error;
+            }
+
             LogOversizedDocument(logger, path);
-            return;
+            return Result.Success;
         }
 
-        await CloseDocumentAsync(path, cancellationToken);
+        return await CloseDocumentAsync(path, cancellationToken);
     }
 
-    private async Task CloseDocumentAsync(string path, CancellationToken cancellationToken)
+    private async Task<Result> CloseDocumentAsync(string path, CancellationToken cancellationToken)
     {
-        await NotifyAsync(
+        var closed = await NotifyAsync(
             LspMethods.TextDocumentDidClose,
             new JsonObject
             {
@@ -329,25 +392,26 @@ internal sealed partial class RoslynConnection
             },
             cancellationToken
         );
-        if (_documents.Remove(path, out var document))
+        if (closed is not ToolError && _documents.Remove(path, out var document))
         {
             _openedOrder.Remove(document.Node);
         }
+
+        return closed;
     }
 
-    private Dictionary<string, FileStamp> ScanWorkspace(CancellationToken cancellationToken)
-    {
-        var files = new Dictionary<string, FileStamp>(StringComparer.Ordinal);
-        foreach (var file in paths.EnumerateWatchedFiles())
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            files.Add(file.Path, file.Stamp);
-        }
+    private static bool IsOversized(ToolError error) => ReferenceEquals(error, _oversizedDocument);
 
-        return files;
-    }
+    private Result<Dictionary<string, FileStamp>> ScanWorkspace(
+        CancellationToken cancellationToken
+    ) =>
+        paths
+            .EnumerateWatchedFiles(cancellationToken)
+            .Map(found =>
+                found.ToDictionary(file => file.Path, file => file.Stamp, StringComparer.Ordinal)
+            );
 
-    private async Task NotifyFileChangesAsync(
+    private Task<Result> NotifyFileChangesAsync(
         Dictionary<string, FileStamp> current,
         HashSet<string> changedPaths,
         CancellationToken cancellationToken
@@ -371,7 +435,7 @@ internal sealed partial class RoslynConnection
             changes.Add(new FileChange(path, FileDeleted));
         }
 
-        await SendFileChangesAsync(changes, cancellationToken);
+        return SendFileChangesAsync(changes, cancellationToken);
     }
 
     private async ValueTask<LockRelease> LockDocumentsAsync(CancellationToken cancellationToken)

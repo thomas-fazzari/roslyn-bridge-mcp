@@ -18,11 +18,13 @@ public sealed class SessionDocumentTests : TempWorkspaceTests
         var path = await WriteFileAsync(Root, "Greeter.cs", "class A {}");
         var servers = new List<FakeRoslynServer>();
         await using var session = CreateSession(Root, FakeServer(servers.Add));
-        await session.EnsureStartedAsync(TestCt);
+        (await session.EnsureStartedAsync(TestCt)).ErrorCode().Should().BeNull();
 
-        await Task.WhenAll(
+        var opened = await Task.WhenAll(
             Enumerable.Range(0, 8).Select(_ => session.OpenDocumentAsync(path, TestCt))
         );
+
+        opened.Should().AllSatisfy(result => result.ErrorCode().Should().BeNull());
 
         (await ReceivedAsync(session, servers[0], LspMethods.TextDocumentDidOpen))
             .Should()
@@ -36,18 +38,18 @@ public sealed class SessionDocumentTests : TempWorkspaceTests
         var written = File.GetLastWriteTimeUtc(path);
         var servers = new List<FakeRoslynServer>();
         await using var session = CreateSession(Root, FakeServer(servers.Add));
-        await session.EnsureStartedAsync(TestCt);
-        await session.OpenDocumentAsync(path, TestCt);
+        (await session.EnsureStartedAsync(TestCt)).ErrorCode().Should().BeNull();
+        (await session.OpenDocumentAsync(path, TestCt)).Succeeded();
 
         File.SetLastWriteTimeUtc(path, written.AddSeconds(1));
-        await session.SynchronizeAsync(TestCt);
+        (await session.SynchronizeAsync(TestCt)).ErrorCode().Should().BeNull();
         (await ReceivedAsync(session, servers[0], LspMethods.TextDocumentDidChange))
             .Should()
             .BeEmpty();
 
         await File.WriteAllTextAsync(path, ChangedText, TestCt);
         File.SetLastWriteTimeUtc(path, written.AddSeconds(2));
-        await session.SynchronizeAsync(TestCt);
+        (await session.SynchronizeAsync(TestCt)).ErrorCode().Should().BeNull();
 
         var changes = await ReceivedAsync(session, servers[0], LspMethods.TextDocumentDidChange);
         var change = changes.Should().ContainSingle().Subject;
@@ -60,12 +62,12 @@ public sealed class SessionDocumentTests : TempWorkspaceTests
         var path = await WriteFileAsync(Root, "Greeter.cs", "class A {}");
         var servers = new List<FakeRoslynServer>();
         await using var session = CreateSession(Root, FakeServer(servers.Add));
-        await session.EnsureStartedAsync(TestCt);
-        await session.OpenDocumentAsync(path, TestCt);
+        (await session.EnsureStartedAsync(TestCt)).ErrorCode().Should().BeNull();
+        (await session.OpenDocumentAsync(path, TestCt)).Succeeded();
         await RegisterWatchedFilesAsync(servers[0]);
 
         File.Delete(path);
-        await session.SynchronizeWorkspaceAsync(TestCt);
+        (await session.SynchronizeWorkspaceAsync(TestCt)).Succeeded();
 
         var uri = new Uri(path).AbsoluteUri;
         var closed = await ReceivedAsync(session, servers[0], LspMethods.TextDocumentDidClose);
@@ -92,13 +94,13 @@ public sealed class SessionDocumentTests : TempWorkspaceTests
     {
         var servers = new List<FakeRoslynServer>();
         await using var session = CreateSession(Root, FakeServer(servers.Add));
-        await session.EnsureStartedAsync(TestCt);
+        (await session.EnsureStartedAsync(TestCt)).ErrorCode().Should().BeNull();
         servers[0].OnShutdown = () => RegisterWatchedFilesAsync(servers[0]);
         session.RequireReload();
-        await session.EnsureStartedAsync(TestCt);
+        (await session.EnsureStartedAsync(TestCt)).ErrorCode().Should().BeNull();
 
         var path = await WriteFileAsync(Root, "Added.cs", "class Added {}");
-        await session.SynchronizeFilesAsync([path], TestCt);
+        (await session.SynchronizeFilesAsync([path], TestCt)).ErrorCode().Should().BeNull();
 
         (await ReceivedAsync(session, servers[1], LspMethods.WorkspaceDidChangeWatchedFiles))
             .Should()

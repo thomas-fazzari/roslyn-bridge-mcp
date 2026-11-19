@@ -6,10 +6,12 @@ using RoslynBridge.Results;
 namespace RoslynBridge;
 
 /// <param name="Candidates">Values the client can send instead, such as the symbols an ambiguous name may mean.</param>
-internal sealed record ToolError(
+/// <param name="RpcCode">The JSON-RPC error code of a failed Roslyn request.</param>
+internal record ToolError(
     string Code,
     string Message,
-    IReadOnlyList<SymbolItem>? Candidates = null
+    IReadOnlyList<SymbolItem>? Candidates = null,
+    int? RpcCode = null
 )
 {
     public static ToolError InvalidRequest(string message) =>
@@ -18,37 +20,136 @@ internal sealed record ToolError(
     public static ToolError InvalidLspData(string message) => new(ErrorCodes.Lsp, message);
 
     public static ToolError StaleEdit(string message) => new(ErrorCodes.StaleEdit, message);
+
+    public static ToolError Io(string message) => new(ErrorCodes.Io, message);
+
+    /// <summary>
+    /// A cancellation that reaches a step which must report the files it already wrote.
+    /// </summary>
+    public static ToolError Cancelled(OperationCanceledException exception) =>
+        new(ErrorCodes.Cancelled, exception.Message);
+
+    /// <summary>
+    /// Whether Roslyn, the file system or a timeout failed, as opposed to a request that is wrong.
+    /// </summary>
+    public bool IsInfrastructureFailure =>
+        Code is ErrorCodes.Lsp or ErrorCodes.Io or ErrorCodes.Timeout;
+
+    /// <summary>
+    /// Whether a file system call failed for a reason outside the bridge, such as a locked or unreadable file.
+    /// </summary>
+    public static bool IsIo(Exception exception) =>
+        exception is IOException or UnauthorizedAccessException;
+}
+
+internal sealed record Success
+{
+    private Success() { }
+
+    public static Success Instance { get; } = new();
 }
 
 /// <summary>
-/// For code too deep in a call chain to return a <see cref="Result{T}"/>.
+/// The outcome of an operation that returns no value.
 /// </summary>
-internal sealed class ToolErrorException(ToolError error) : Exception(error.Message)
+internal union Result(Success, ToolError)
 {
-    public ToolError Error { get; } = error;
+    public static Result Success => RoslynBridge.Success.Instance;
 }
 
-internal readonly struct Result<T>(T value, ToolError? error)
+/// <summary>
+/// The outcome of an operation that returns a value.
+/// </summary>
+internal union Result<T>(T, ToolError)
 {
     /// <summary>
-    /// Meaningful only when <see cref="Error"/> is null.
+    /// Splits the result so that the value is readable only after the error check.
     /// </summary>
-    public T Value { get; } = value;
+    public bool IsError([NotNullWhen(true)] out ToolError? error, [MaybeNullWhen(true)] out T value)
+    {
+        if (this is ToolError toolError)
+        {
+            (error, value) = (toolError, default);
+            return true;
+        }
 
-    public ToolError? Error { get; } = error;
+        (error, value) = (null, Value is T held ? held : default!);
+        return false;
+    }
 
-    public static implicit operator Result<T>(T value) => new(value, error: null);
-
-    public static implicit operator Result<T>(ToolError error) => new(default!, error);
+    public Result<TResult> Map<TResult>(Func<T, TResult> map) =>
+        this switch
+        {
+            ToolError error => error,
+            T value => map(value),
+            null => map(default!),
+        };
 }
 
 internal static class ResultExtensions
 {
+    extension<T>(IEnumerable<Result<T>> results)
+    {
+        /// <summary>
+        /// Stops at the first error.
+        /// </summary>
+        public Result<List<T>> All()
+        {
+            var values = new List<T>();
+            foreach (var result in results)
+            {
+                if (result.IsError(out var error, out var value))
+                {
+                    return error;
+                }
+
+                values.Add(value);
+            }
+
+            return values;
+        }
+    }
+
     extension<T>(Result<T> result)
         where T : ToolResult
     {
-        public Result<ToolResult> AsToolResult() =>
-            result.Error is { } error ? error : result.Value;
+        public Result<ToolResult> AsToolResult() => result.Map<ToolResult>(value => value);
+    }
+
+    extension<T>(Task<Result<T>> task)
+    {
+        /// <summary>
+        /// Turns a cancellation into <see cref="ToolError.Cancelled"/>.
+        /// </summary>
+        public async Task<Result<T>> OrCancelledAsync()
+        {
+            try
+            {
+                return await task;
+            }
+            catch (OperationCanceledException exception)
+            {
+                return ToolError.Cancelled(exception);
+            }
+        }
+    }
+
+    extension(Task<Result> task)
+    {
+        /// <summary>
+        /// Turns a cancellation into <see cref="ToolError.Cancelled"/>.
+        /// </summary>
+        public async Task<Result> OrCancelledAsync()
+        {
+            try
+            {
+                return await task;
+            }
+            catch (OperationCanceledException exception)
+            {
+                return ToolError.Cancelled(exception);
+            }
+        }
     }
 }
 

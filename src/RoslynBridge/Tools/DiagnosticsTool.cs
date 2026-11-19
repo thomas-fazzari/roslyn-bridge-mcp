@@ -35,23 +35,18 @@ internal sealed class DiagnosticsTool(LspTool lsp, SettingsMonitor settings)
             DiagnosticSeverity? severity = null,
         [Description("Only these diagnostic codes, such as CS0246.")] string[]? ids = null,
         [Description("One line per code with count and example.")] bool summary = false,
-        [Description(ToolDescriptions.Limit)] int limit = LspRequest.DefaultResultLimit,
+        [Description(ToolDescriptions.Limit)] int limit = Paging.DefaultLimit,
         [Description(ToolDescriptions.Offset)] int offset = 0,
         CancellationToken cancellationToken = default
     ) =>
         lsp.ExecuteAsync(
-            new LspRequest
-            {
-                Action = LspAction.Diagnostics,
-                File = file,
-                Severity = severity
-                    ?? settings.CurrentValue.DiagnosticsSeverity
-                    ?? DiagnosticSeverity.Warning,
-                Ids = ids,
-                Summary = summary,
-                Limit = limit,
-                Offset = offset,
-            },
+            new DiagnosticsRequest(
+                file,
+                severity ?? settings.CurrentValue.DiagnosticsSeverity ?? DiagnosticSeverity.Warning,
+                ids,
+                summary,
+                new Paging(limit, offset)
+            ),
             cancellationToken
         );
 }

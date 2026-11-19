@@ -30,6 +30,7 @@ flowchart LR
 - One tool call runs at a time. `bulk_navigate` runs its queries concurrently inside its call.
 - Before a request, the session sends Roslyn the files that changed on disk since the last one.
 - An edit is computed against a snapshot of the workspace. The bridge refuses it when a file it touches or a project file changed since.
+- An expected failure returns a `Result` that holds a `ToolError`. The Roslyn connection and the file reads turn their exceptions into one. Any other exception is a bug, except a cancellation.
 
 ## Roslyn extension
 
