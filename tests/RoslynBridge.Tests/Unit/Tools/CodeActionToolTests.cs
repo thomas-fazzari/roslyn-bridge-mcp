@@ -84,9 +84,50 @@ public sealed class CodeActionToolTests : TempWorkspaceTests
             FakeServer(server =>
                 server.Handle = (method, _) =>
                 {
-                    if (method is LspMethods.WorkspaceExecuteCommand)
+                    return method is LspMethods.WorkspaceExecuteCommand
+                        ? throw new LocalRpcException("Unknown command.")
+                        : Task.FromResult<JsonNode?>(
+                            method is LspMethods.TextDocumentCodeAction ? actions.DeepClone() : null
+                        );
+                }
+            )
+        );
+        using var tool = CreateTool(Root, session);
+
+        var response = await tool.ExecuteAsync(
+            CodeActionsRequest() with
+            {
+                ActionIndex = 0,
+                Apply = true,
+            },
+            TestCt
+        );
+
+        response.Should().BeError(ErrorCodes.Lsp);
+        ResultLines.Lines(ResponseText(response)).Should().ContainSingle();
+    }
+
+    [Fact]
+    public async Task ActionWithACommandSynchronizesTheFileItsEditCreatesAsync()
+    {
+        await WriteFileAsync(Root, SourceFile, "class A {}");
+        var actions = new JsonArray(
+            new JsonObject
+            {
+                ["title"] = "Extract",
+                ["edit"] = DocumentChanges(CreateFile(Path.Combine(Root, "Created.cs"))),
+                ["command"] = new JsonObject { ["command"] = "extract.command" },
+            }
+        );
+        await using var session = CreateSession(
+            Root,
+            FakeServer(server =>
+                server.Handle = (method, _) =>
+                {
+                    // A crash while synchronizing fails the call, while the diagnostics after it ignore one
+                    if (method is LspMethods.TextDocumentGetProjectContexts)
                     {
-                        throw new LocalRpcException("Unknown command.");
+                        server.Crash();
                     }
 
                     return Task.FromResult<JsonNode?>(
@@ -106,8 +147,8 @@ public sealed class CodeActionToolTests : TempWorkspaceTests
             TestCt
         );
 
-        response.Should().BeError(ErrorCodes.Lsp);
-        ResultLines.Lines(ResponseText(response)).Should().ContainSingle();
+        response.Should().BeError(ErrorCodes.Io);
+        ResultLines.Lines(ResponseText(response)).Should().Contain("failed step: synchronize");
     }
 
     private static LspRequest CodeActionsRequest() =>

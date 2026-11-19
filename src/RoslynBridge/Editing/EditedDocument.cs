@@ -43,6 +43,11 @@ internal sealed class EditedDocument(string path, byte[]? original)
 
     public byte[]? Original { get; } = original;
 
+    /// <summary>
+    /// The file whose Unix mode the written content keeps, or null for the default mode.
+    /// </summary>
+    public string? ModeSource { get; set; } = original is null ? null : path;
+
     public byte[]? Content { get; set; } = original;
 
     public bool Changed => CaseOnlyRename || !SameBytes(Original, Content);

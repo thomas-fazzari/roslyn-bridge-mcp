@@ -48,7 +48,8 @@ internal sealed class CallersHandler
 
         var solution = document.Project.Solution;
         var callers = await SymbolFinder.FindCallersAsync(symbol, solution, cancellationToken);
-        var seen = new HashSet<(SyntaxTree, TextSpan)>();
+        // Each target framework of a project has its own tree and calling symbol for the same file
+        var seen = new HashSet<(string, TextSpan)>();
         var calls = new List<IncomingCall>();
         // Direct callers come first, so a call site listed under several members stays direct
         foreach (var caller in callers)
@@ -56,9 +57,9 @@ internal sealed class CallersHandler
             var sites = caller
                 .Locations.Where(location =>
                     location.IsVisibleSourceLocation(cancellationToken)
-                    && solution.GetDocument(location.SourceTree) is { FilePath: not null } site
+                    && solution.GetDocument(location.SourceTree) is { FilePath: { } path } site
                     && site is not SourceGeneratedDocument
-                    && seen.Add((location.SourceTree!, location.SourceSpan))
+                    && seen.Add((path, location.SourceSpan))
                 )
                 .ToList();
             if (

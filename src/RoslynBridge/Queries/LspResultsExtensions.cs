@@ -67,6 +67,22 @@ internal static class LspResultsExtensions
                     ToolError.InvalidLspData("Roslyn returned an invalid location result.")
                 ),
             };
+            return locations.FindLocations(paths, skipGenerated);
+        }
+
+        public List<SourcePosition> ToHighlightStarts(int kind) =>
+            [
+                .. LspJson
+                    .ReadArray<LspHighlight>(result)
+                    .Where(highlight => highlight.Kind == kind)
+                    .Select(highlight => highlight.Range.Start.OneBased),
+            ];
+    }
+
+    extension(LspLocation[] locations)
+    {
+        public FoundLocations FindLocations(WorkspacePaths paths, bool skipGenerated)
+        {
             var found = new HashSet<(string File, SourcePosition Position)>();
             var generated = 0;
             foreach (var location in locations)
@@ -100,14 +116,6 @@ internal static class LspResultsExtensions
                 generated
             );
         }
-
-        public List<SourcePosition> ToHighlightStarts(int kind) =>
-            [
-                .. LspJson
-                    .ReadArray<LspHighlight>(result)
-                    .Where(highlight => highlight.Kind == kind)
-                    .Select(highlight => highlight.Range.Start.OneBased),
-            ];
     }
 
     extension(LspSymbol symbol)

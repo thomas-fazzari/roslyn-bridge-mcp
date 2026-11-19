@@ -250,9 +250,9 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
             var temporary = $"{document.Path}.{Guid.NewGuid():N}.tmp";
             temporaryFiles.Add(document.Path, temporary);
             await File.WriteAllBytesAsync(temporary, document.Content!, cancellationToken);
-            if (!OperatingSystem.IsWindows() && document.Original is not null)
+            if (!OperatingSystem.IsWindows() && document.ModeSource is { } modeSource)
             {
-                File.SetUnixFileMode(temporary, File.GetUnixFileMode(document.OriginalPath));
+                File.SetUnixFileMode(temporary, File.GetUnixFileMode(modeSource));
             }
         }
     }
@@ -468,6 +468,7 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
         }
 
         destination.Content = source.Content;
+        destination.ModeSource = source.ModeSource;
         source.Content = null;
     }
 

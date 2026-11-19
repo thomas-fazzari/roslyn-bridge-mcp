@@ -18,8 +18,12 @@ public sealed class ExtensionFallbackTests : TempWorkspaceTests
     private const string CallerName = "Caller.Run()";
     private const int HandlerFailureCode = -32603;
 
-    [Fact]
-    public async Task FallsBackToTheReferencesRequestWhenTheExtensionAnswersAnEmptyResponseAsync()
+    [Theory]
+    [InlineData("")]
+    [InlineData("""{"found":true,"locations":[],"written":[]}""")]
+    public async Task FallsBackToTheReferencesRequestWhenTheExtensionAnswerIsInvalidAsync(
+        string answer
+    )
     {
         await WriteFileAsync(Root, SourceFile, "class A {}\n");
         var found = await WriteFileAsync(Root, FoundFile, "class B {}\n");
@@ -31,7 +35,7 @@ public sealed class ExtensionFallbackTests : TempWorkspaceTests
                     [LspMethods.ServerActivateExtension] = ActivatedHandlers(),
                     [LspMethods.TextDocumentDispatchExtensionMessage] = new JsonObject
                     {
-                        ["response"] = string.Empty,
+                        ["response"] = answer,
                     },
                     [LspMethods.TextDocumentReferences] = new JsonArray(Location(found)),
                 }

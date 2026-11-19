@@ -17,13 +17,14 @@ internal sealed partial class LspQueries
         CancellationToken cancellationToken
     )
     {
-        if (await session.FindReferencesAsync(parameters, cancellationToken) is { } references)
+        var references = await session.FindReferencesAsync(parameters, cancellationToken);
+        if (references.Found)
         {
-            var locations = references["locations"].FindLocations(paths, skipGenerated: true) with
+            var locations = references.Locations.FindLocations(paths, skipGenerated: true) with
             {
-                Generated = references["generated"]!.GetValue<int>(),
+                Generated = references.Generated,
             };
-            var written = references["written"].FindLocations(paths, skipGenerated: true);
+            var written = references.Written.FindLocations(paths, skipGenerated: true);
             return new FoundReferences(locations, [.. written.Positions]);
         }
 

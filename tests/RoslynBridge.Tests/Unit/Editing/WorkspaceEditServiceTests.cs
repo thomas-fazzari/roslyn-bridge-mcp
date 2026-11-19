@@ -290,6 +290,32 @@ public sealed class WorkspaceEditServiceTests : TempWorkspaceTests
     }
 
     [Fact]
+    public async Task RenamedFileKeepsItsUnixModeAsync()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            Assert.Skip("This test requires Unix file modes.");
+            return;
+        }
+
+        var source = await WriteFileAsync(Root, "Script.cs", "class Script {}");
+        const UnixFileMode executable =
+            UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute;
+        File.SetUnixFileMode(source, executable);
+        var destination = Path.Combine(Root, "Renamed.cs");
+        var service = CreateService();
+        var snapshot = Snapshot(Root);
+
+        await service.ApplyAsync(
+            DocumentChanges(RenameFile(source, destination)),
+            snapshot,
+            TestCt
+        );
+
+        File.GetUnixFileMode(destination).Should().Be(executable);
+    }
+
+    [Fact]
     public async Task RenameOnlyCaseAndBackLeavesOriginalFileAsync()
     {
         var source = await WriteFileAsync(Root, "Name.cs", "class Name {}");
