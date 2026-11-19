@@ -49,10 +49,9 @@ internal sealed partial class LspChanges(
         CancellationToken cancellationToken
     )
     {
-        var edit = change.Edit ?? [];
         if (!apply)
         {
-            return await edits.PreviewAsync(edit, change.Snapshot, cancellationToken) switch
+            return await edits.PreviewAsync(change.Edit, change.Snapshot, cancellationToken) switch
             {
                 ToolError previewError => previewError,
                 EditPreview preview => new ProposalPreview(
@@ -64,7 +63,7 @@ internal sealed partial class LspChanges(
         }
 
         if (
-            (await edits.ApplyAsync(edit, change.Snapshot, cancellationToken)).IsError(
+            (await edits.ApplyAsync(change.Edit, change.Snapshot, cancellationToken)).IsError(
                 out var applyError,
                 out var applied
             )
@@ -176,24 +175,25 @@ internal sealed partial class LspChanges(
 
         parameters["newName"] = request.NewName;
         var versioned = await WithDocumentVersionsAsync(snapshot, cancellationToken);
-        return await session.RequestAsync(
+        var renamed = await session.RequestAsync(
             LspMethods.TextDocumentRename,
             parameters,
             cancellationToken
-        ) switch
-        {
-            ToolError renameError => renameError,
-            JsonObject edit => await CompleteAsync(
-                new PendingChange(request.Action, versioned, edit, Command: null),
-                request.Apply,
-                cancellationToken
-            ),
-            JsonNode or null => await RenameRefusalAsync(
-                parameters,
-                request.NewName,
-                cancellationToken
-            ),
-        };
+        );
+        if (renamed.IsError(out var renameError, out var answer))
+            return renameError;
+
+        if (answer is not JsonObject json)
+            return await RenameRefusalAsync(parameters, request.NewName, cancellationToken);
+
+        if (WorkspaceEdit.Parse(json).IsError(out var editError, out var edit))
+            return editError;
+
+        return await CompleteAsync(
+            new PendingChange(request.Action, versioned, edit, Command: null),
+            request.Apply,
+            cancellationToken
+        );
     }
 
     // Roslyn returns no edit both for a position without a symbol and for a name it rejects
@@ -271,17 +271,14 @@ internal sealed partial class LspChanges(
             return renameError;
         }
 
-        var changes = ToDocumentChanges(renamed as JsonObject ?? []);
-        changes.Add(
-            (JsonNode)
-                new JsonObject
-                {
-                    ["kind"] = FileOperation.Rename,
-                    ["oldUri"] = oldUri,
-                    ["newUri"] = newUri,
-                }
-        );
-        var edit = new JsonObject { ["documentChanges"] = changes };
+        var parsed = WorkspaceEdit.Parse(renamed as JsonObject);
+        if (parsed.IsError(out var editError, out var willRename))
+            return editError;
+
+        var edit = new WorkspaceEdit([
+            .. willRename.Operations,
+            new RenameFile(oldUri, newUri, new FileOperationOptions()),
+        ]);
         return await CompleteAsync(
             new PendingChange(request.Action, snapshot, edit, Command: null),
             request.Apply,
@@ -432,29 +429,5 @@ internal sealed partial class LspChanges(
         var id = Guid.NewGuid().ToString("N");
         _pending.Add(id, change);
         return id;
-    }
-
-    private static JsonArray ToDocumentChanges(JsonObject edit)
-    {
-        if (edit["documentChanges"] is JsonArray documentChanges)
-            return (JsonArray)documentChanges.DeepClone();
-
-        var result = new JsonArray();
-        if (edit["changes"] is JsonObject changes)
-        {
-            foreach (var (uri, edits) in changes)
-            {
-                result.Add(
-                    (JsonNode)
-                        new JsonObject
-                        {
-                            ["textDocument"] = new JsonObject { ["uri"] = uri, ["version"] = null },
-                            ["edits"] = edits?.DeepClone(),
-                        }
-                );
-            }
-        }
-
-        return result;
     }
 }

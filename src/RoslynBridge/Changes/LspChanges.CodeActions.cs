@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Thomas Fazzari
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+using RoslynBridge.Editing;
 using RoslynBridge.Lsp;
 using RoslynBridge.Requests;
 using RoslynBridge.Results;
@@ -57,7 +58,7 @@ internal sealed partial class LspChanges
         var pending = new PendingChange(
             request.Action,
             versioned,
-            Edit: null,
+            WorkspaceEdit.Empty,
             Command: null,
             choices
         );
@@ -299,15 +300,15 @@ internal sealed partial class LspChanges
             command = null;
         }
 
-        var selected = new PendingChange(
-            pending.Action,
-            pending.Snapshot,
-            value["edit"] as JsonObject,
-            command
-        );
-        return selected.Edit is null && selected.Command is null
-            ? ToolError.InvalidLspData("The selected action contains no edit or command.")
-            : await CompleteAsync(selected, apply, cancellationToken);
+        var rawEdit = value["edit"] as JsonObject;
+        if (rawEdit is null && command is null)
+            return ToolError.InvalidLspData("The selected action contains no edit or command.");
+
+        if (WorkspaceEdit.Parse(rawEdit).IsError(out var editError, out var edit))
+            return editError;
+
+        var selected = new PendingChange(pending.Action, pending.Snapshot, edit, command);
+        return await CompleteAsync(selected, apply, cancellationToken);
     }
 
     // A request with an end also has a line and character, because a symbol cannot take one

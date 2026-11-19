@@ -52,7 +52,7 @@ internal sealed class EditedDocument(string path, byte[]? original)
 
     public bool Changed => CaseOnlyRename || !SameBytes(Original, Content);
 
-    public Result Apply(TextEdit?[] edits)
+    public Result Apply(IReadOnlyList<TextEdit> edits)
     {
         if (Content is not { } content)
             return ToolError.InvalidLspData($"The file does not exist: {Path}");

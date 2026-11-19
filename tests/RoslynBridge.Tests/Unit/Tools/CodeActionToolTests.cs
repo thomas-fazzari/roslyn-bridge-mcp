@@ -3,6 +3,7 @@
 
 using RoslynBridge.Lsp;
 using RoslynBridge.Requests;
+using RoslynBridge.Results;
 using RoslynBridge.Tests.Assertions;
 using StreamJsonRpc;
 using static RoslynBridge.Tests.Unit.TestHelpers;
@@ -11,6 +12,11 @@ namespace RoslynBridge.Tests.Unit.Tools;
 
 public sealed class CodeActionToolTests : TempWorkspaceTests
 {
+    private const string BothFields = "both";
+    private const string NullOperation = "null-operation";
+    private const string RenameWithoutNewUri = "rename-without-new-uri";
+    private const string NullTextEdit = "null-text-edit";
+
     [Fact]
     public async Task ListingFlattensNestedActionsAndResolvesFixAllByScopeAsync()
     {
@@ -147,6 +153,69 @@ public sealed class CodeActionToolTests : TempWorkspaceTests
 
         response.Should().BeError(ErrorCodes.Io);
         ResultLines.Lines(ResponseText(response)).Should().Contain("failed step: synchronize");
+    }
+
+    [Theory]
+    [InlineData(BothFields)]
+    [InlineData(NullOperation)]
+    [InlineData(RenameWithoutNewUri)]
+    [InlineData(NullTextEdit)]
+    public async Task ActionWithAMalformedEditWritesNothingAsync(string fault)
+    {
+        var path = await WriteFileAsync(Root, SourceFile, "class A {}");
+        var actions = new JsonArray(
+            new JsonObject { ["title"] = "Broken", ["edit"] = MalformedEdit(fault, path) }
+        );
+        await using var session = CreateSession(
+            Root,
+            FakeServer(server =>
+                server.Handle = (method, _) =>
+                    Task.FromResult<JsonNode?>(
+                        method is LspMethods.TextDocumentCodeAction ? actions.DeepClone() : null
+                    )
+            )
+        );
+        using var tool = CreateTool(Root, session);
+
+        var response = await tool.ExecuteAsync(
+            CodeActionsRequest() with
+            {
+                ActionIndex = 0,
+                Apply = true,
+            },
+            TestCt
+        );
+
+        response.Should().BeError(ErrorCodes.Lsp);
+        await AssertFileTextAsync(path, "class A {}");
+    }
+
+    // Each edit starts with a valid change, so a write before the fault would show
+    private static JsonObject MalformedEdit(string fault, string path)
+    {
+        var valid = TextEdit(0, 6, 0, 7, "B");
+        var uri = new Uri(path).AbsoluteUri;
+        return fault switch
+        {
+            BothFields => new JsonObject
+            {
+                ["changes"] = new JsonObject { [uri] = new JsonArray(valid) },
+                ["documentChanges"] = new JsonArray(),
+            },
+            NullOperation => new JsonObject
+            {
+                ["documentChanges"] = new JsonArray(DocumentEdit(path, version: null, valid), null),
+            },
+            RenameWithoutNewUri => DocumentChanges(
+                DocumentEdit(path, version: null, valid),
+                new JsonObject { ["kind"] = FileOperation.Rename, ["oldUri"] = uri }
+            ),
+            NullTextEdit => new JsonObject
+            {
+                ["changes"] = new JsonObject { [uri] = new JsonArray(valid, null) },
+            },
+            _ => throw new ArgumentOutOfRangeException(nameof(fault)),
+        };
     }
 
     private static LspRequest CodeActionsRequest() =>
