@@ -668,6 +668,34 @@ public sealed class LspToolTests : TempWorkspaceTests
     }
 
     [Fact]
+    public async Task BulkShowsTheRpcCodeOfAFailedRoslynRequestInItsSectionAsync()
+    {
+        const int HandlerFailureCode = -32603;
+        await WriteFileAsync(Root, SourceFile, SourceText);
+        await using var session = CreateSession(
+            Root,
+            FakeServer(server =>
+                server.Handle = (method, parameters) =>
+                    method is LspMethods.TextDocumentReferences && LineOf(parameters) == 2
+                        ? throw new LocalRpcException("Roslyn failed.")
+                        {
+                            ErrorCode = HandlerFailureCode,
+                        }
+                        : Task.FromResult<JsonNode?>(Found("Found.cs"))
+            )
+        );
+        using var tool = CreateTool(session);
+
+        var response = await tool.ExecuteAsync(Bulk(ReferencesAt(1), ReferencesAt(2)), TestCt);
+
+        ResponseText(response)
+            .Should()
+            .Contain(
+                $"## 2 references Source.cs:2:1\nerror {ErrorCodes.Lsp} (LSP {HandlerFailureCode}): Roslyn failed."
+            );
+    }
+
+    [Fact]
     public async Task BulkResolvesASymbolOnceForEveryQueryThatNamesItAsync()
     {
         var symbolRequests = 0;
@@ -707,7 +735,7 @@ public sealed class LspToolTests : TempWorkspaceTests
 
     [Theory]
     [InlineData(0)]
-    [InlineData(LspRequest.MaximumBulkQueries + 1)]
+    [InlineData(BulkRequest.MaximumQueries + 1)]
     public async Task BulkRejectsAnEmptyOrOversizedBatchAsync(int count)
     {
         await using var session = CreateSession(Root, FakeServer());
@@ -744,7 +772,7 @@ public sealed class LspToolTests : TempWorkspaceTests
         var response = await tool.ExecuteAsync(
             Bulk(ReferencesAt(1), ReferencesAt(2), ReferencesAt(3), ReferencesAt(4)) with
             {
-                Limit = LspRequest.MaximumResultLimit,
+                Limit = Paging.MaximumLimit,
             },
             TestCt
         );
@@ -1360,9 +1388,9 @@ public sealed class LspToolTests : TempWorkspaceTests
             DiagnosticServer(("A.cs", 0, 0, Error, "CS0246"), ("A.cs", 1, 0, Hint, hintCode))
         );
         using var tool = CreateTool(session);
-        var withProjectSeverity = new DiagnosticsTool(tool, Monitor(options));
+        var withProjectSeverity = new DiagnosticsTool(tool.Lsp, Monitor(options));
         var withBuiltInSeverity = new DiagnosticsTool(
-            tool,
+            tool.Lsp,
             Monitor(options with { DiagnosticsSeverity = null })
         );
 
@@ -1457,7 +1485,7 @@ public sealed class LspToolTests : TempWorkspaceTests
     private JsonArray LargeFound() =>
         [
             .. Enumerable
-                .Range(0, LspRequest.MaximumResultLimit)
+                .Range(0, Paging.MaximumLimit)
                 .Select(index =>
                     Location(
                         Path.Combine(
@@ -1537,12 +1565,12 @@ public sealed class LspToolTests : TempWorkspaceTests
     private static LspRequest ReferencesOf(string symbol) =>
         new() { Action = LspAction.References, Symbol = symbol };
 
-    private LspTool CreateTool(RoslynSession session, SettingsMonitor settings) =>
+    private ToolClient CreateTool(RoslynSession session, SettingsMonitor settings) =>
         TestHelpers.CreateTool(Root, session, settings: settings);
 
     private static string StartupTimeoutSetting(int seconds) =>
         string.Create(CultureInfo.InvariantCulture, $"{{ \"startupTimeout\": {seconds} }}");
 
-    private LspTool CreateTool(RoslynSession session, BridgeOptions? options = null) =>
+    private ToolClient CreateTool(RoslynSession session, BridgeOptions? options = null) =>
         TestHelpers.CreateTool(Root, session, options);
 }

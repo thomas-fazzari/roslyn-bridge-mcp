@@ -203,7 +203,7 @@ public sealed partial class RoslynMcpTests
         {
             Action = LspAction.Diagnostics,
             File = "Application/*.cs",
-            Limit = LspRequest.MaximumResultLimit,
+            Limit = Paging.MaximumLimit,
         };
         var full = await workspace.CallAsync(request);
         var limited = await workspace.CallAsync(request with { Limit = 1 });

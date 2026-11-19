@@ -26,11 +26,9 @@ public sealed class LspResultsExtensionsTests
             Location("First.cs", 20, 8)
         );
 
-        var result = locations.ToLocations(
-            _paths,
-            LspRequest.DefaultResultLimit,
-            skipGenerated: false
-        );
+        var result = locations
+            .ToLocations(_paths, Paging.DefaultLimit, skipGenerated: false)
+            .Succeeded();
 
         result.Total.Should().Be(3);
         result.NextOffset.Should().BeNull();
@@ -55,7 +53,7 @@ public sealed class LspResultsExtensionsTests
             Location("Second.cs", 2, 0)
         );
 
-        var result = locations.ToLocations(_paths, 2, skipGenerated: false);
+        var result = locations.ToLocations(_paths, 2, skipGenerated: false).Succeeded();
 
         result.Total.Should().Be(3);
         result.NextOffset.Should().Be(2);
@@ -79,11 +77,9 @@ public sealed class LspResultsExtensionsTests
             };
         }
 
-        var result = location.ToLocations(
-            _paths,
-            LspRequest.DefaultResultLimit,
-            skipGenerated: false
-        );
+        var result = location
+            .ToLocations(_paths, Paging.DefaultLimit, skipGenerated: false)
+            .Succeeded();
 
         result.Total.Should().Be(1);
         result
@@ -100,11 +96,9 @@ public sealed class LspResultsExtensionsTests
     {
         JsonNode? locations = array ? new JsonArray() : null;
 
-        var result = locations.ToLocations(
-            _paths,
-            LspRequest.DefaultResultLimit,
-            skipGenerated: false
-        );
+        var result = locations
+            .ToLocations(_paths, Paging.DefaultLimit, skipGenerated: false)
+            .Succeeded();
 
         result.Files.Should().BeEmpty();
         result.Total.Should().Be(0);
@@ -117,11 +111,9 @@ public sealed class LspResultsExtensionsTests
     {
         var location = new JsonObject { ["uri"] = value, ["range"] = Range(0, 0) };
 
-        var result = location.ToLocations(
-            _paths,
-            LspRequest.DefaultResultLimit,
-            skipGenerated: false
-        );
+        var result = location
+            .ToLocations(_paths, Paging.DefaultLimit, skipGenerated: false)
+            .Succeeded();
 
         result.Files.Should().ContainSingle().Which.File.Should().Be(value);
     }
@@ -138,11 +130,9 @@ public sealed class LspResultsExtensionsTests
             }
         );
 
-        var result = locations.ToLocations(
-            _paths,
-            LspRequest.DefaultResultLimit,
-            skipGenerated: true
-        );
+        var result = locations
+            .ToLocations(_paths, Paging.DefaultLimit, skipGenerated: true)
+            .Succeeded();
 
         result.Total.Should().Be(1);
         result.Generated.Should().Be(1);
@@ -162,7 +152,7 @@ public sealed class LspResultsExtensionsTests
             ["tags"] = new JsonArray(1),
         };
 
-        var result = diagnostic.Read<LspDiagnostic>().ToDiagnostic();
+        var result = diagnostic.Read<LspDiagnostic>().Succeeded().ToDiagnostic();
 
         result
             .Should()
@@ -200,7 +190,7 @@ public sealed class LspResultsExtensionsTests
             }
         );
 
-        var result = symbols.ToSymbolList(_paths, LspRequest.DefaultResultLimit);
+        var result = symbols.ToSymbolList(_paths, Paging.DefaultLimit).Succeeded();
 
         result
             .Items.Should()
@@ -250,7 +240,7 @@ public sealed class LspResultsExtensionsTests
             }
         );
 
-        var result = symbols.ToSymbolList(_paths, 2);
+        var result = symbols.ToSymbolList(_paths, 2).Succeeded();
 
         result.Total.Should().Be(3);
         result.NextOffset.Should().Be(2);
@@ -286,8 +276,8 @@ public sealed class LspResultsExtensionsTests
             }
         );
 
-        var first = symbols.ToSymbolList(_paths, limit: 1, offset: 1);
-        var last = symbols.ToSymbolList(_paths, limit: 2, offset: 2);
+        var first = symbols.ToSymbolList(_paths, limit: 1, offset: 1).Succeeded();
+        var last = symbols.ToSymbolList(_paths, limit: 2, offset: 2).Succeeded();
 
         first.Total.Should().Be(3);
         first.Items.Select(item => item.Name).Should().Equal("First");
@@ -310,7 +300,7 @@ public sealed class LspResultsExtensionsTests
             new JsonObject { ["name"] = "Other", ["kind"] = 5 }
         );
 
-        var result = symbols.ToSymbolList(_paths, 1);
+        var result = symbols.ToSymbolList(_paths, 1).Succeeded();
 
         result.Total.Should().Be(2);
         result.NextOffset.Should().Be(1);
@@ -344,7 +334,7 @@ public sealed class LspResultsExtensionsTests
             }
         );
 
-        var result = calls.ToRelatedSymbols(_paths, LspRequest.DefaultResultLimit);
+        var result = calls.ToRelatedSymbols(_paths, Paging.DefaultLimit).Succeeded();
 
         var item = result.Items.Should().ContainSingle().Which;
         item.File.Should().Be("Consumer.cs");
@@ -361,8 +351,8 @@ public sealed class LspResultsExtensionsTests
             IncomingCall("Consumer.cs", 2)
         );
 
-        var all = calls.ToRelatedSymbols(_paths, LspRequest.DefaultResultLimit);
-        var page = calls.ToRelatedSymbols(_paths, limit: 1, offset: 1);
+        var all = calls.ToRelatedSymbols(_paths, Paging.DefaultLimit).Succeeded();
+        var page = calls.ToRelatedSymbols(_paths, limit: 1, offset: 1).Succeeded();
 
         all.Items.Select(item => (item.File, item.Position!.Value.Line))
             .Should()

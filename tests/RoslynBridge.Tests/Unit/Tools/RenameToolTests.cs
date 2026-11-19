@@ -88,6 +88,31 @@ public sealed class RenameToolTests : TempWorkspaceTests
         response.Should().BeError(ErrorCodes.InvalidRequest);
     }
 
+    [Theory]
+    [InlineData(nameof(LspAction.Rename), 0)]
+    [InlineData(nameof(LspAction.Rename), Paging.MaximumLimit + 1)]
+    [InlineData(nameof(LspAction.RenameFile), 0)]
+    [InlineData(nameof(LspAction.RenameFile), Paging.MaximumLimit + 1)]
+    [InlineData(nameof(LspAction.CodeActions), 0)]
+    [InlineData(nameof(LspAction.CodeActions), Paging.MaximumLimit + 1)]
+    public async Task EditRejectsALimitOutsideTheAllowedRangeAsync(string action, int limit)
+    {
+        await WriteFileAsync(Root, SourceFile, SourceText);
+        await using var session = CreateSession(Root, RenamingServer());
+        using var tool = CreateTool(Root, session);
+
+        var response = await tool.ExecuteAsync(
+            RenameRequest() with
+            {
+                Action = Enum.Parse<LspAction>(action),
+                Limit = limit,
+            },
+            TestCt
+        );
+
+        response.Should().BeError(ErrorCodes.InvalidRequest);
+    }
+
     [Fact]
     public async Task RenameFileIsRefusedWithoutTheWillRenameCapabilityAsync()
     {

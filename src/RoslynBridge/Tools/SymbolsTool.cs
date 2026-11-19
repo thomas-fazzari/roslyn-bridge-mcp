@@ -30,20 +30,12 @@ internal sealed class SymbolsTool(LspTool lsp)
             string? file = null,
         [Description("Symbol name to search when file is omitted.")] string? query = null,
         [Description(ToolDescriptions.Unused)] bool unused = false,
-        [Description(ToolDescriptions.Limit)] int limit = LspRequest.DefaultResultLimit,
+        [Description(ToolDescriptions.Limit)] int limit = Paging.DefaultLimit,
         [Description(ToolDescriptions.Offset)] int offset = 0,
         CancellationToken cancellationToken = default
     ) =>
         lsp.ExecuteAsync(
-            new LspRequest
-            {
-                Limit = limit,
-                Offset = offset,
-                Action = LspAction.Symbols,
-                File = file,
-                Query = query,
-                Unused = unused,
-            },
+            new SymbolsRequest(file, query, unused, new Paging(limit, offset)),
             cancellationToken
         );
 }

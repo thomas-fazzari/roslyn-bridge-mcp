@@ -10,7 +10,7 @@ namespace RoslynBridge.Changes;
 internal sealed class CommandEdits(
     WorkspaceEditService edits,
     WorkspaceSnapshot snapshot,
-    Func<CancellationToken, Task<WorkspaceSnapshot>> capture,
+    Func<CancellationToken, Task<Result<WorkspaceSnapshot>>> capture,
     CancellationToken cancellationToken
 ) : IAsyncDisposable
 {
@@ -26,12 +26,12 @@ internal sealed class CommandEdits(
 
     private WorkspaceSnapshot _snapshot = snapshot;
     private TaskCompletionSource? _callbacksDrained;
-    private Exception? _failure;
+    private ToolError? _failure;
     private int _activeCallbacks;
     private bool _accepting = true;
     private bool _applied = true;
 
-    public Exception? Failure => _failure;
+    public ToolError? Failure => _failure;
 
     public bool HasChanges => _paths.Count != 0;
 
@@ -70,7 +70,11 @@ internal sealed class CommandEdits(
             catch (OperationCanceledException exception)
             {
                 return IsAcceptingEdits()
-                    ? FailCallback(exception, EditApplicationPhase.Write, applied: false)
+                    ? FailCallback(
+                        ToolError.Cancelled(exception),
+                        EditApplicationPhase.Write,
+                        applied: false
+                    )
                     : RejectedResponse();
             }
 
@@ -116,31 +120,33 @@ internal sealed class CommandEdits(
         CancellationToken token
     )
     {
-        EditReceipt receipt;
-        try
+        var result = await edits
+            .ApplyAsync(edit, _snapshot, token, parent: _call)
+            .OrCancelledAsync();
+        if (result.IsError(out var error, out var written))
         {
-            receipt = await edits.ApplyAsync(edit, _snapshot, token, parent: _call);
-        }
-        catch (EditApplicationException exception)
-        {
-            RecordReceipt(exception.Result);
-            return FailCallback(exception, exception.Phase, applied: exception.Result.Applied);
-        }
-        catch (Exception exception)
-        {
-            return FailCallback(exception, EditApplicationPhase.Write, applied: false);
+            if (error is EditFailure failure)
+            {
+                RecordReceipt(failure.Receipt);
+                return FailCallback(failure, failure.Phase, failure.Receipt.Applied);
+            }
+
+            return FailCallback(error, EditApplicationPhase.Write, applied: false);
         }
 
-        RecordReceipt(receipt);
-        try
+        RecordReceipt(written);
+        if (
+            (await capture(token).OrCancelledAsync()).IsError(
+                out var captureError,
+                out var snapshot
+            )
+        )
         {
-            _snapshot = await capture(token);
-            return new ApplyWorkspaceEditResult(Applied: true);
+            return FailCallback(captureError, EditApplicationPhase.Synchronize, applied: true);
         }
-        catch (Exception exception)
-        {
-            return FailCallback(exception, EditApplicationPhase.Synchronize, applied: true);
-        }
+
+        _snapshot = snapshot;
+        return new ApplyWorkspaceEditResult(Applied: true);
     }
 
     private bool TryBeginCallback()
@@ -192,7 +198,7 @@ internal sealed class CommandEdits(
     }
 
     private ApplyWorkspaceEditResult FailCallback(
-        Exception exception,
+        ToolError error,
         EditApplicationPhase phase,
         bool applied
     )
@@ -201,21 +207,12 @@ internal sealed class CommandEdits(
         {
             _applied &= applied;
             _failure ??=
-                applied && exception is not EditApplicationException
-                    ? new EditApplicationException(
-                        BuildResult(),
-                        phase,
-                        failedPath: null,
-                        failedOperation: null,
-                        exception
-                    )
-                    : exception;
+                applied && error is not EditFailure
+                    ? new EditFailure(error, BuildResult(), phase)
+                    : error;
 
             _accepting = false;
-            return new ApplyWorkspaceEditResult(
-                applied,
-                _failure.InnerException?.Message ?? _failure.Message
-            );
+            return new ApplyWorkspaceEditResult(applied, _failure.Message);
         }
     }
 

@@ -12,34 +12,68 @@ internal sealed partial class LspQueries
     private const int ReadHighlight = 2;
     private const int WriteHighlight = 3;
 
-    private async Task<FoundReferences> ReferencesAsync(
+    private async Task<Result<FoundReferences>> ReferencesAsync(
         JsonObject parameters,
         CancellationToken cancellationToken
     )
     {
-        var references = await session.FindReferencesAsync(parameters, cancellationToken);
+        var lookup = await session.FindReferencesAsync(parameters, cancellationToken);
+        if (lookup.IsError(out var error, out var references))
+        {
+            return error;
+        }
+
         if (references.Found)
         {
-            var locations = references.Locations.FindLocations(paths, skipGenerated: true) with
+            if (
+                references
+                    .Locations.FindLocations(paths, skipGenerated: true)
+                    .IsError(out var readError, out var read)
+            )
             {
-                Generated = references.Generated,
-            };
-            var written = references.Written.FindLocations(paths, skipGenerated: true);
-            return new FoundReferences(locations, [.. written.Positions]);
+                return readError;
+            }
+
+            if (
+                references
+                    .Written.FindLocations(paths, skipGenerated: true)
+                    .IsError(out var writtenError, out var written)
+            )
+            {
+                return writtenError;
+            }
+
+            HashSet<(string File, SourcePosition Position)> writtenPositions =
+            [
+                .. written.Positions,
+            ];
+            return new FoundReferences(
+                read with
+                {
+                    Generated = references.Generated,
+                },
+                writtenPositions
+            );
         }
 
         // definition already gives the declaration, which would read as one more usage
         parameters["context"] = new JsonObject { ["includeDeclaration"] = false };
-        var result = await session.RequestAsync(
+        var response = await session.RequestAsync(
             LspMethods.TextDocumentReferences,
             parameters,
             cancellationToken
         );
-        return new FoundReferences(result.FindLocations(paths, skipGenerated: true), Written: null);
+        if (response.IsError(out var requestError, out var result))
+        {
+            return requestError;
+        }
+
+        var located = result.FindLocations(paths, skipGenerated: true);
+        return located.Map(locations => new FoundReferences(locations, Written: null));
     }
 
     private async Task<Result<ToolResult>> AccessAsync(
-        LspRequest request,
+        NavigationRequest request,
         FoundReferences found,
         CancellationToken cancellationToken
     )
@@ -57,19 +91,19 @@ internal sealed partial class LspQueries
                 writes,
                 cancellationToken
             );
-            if (highlighted.Error is { } error)
+            if (highlighted.IsError(out var error, out var highlights))
             {
                 return error;
             }
 
-            accessed = highlighted.Value;
+            accessed = highlights;
         }
 
         var matching = found.Locations with
         {
             Positions = [.. found.Locations.Positions.Where(accessed.Contains)],
         };
-        var locations = matching.Page(request.Limit, request.Offset) with
+        var locations = matching.Page(request.Page.Limit, request.Page.Offset) with
         {
             Access = request.Action,
         };
@@ -125,15 +159,7 @@ internal sealed partial class LspQueries
                 HighlightsAsync(firsts[index].File, firsts[index].Position, writes, token),
             cancellationToken
         );
-        foreach (var result in results)
-        {
-            if (result.Error is { } error)
-            {
-                return error;
-            }
-        }
-
-        return results.SelectMany(result => result.Value).ToHashSet();
+        return results.All().Map(highlights => highlights.SelectMany(found => found).ToHashSet());
     }
 
     private async Task<Result<List<(string File, SourcePosition Position)>>> HighlightsAsync(
@@ -143,20 +169,41 @@ internal sealed partial class LspQueries
         CancellationToken cancellationToken
     )
     {
-        var highlights = await session.RequestAsync(
+        var positioned = await PositionParametersAsync(file, position, cancellationToken);
+        if (positioned.IsError(out var error, out var parameters))
+        {
+            return error;
+        }
+
+        var response = await session.RequestAsync(
             LspMethods.TextDocumentDocumentHighlight,
-            await PositionParametersAsync(file, position, cancellationToken),
+            parameters,
             cancellationToken
         );
+        if (response.IsError(out var requestError, out var result))
+        {
+            return requestError;
+        }
+
+        if (result.ReadArray<LspHighlight>().IsError(out var readError, out var highlights))
+        {
+            return readError;
+        }
+
         var lines = SourceLines.TryReadLines(paths.ResultFilePath(file));
-        var reads = highlights
-            .ToHighlightStarts(ReadHighlight)
-            .Where(_ => Accesses(writes, written: null));
-        var written = highlights
-            .ToHighlightStarts(WriteHighlight)
-            .Where(start => Accesses(writes, ByRefAccess.Of(lines, start)));
-        return reads.Concat(written).Select(start => (file, start)).ToList();
+        var reads = StartsOf(highlights, ReadHighlight);
+        var written = StartsOf(highlights, WriteHighlight);
+        return reads
+            .Where(_ => Accesses(writes, written: null))
+            .Concat(written.Where(start => Accesses(writes, ByRefAccess.Of(lines, start))))
+            .Select(start => (file, start))
+            .ToList();
     }
+
+    private static IEnumerable<SourcePosition> StartsOf(LspHighlight[] highlights, int kind) =>
+        highlights
+            .Where(highlight => highlight.Kind == kind)
+            .Select(highlight => highlight.Range.Start.OneBased);
 
     /// <summary>
     /// Roslyn counts an argument passed by reference as a write, so its text decides whether it also reads.

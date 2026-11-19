@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Thomas Fazzari
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+using System.ComponentModel;
 using Microsoft.Extensions.Logging;
 using RoslynBridge.Settings;
 using RoslynBridge.Telemetry;
@@ -21,7 +22,7 @@ internal sealed partial class RoslynSession(
 {
     private RoslynConnection? _connection;
     private CancellationTokenSource? _startupCancellation;
-    private Task? _startup;
+    private Task<Result>? _startup;
     private bool _disposed;
 
     public JsonObject? Capabilities => _connection?.Capabilities;
@@ -83,9 +84,9 @@ internal sealed partial class RoslynSession(
         );
         // A load started at launch has no caller until the first tool call
         _ = _startup.ContinueWith(
-            load => LogLoadFailed(logger, load.Exception!.GetBaseException()),
+            LogLoadFailure,
             CancellationToken.None,
-            TaskContinuationOptions.OnlyOnFaulted,
+            TaskContinuationOptions.NotOnCanceled,
             TaskScheduler.Default
         );
     }
@@ -93,26 +94,30 @@ internal sealed partial class RoslynSession(
     /// <summary>
     /// The load continues when the startup timeout ends the wait.
     /// </summary>
-    public async Task EnsureStartedAsync(CancellationToken cancellationToken)
+    public async Task<Result> EnsureStartedAsync(CancellationToken cancellationToken)
     {
         await StartLoadingAsync();
+        var startup = _startup!;
         try
         {
-            await _startup!.WaitAsync(settings.CurrentValue.StartupTimeout, cancellationToken);
+            return await startup.WaitAsync(settings.CurrentValue.StartupTimeout, cancellationToken);
         }
-        catch (TimeoutException) when (IsLoading)
+        catch (TimeoutException)
         {
-            throw new WorkspaceLoadingException(Progress);
+            // Load may finish between the timeout and this check
+            return startup.IsCompleted
+                ? await startup
+                : new ToolError(ErrorCodes.Loading, LoadingMessage(Progress));
         }
     }
 
-    public async Task ReloadAsync(CancellationToken cancellationToken)
+    public async Task<Result> ReloadAsync(CancellationToken cancellationToken)
     {
         await StopAsync();
-        await EnsureStartedAsync(cancellationToken);
+        return await EnsureStartedAsync(cancellationToken);
     }
 
-    public Task<JsonNode?> RequestAsync(
+    public Task<Result<JsonNode?>> RequestAsync(
         string method,
         JsonNode? parameters,
         CancellationToken cancellationToken
@@ -122,55 +127,57 @@ internal sealed partial class RoslynSession(
         CancellationToken cancellationToken
     ) => Connection.CopyDocumentVersionsAsync(cancellationToken);
 
-    public Task<string> OpenDocumentAsync(string file, CancellationToken cancellationToken) =>
-        Connection.OpenDocumentAsync(file, cancellationToken);
+    public Task<Result<string>> OpenDocumentAsync(
+        string file,
+        CancellationToken cancellationToken
+    ) => Connection.OpenDocumentAsync(file, cancellationToken);
 
-    public Task<List<string>> OpenDocumentsAsync(
+    public Task<Result<List<string>>> OpenDocumentsAsync(
         IReadOnlyCollection<string> files,
         CancellationToken cancellationToken
     ) => Connection.OpenDocumentsAsync(files, cancellationToken);
 
-    public Task SynchronizeAsync(CancellationToken cancellationToken) =>
+    public Task<Result> SynchronizeAsync(CancellationToken cancellationToken) =>
         Connection.SynchronizeAsync(cancellationToken);
 
-    public Task SynchronizeFilesAsync(
+    public Task<Result> SynchronizeFilesAsync(
         IEnumerable<string> files,
         CancellationToken cancellationToken
     ) => Connection.SynchronizeFilesAsync(files, cancellationToken);
 
-    public Task SynchronizeNewFilesAsync(
+    public Task<Result> SynchronizeNewFilesAsync(
         IEnumerable<string> files,
         CancellationToken cancellationToken
     ) => Connection.SynchronizeNewFilesAsync(files, cancellationToken);
 
-    public Task<Dictionary<string, FileStamp>> SynchronizeWorkspaceAsync(
+    public Task<Result<Dictionary<string, FileStamp>>> SynchronizeWorkspaceAsync(
         CancellationToken cancellationToken
     ) => Connection.SynchronizeWorkspaceAsync(cancellationToken);
 
-    public Task<string[]> WorkspaceFilesAsync(CancellationToken cancellationToken) =>
+    public Task<Result<string[]>> WorkspaceFilesAsync(CancellationToken cancellationToken) =>
         Connection.WorkspaceFilesAsync(cancellationToken);
 
-    public Task<LspDiagnosticReport> DiagnosticReportAsync(
+    public Task<Result<LspDiagnosticReport>> DiagnosticReportAsync(
         string uri,
         CancellationToken cancellationToken
     ) => Connection.DiagnosticReportAsync(uri, cancellationToken);
 
-    public Task<ProjectContext[]> ProjectContextsAsync(
+    public Task<Result<ProjectContext[]>> ProjectContextsAsync(
         string uri,
         CancellationToken cancellationToken
     ) => Connection.ProjectContextsAsync(uri, cancellationToken);
 
-    public Task<HashSet<string>> WaitForProjectsAsync(
+    public Task<Result<HashSet<string>>> WaitForProjectsAsync(
         IReadOnlyCollection<string> files,
         CancellationToken cancellationToken
     ) => Connection.WaitForProjectsAsync(files, cancellationToken);
 
-    public Task<ExtensionReferences> FindReferencesAsync(
+    public Task<Result<ExtensionReferences>> FindReferencesAsync(
         JsonObject parameters,
         CancellationToken cancellationToken
     ) => Connection.FindReferencesAsync(parameters, cancellationToken);
 
-    public Task<ExtensionCallers> FindCallersAsync(
+    public Task<Result<ExtensionCallers>> FindCallersAsync(
         JsonObject parameters,
         CancellationToken cancellationToken
     ) => Connection.FindCallersAsync(parameters, cancellationToken);
@@ -197,25 +204,69 @@ internal sealed partial class RoslynSession(
         "CA2000:Dispose objects before losing scope",
         Justification = "The session disposes the connection when it stops."
     )]
-    private async Task StartAsync(CancellationToken cancellationToken)
+    private async Task<Result> StartAsync(CancellationToken cancellationToken)
     {
         var options = settings.CurrentValue;
+        IRoslynServer server;
+        try
+        {
+            server = launcher(options, paths);
+        }
+        catch (Exception exception) when (exception is Win32Exception || ToolError.IsIo(exception))
+        {
+            return ToolError.Io(exception.Message);
+        }
+
         _connection = new RoslynConnection(
-            launcher(options, paths),
+            server,
             options,
             settings,
             paths,
             new ClientCallbacks(this, paths, logger),
             logger
         );
+        Result started;
         try
         {
-            await _connection.StartAsync(cancellationToken);
+            started = await _connection.StartAsync(cancellationToken);
+        }
+        catch (Exception exception) when (ToolError.IsIo(exception))
+        {
+            await StopConnectionAsync();
+            return ToolError.Io(exception.Message);
         }
         catch
         {
             await StopConnectionAsync();
             throw;
+        }
+
+        if (started is ToolError)
+        {
+            await StopConnectionAsync();
+        }
+
+        return started;
+    }
+
+    private static string LoadingMessage(LoadProgress? progress)
+    {
+        const string Loading = "Roslyn is still loading the workspace.";
+        const string Advice = "Retry the call, or use lsp status to follow the load.";
+        return progress is null
+            ? $"{Loading} {Advice}"
+            : $"{Loading} Progress: {progress.Text}. {Advice}";
+    }
+
+    private void LogLoadFailure(Task<Result> load)
+    {
+        if (load.IsFaulted)
+        {
+            LogLoadCrashed(logger, load.Exception.GetBaseException());
+        }
+        else if (load.Result is ToolError error)
+        {
+            LogLoadFailed(logger, error.Message);
         }
     }
 
@@ -250,8 +301,14 @@ internal sealed partial class RoslynSession(
     [LoggerMessage(Level = LogLevel.Debug, Message = "Stopped Roslyn while it was loading.")]
     private static partial void LogStartupStopped(ILogger logger, Exception exception);
 
+    [LoggerMessage(
+        Level = LogLevel.Error,
+        Message = "Roslyn failed to load the workspace: {Reason}"
+    )]
+    private static partial void LogLoadFailed(ILogger logger, string reason);
+
     [LoggerMessage(Level = LogLevel.Error, Message = "Roslyn failed to load the workspace.")]
-    private static partial void LogLoadFailed(ILogger logger, Exception exception);
+    private static partial void LogLoadCrashed(ILogger logger, Exception exception);
 
     private sealed class WorkspaceEditScope(RoslynSession session) : IDisposable
     {

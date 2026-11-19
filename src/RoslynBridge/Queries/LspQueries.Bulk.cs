@@ -12,29 +12,22 @@ internal sealed partial class LspQueries
 
     /// <param name="fileErrors">The errors of query files that match several files, by name.</param>
     public async Task<Result<ToolResult>> BulkAsync(
-        LspRequest request,
+        BulkRequest request,
         IReadOnlyDictionary<string, ToolError> fileErrors,
         CancellationToken cancellationToken
     )
     {
-        var queries = request
-            .Queries.Select(query =>
-                query with
-                {
-                    Limit = request.Limit,
-                    Offset = request.Offset,
-                    Context = request.Context,
-                }
-            )
-            .ToList();
+        var queries = request.Queries;
         var located = await LocateAllAsync(queries, fileErrors, cancellationToken);
 
         return await SectionsAsync(
             [.. queries.Select((query, index) => Label(index + 1, query))],
             async (index, token) =>
-                located[index].Error is { } error
-                    ? error
-                    : await NavigationAsync(located[index].Value, token),
+                located[index] switch
+                {
+                    ToolError error => error,
+                    NavigationRequest query => await NavigationAsync(query, token),
+                },
             cancellationToken
         );
     }
@@ -74,10 +67,6 @@ internal sealed partial class LspQueries
                         "The query did not finish before the request timeout."
                     );
                 }
-                catch (Exception exception) when (ToolFailures.IsReported(exception))
-                {
-                    results[index] = ToolFailures.ToError(exception);
-                }
             }
         );
 
@@ -85,27 +74,31 @@ internal sealed partial class LspQueries
     }
 
     // A symbol that several queries name resolves once, and a failure to resolve it fails them all
-    private async Task<Result<LspRequest>[]> LocateAllAsync(
-        IReadOnlyList<LspRequest> queries,
+    private async Task<Result<NavigationRequest>[]> LocateAllAsync(
+        IReadOnlyList<NavigationRequest> queries,
         IReadOnlyDictionary<string, ToolError> fileErrors,
         CancellationToken cancellationToken
     )
     {
         var named = queries
             .Where(query => NeedsLocation(query) && FileError(query, fileErrors) is null)
-            .GroupBy(query => (query.Symbol, query.File))
+            .GroupBy(query => (query.Target.Symbol, query.Target.File))
             .ToList();
         var found = await RunConcurrentlyAsync(
             named.Count,
-            (index, token) => LocateAsync(named[index].First(), token),
+            (index, token) =>
+            {
+                var query = named[index].First();
+                return LocateAsync(query.Target, query.Action, token);
+            },
             cancellationToken
         );
         var locations = named.Zip(found).ToDictionary(pair => pair.First.Key, pair => pair.Second);
         return [.. queries.Select(query => Located(query, locations, fileErrors))];
     }
 
-    private static Result<LspRequest> Located(
-        LspRequest query,
+    private static Result<NavigationRequest> Located(
+        NavigationRequest query,
         Dictionary<
             (string? Symbol, string? File),
             Result<(string File, SourcePosition Position)>
@@ -123,46 +116,47 @@ internal sealed partial class LspQueries
             return query;
         }
 
-        var location = locations[(query.Symbol, query.File)];
-        if (location.Error is { } error)
+        if (
+            locations[(query.Target.Symbol, query.Target.File)]
+                .IsError(out var error, out var found)
+        )
         {
             return error;
         }
 
-        var (file, position) = location.Value;
         return query with
         {
-            Symbol = null,
-            File = file,
-            Line = position.Line,
-            Character = position.Character,
+            Target = SymbolTarget.At(found.File, found.Position),
         };
     }
 
     private static ToolError? FileError(
-        LspRequest query,
+        NavigationRequest query,
         IReadOnlyDictionary<string, ToolError> fileErrors
-    ) => query.File is { } file ? fileErrors.GetValueOrDefault(file) : null;
+    ) => query.Target.File is { } file ? fileErrors.GetValueOrDefault(file) : null;
 
     // source and members resolve declarations themselves
-    private static bool NeedsLocation(LspRequest query) =>
-        query is { Symbol: not null, Line: null, Character: null }
+    private static bool NeedsLocation(NavigationRequest query) =>
+        query.Target is { Symbol: not null, Line: null, Character: null }
         && query.Action is not (LspAction.Source or LspAction.Members);
 
-    private static string Label(int number, LspRequest query) =>
+    private static string Label(int number, NavigationRequest query) =>
         string.Create(
             CultureInfo.InvariantCulture,
-            $"{number} {query.Action.Name} {query.Symbol ?? Position(query)}"
+            $"{number} {query.Action.Name} {query.Target.Symbol ?? Position(query.Target)}"
         );
 
-    private static string Position(LspRequest query) =>
-        (query.Line, query.Character) switch
+    private static string Position(SymbolTarget target) =>
+        (target.Line, target.Character) switch
         {
             ({ } line, { } character) => string.Create(
                 CultureInfo.InvariantCulture,
-                $"{query.File}:{line}:{character}"
+                $"{target.File}:{line}:{character}"
             ),
-            ({ } line, null) => string.Create(CultureInfo.InvariantCulture, $"{query.File}:{line}"),
-            _ => query.File ?? string.Empty,
+            ({ } line, null) => string.Create(
+                CultureInfo.InvariantCulture,
+                $"{target.File}:{line}"
+            ),
+            _ => target.File ?? string.Empty,
         };
 }

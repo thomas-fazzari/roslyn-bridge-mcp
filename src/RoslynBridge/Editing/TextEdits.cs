@@ -9,18 +9,23 @@ internal static class TextEdits
 {
     internal const int MaximumTextEditCount = 10_000;
 
-    public static string Apply(string source, TextEdit?[] edits)
+    public static Result<string> Apply(string source, TextEdit?[] edits)
     {
         if (edits.Length > MaximumTextEditCount)
         {
-            throw new ToolErrorException(
-                ToolError.InvalidRequest($"The edit exceeds {MaximumTextEditCount} text changes.")
+            return ToolError.InvalidRequest(
+                $"The edit exceeds {MaximumTextEditCount} text changes."
             );
         }
 
         var lines = GetLines(source);
-        var changes = edits
-            .Select((edit, index) => Parse(edit, index, lines))
+        var parseResult = edits.Select((edit, index) => Parse(edit, index, lines)).All();
+        if (parseResult.IsError(out var error, out var parsed))
+        {
+            return error;
+        }
+
+        var changes = parsed
             .OrderBy(change => change.Start)
             .ThenBy(change => change.End)
             .ThenBy(change => change.Index);
@@ -30,18 +35,14 @@ internal static class TextEdits
         {
             if (change.Start < offset || change.End < change.Start)
             {
-                throw new ToolErrorException(
-                    ToolError.InvalidLspData("Text edit ranges overlap or run backwards.")
-                );
+                return ToolError.InvalidLspData("Text edit ranges overlap or run backwards.");
             }
 
             result.Append(source, offset, change.Start - offset).Append(change.Text);
             offset = change.End;
             if (result.Length > WorkspaceEditService.MaximumFileBytes)
             {
-                throw new ToolErrorException(
-                    ToolError.InvalidRequest("The edited document exceeds the size limit.")
-                );
+                return ToolError.InvalidRequest("The edited document exceeds the size limit.");
             }
         }
 
@@ -77,32 +78,33 @@ internal static class TextEdits
     internal static bool IsLineBreak(char character) =>
         character is '\r' or '\n' or '\u0085' or '\u2028' or '\u2029';
 
-    private static Change Parse(TextEdit? edit, int index, List<LineSpan> lines)
+    private static Result<Change> Parse(TextEdit? edit, int index, List<LineSpan> lines)
     {
         if (edit is null)
         {
-            throw new ToolErrorException(ToolError.InvalidLspData("Missing text edit."));
+            return ToolError.InvalidLspData("Missing text edit.");
         }
 
-        return new Change(
-            GetOffset(edit.Range.Start, lines),
-            GetOffset(edit.Range.End, lines),
-            edit.NewText,
-            index
-        );
+        if (
+            GetOffset(edit.Range.Start, lines) is not { } start
+            || GetOffset(edit.Range.End, lines) is not { } end
+        )
+        {
+            return ToolError.InvalidLspData("The text edit position is outside the document.");
+        }
+
+        return new Change(start, end, edit.NewText, index);
     }
 
-    private static int GetOffset(LspPosition position, List<LineSpan> lines)
+    /// <summary>
+    /// Null for a position outside the document.
+    /// </summary>
+    private static int? GetOffset(LspPosition position, List<LineSpan> lines)
     {
         var (line, character) = (position.Line, position.Character);
-        if (line < 0 || line >= lines.Count || character < 0 || character > lines[line].Length)
-        {
-            throw new ToolErrorException(
-                ToolError.InvalidLspData("The text edit position is outside the document.")
-            );
-        }
-
-        return lines[line].Start + character;
+        return line < 0 || line >= lines.Count || character < 0 || character > lines[line].Length
+            ? null
+            : lines[line].Start + character;
     }
 
     private sealed record Change(int Start, int End, string Text, int Index);

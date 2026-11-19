@@ -47,7 +47,7 @@ public sealed class WorkspaceEditServiceTests : TempWorkspaceTests
         var snapshot = Snapshot(Root);
         var edit = WorkspaceChanges(path, TextEdit(0, 6, 0, 10, "value"));
 
-        var result = await service.ApplyAsync(edit, snapshot, TestCt);
+        var result = (await service.ApplyAsync(edit, snapshot, TestCt)).Succeeded();
 
         result.Applied.Should().BeTrue();
         var bytes = await File.ReadAllBytesAsync(path, TestCt);
@@ -88,19 +88,19 @@ public sealed class WorkspaceEditServiceTests : TempWorkspaceTests
 
         try
         {
-            var exception = (
-                await FluentActions.Awaiting(Apply).Should().ThrowAsync<EditApplicationException>()
-            ).Which;
-
-            exception.Phase.Should().Be(EditApplicationPhase.Write);
-            exception.FailedPath.Should().Be(Path.Combine("Nested", "Delete.cs"));
-            exception.FailedOperation.Should().Be(FileOperation.Delete);
-            (exception.InnerException is IOException or UnauthorizedAccessException)
+            var result = await service.ApplyAsync(edit, snapshot, TestCt);
+            var failure = (result is ToolError error ? error : null)
                 .Should()
-                .BeTrue();
-            exception.Result.Applied.Should().BeFalse();
-            exception
-                .Result.Operations.Should()
+                .BeOfType<EditFailure>()
+                .Subject;
+
+            failure.Phase.Should().Be(EditApplicationPhase.Write);
+            failure.FailedPath.Should().Be(Path.Combine("Nested", "Delete.cs"));
+            failure.FailedOperation.Should().Be(FileOperation.Delete);
+            failure.Code.Should().Be(ErrorCodes.Io);
+            failure.Receipt.Applied.Should().BeFalse();
+            failure
+                .Receipt.Operations.Should()
                 .Equal(new FileOperation("First.cs", FileOperation.Change));
             await AssertFileTextAsync(first, "class Changed {}");
             File.Exists(deleted).Should().BeTrue();
@@ -109,9 +109,6 @@ public sealed class WorkspaceEditServiceTests : TempWorkspaceTests
         {
             File.SetUnixFileMode(directory.FullName, originalMode);
         }
-        return;
-
-        Task Apply() => service.ApplyAsync(edit, snapshot, TestCt);
     }
 
     [Fact]
@@ -121,11 +118,13 @@ public sealed class WorkspaceEditServiceTests : TempWorkspaceTests
         var service = CreateService();
         var snapshot = Snapshot(Root);
 
-        var (preview, _) = await service.PreviewAsync(
-            WorkspaceChanges(path, TextEdit(0, 6, 0, 7, "B")),
-            snapshot,
-            TestCt
-        );
+        var (preview, _) = (
+            await service.PreviewAsync(
+                WorkspaceChanges(path, TextEdit(0, 6, 0, 7, "B")),
+                snapshot,
+                TestCt
+            )
+        ).Succeeded();
 
         preview.Should().ContainSingle().Which.Changes[0].After.Should().Be("class B {}");
         await AssertFileTextAsync(path, "class A {}");
@@ -156,7 +155,7 @@ public sealed class WorkspaceEditServiceTests : TempWorkspaceTests
         var service = CreateService();
         var snapshot = Snapshot(Root);
 
-        var (preview, _) = await service.PreviewAsync(edit, snapshot, TestCt);
+        var (preview, _) = (await service.PreviewAsync(edit, snapshot, TestCt)).Succeeded();
         var rendered = ResponseText(
             LspTool.Response(new ProposalPreview("proposal", preview, Command: null))
         );
@@ -166,7 +165,7 @@ public sealed class WorkspaceEditServiceTests : TempWorkspaceTests
         rendered.Length.Should().BeLessThanOrEqualTo(ResultText.MaximumResponseCharacters);
         await AssertFileTextAsync(Path.Combine(Root, "Source0.cs"), before);
 
-        var applied = await service.ApplyAsync(edit, snapshot, TestCt);
+        var applied = (await service.ApplyAsync(edit, snapshot, TestCt)).Succeeded();
 
         applied.Applied.Should().BeTrue();
         applied.Operations.Should().HaveCount(fileCount);
@@ -194,7 +193,7 @@ public sealed class WorkspaceEditServiceTests : TempWorkspaceTests
         await AssertFileTextAsync(second, "class External {}");
         return;
 
-        Task Apply() => service.ApplyAsync(edit, snapshot, TestCt);
+        Task<Result<EditReceipt>> Apply() => service.ApplyAsync(edit, snapshot, TestCt);
     }
 
     [Fact]
@@ -210,7 +209,7 @@ public sealed class WorkspaceEditServiceTests : TempWorkspaceTests
         await AssertFileTextAsync(target, "class A {}");
         return;
 
-        Task Apply() =>
+        Task<Result<EditReceipt>> Apply() =>
             service.ApplyAsync(
                 WorkspaceChanges(target, TextEdit(0, 6, 0, 7, "C")),
                 snapshot,
@@ -242,7 +241,7 @@ public sealed class WorkspaceEditServiceTests : TempWorkspaceTests
         var target = await WriteFileAsync(Root, "Target.cs", "class A {}");
         var service = CreateService();
         var edit = WorkspaceChanges(target, TextEdit(0, 6, 0, 7, "C"));
-        var (_, previewed) = await service.PreviewAsync(edit, Snapshot(Root), TestCt);
+        var (_, previewed) = (await service.PreviewAsync(edit, Snapshot(Root), TestCt)).Succeeded();
         var written = File.GetLastWriteTimeUtc(target);
         await File.WriteAllTextAsync(target, "class B {}", TestCt);
         File.SetLastWriteTimeUtc(target, written);
@@ -251,7 +250,7 @@ public sealed class WorkspaceEditServiceTests : TempWorkspaceTests
         await AssertFileTextAsync(target, "class B {}");
         return;
 
-        Task Apply() => service.ApplyAsync(edit, previewed, TestCt);
+        Task<Result<EditReceipt>> Apply() => service.ApplyAsync(edit, previewed, TestCt);
     }
 
     [Fact]
@@ -327,7 +326,7 @@ public sealed class WorkspaceEditServiceTests : TempWorkspaceTests
             RenameFile(destination, source)
         );
 
-        var result = await service.ApplyAsync(edit, snapshot, TestCt);
+        var result = (await service.ApplyAsync(edit, snapshot, TestCt)).Succeeded();
 
         result.Operations.Should().BeEmpty();
         Directory.EnumerateFiles(Root).Select(Path.GetFileName).Should().Equal("Name.cs");
@@ -344,7 +343,7 @@ public sealed class WorkspaceEditServiceTests : TempWorkspaceTests
         await AssertFileTextAsync(source, "class A {}");
         return;
 
-        Task Apply() =>
+        Task<Result<EditReceipt>> Apply() =>
             service.ApplyAsync(
                 WorkspaceChanges(source, TextEdit(0, 6, 0, 7, "B")),
                 snapshot,
@@ -366,7 +365,8 @@ public sealed class WorkspaceEditServiceTests : TempWorkspaceTests
         File.Exists(target).Should().BeFalse();
         return;
 
-        Task Apply() => service.ApplyAsync(DocumentChanges(CreateFile(target)), snapshot, TestCt);
+        Task<Result<EditReceipt>> Apply() =>
+            service.ApplyAsync(DocumentChanges(CreateFile(target)), snapshot, TestCt);
     }
 
     [Theory]
@@ -387,7 +387,8 @@ public sealed class WorkspaceEditServiceTests : TempWorkspaceTests
         await AssertFileTextAsync(source, "class Source {}");
         return;
 
-        Task Apply() => service.ApplyAsync(DocumentChanges(operation), snapshot, TestCt);
+        Task<Result<EditReceipt>> Apply() =>
+            service.ApplyAsync(DocumentChanges(operation), snapshot, TestCt);
     }
 
     [Theory]
@@ -413,7 +414,8 @@ public sealed class WorkspaceEditServiceTests : TempWorkspaceTests
         File.Exists(target).Should().BeFalse();
         return;
 
-        Task Apply() => service.ApplyAsync(DocumentChanges(operation), snapshot, TestCt);
+        Task<Result<EditReceipt>> Apply() =>
+            service.ApplyAsync(DocumentChanges(operation), snapshot, TestCt);
     }
 
     [Theory]
@@ -434,7 +436,8 @@ public sealed class WorkspaceEditServiceTests : TempWorkspaceTests
         await AssertFileTextAsync(target, "class Target {}");
         return;
 
-        Task Apply() => service.ApplyAsync(DocumentChanges(operation), snapshot, TestCt);
+        Task<Result<EditReceipt>> Apply() =>
+            service.ApplyAsync(DocumentChanges(operation), snapshot, TestCt);
     }
 
     protected override void Dispose(bool disposing)
@@ -449,6 +452,8 @@ public sealed class WorkspaceEditServiceTests : TempWorkspaceTests
 
     private WorkspaceEditService CreateService() => new(new WorkspacePaths(Root));
 
-    private static async Task AssertErrorAsync(Func<Task> apply, string code) =>
-        (await apply.Should().ThrowAsync<ToolErrorException>()).Which.Error.Code.Should().Be(code);
+    private static async Task AssertErrorAsync(
+        Func<Task<Result<EditReceipt>>> apply,
+        string code
+    ) => (await apply()).ErrorCode().Should().Be(code);
 }

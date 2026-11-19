@@ -60,22 +60,6 @@ internal static class LspActions
     {
         public string Name => JsonNamingPolicy.SnakeCaseLower.ConvertName(action.ToString());
 
-        /// <summary>
-        /// Whether the navigate tool serves the action.
-        /// </summary>
-        public bool IsNavigation =>
-            action
-                is LspAction.Definition
-                    or LspAction.TypeDefinition
-                    or LspAction.Implementation
-                    or LspAction.References
-                    or LspAction.Hover
-                    or LspAction.Source
-                    or LspAction.Members
-                    or LspAction.Impact
-            || action.IsHierarchy
-            || action.IsAccess;
-
         public bool IsAccess => action is LspAction.Reads or LspAction.Writes;
 
         public bool IsHierarchy =>
@@ -90,8 +74,5 @@ internal static class LspActions
         /// </summary>
         public bool TakesType =>
             action is LspAction.Members or LspAction.Subtypes or LspAction.Supertypes;
-
-        public bool IsChange =>
-            action is LspAction.Rename or LspAction.RenameFile or LspAction.CodeActions;
     }
 }

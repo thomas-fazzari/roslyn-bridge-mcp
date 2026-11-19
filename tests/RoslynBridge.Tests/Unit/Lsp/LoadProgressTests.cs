@@ -6,7 +6,6 @@ using RoslynBridge.Requests;
 using RoslynBridge.Settings;
 using RoslynBridge.Tests.Assertions;
 using RoslynBridge.Tests.Fakes;
-using RoslynBridge.Tools;
 using static RoslynBridge.Tests.Unit.TestHelpers;
 
 namespace RoslynBridge.Tests.Unit.Lsp;
@@ -134,13 +133,10 @@ public sealed class LoadProgressTests : TempWorkspaceTests
         await first.ReportProgressAsync("load", Begin("Loading Workspace.slnx"), cancellationToken);
         (await StatusAsync(tool)).Should().Contain("progress: Loading Workspace.slnx");
 
-        await FluentActions.Awaiting(Reload).Should().ThrowAsync<WorkspaceLoadingException>();
+        (await session.ReloadAsync(cancellationToken)).ErrorCode().Should().Be(ErrorCodes.Loading);
         var status = await StatusAsync(tool);
 
         status.Should().Contain("loading: true").And.NotContain("progress:");
-        return;
-
-        Task Reload() => session.ReloadAsync(cancellationToken);
     }
 
     private static TaskCompletionSource NewCompletionSource() =>
@@ -159,7 +155,7 @@ public sealed class LoadProgressTests : TempWorkspaceTests
             launched.SetResult(server);
         });
 
-    private static async Task<string> StatusAsync(LspTool tool) =>
+    private static async Task<string> StatusAsync(ToolClient tool) =>
         ResponseText(await tool.ExecuteAsync(StatusRequest(), TestCt));
 
     private static LspRequest StatusRequest() => new() { Action = LspAction.Status };

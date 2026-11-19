@@ -185,7 +185,7 @@ internal sealed class RoslynTestWorkspace : IAsyncDisposable
                 ["file", "severity", "limit", "offset"]
             ),
             LspAction.Symbols => (SymbolsTool.Name, ["file", "query", "unused", "limit", "offset"]),
-            _ when request.Action.IsNavigation => (
+            _ when request.IsNavigation => (
                 NavigateTool.Name,
                 new[]
                 {
@@ -201,7 +201,7 @@ internal sealed class RoslynTestWorkspace : IAsyncDisposable
                 }
             ),
             LspAction.Bulk => (BulkNavigateTool.Name, ["queries", "context", "limit", "offset"]),
-            _ when request.Action.IsChange => (
+            _ when request.IsEdit => (
                 EditTool.Name,
                 [
                     "action",
@@ -233,7 +233,7 @@ internal sealed class RoslynTestWorkspace : IAsyncDisposable
             ["action"] = JsonNamingPolicy.SnakeCaseLower.ConvertName(request.Action.ToString()),
             ["file"] = request.File,
             ["symbol"] = request.Symbol,
-            ["severity"] = request.Severity.ToString().ToLowerInvariant(),
+            ["severity"] = request.Severity?.ToString().ToLowerInvariant(),
             ["line"] = request.Line,
             ["character"] = request.Character,
             ["endLine"] = request.EndLine,

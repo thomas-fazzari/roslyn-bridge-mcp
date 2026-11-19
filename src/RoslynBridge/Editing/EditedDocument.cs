@@ -52,31 +52,50 @@ internal sealed class EditedDocument(string path, byte[]? original)
 
     public bool Changed => CaseOnlyRename || !SameBytes(Original, Content);
 
-    public void Apply(TextEdit?[] edits)
+    public Result Apply(TextEdit?[] edits)
     {
-        var content = Content
-            ?? throw new ToolErrorException(
-                ToolError.InvalidLspData($"The file does not exist: {Path}")
-            );
+        if (Content is not { } content)
+        {
+            return ToolError.InvalidLspData($"The file does not exist: {Path}");
+        }
+
         var (encoding, preamble) = GetEncoding(content);
-        var result = TextEdits.Apply(Decode(content), edits);
-        var length = encoding.GetByteCount(result);
+        if (Decode(content).IsError(out var decodeError, out var source))
+        {
+            return decodeError;
+        }
+
+        if (TextEdits.Apply(source, edits).IsError(out var editError, out var edited))
+        {
+            return editError;
+        }
+
+        var length = encoding.GetByteCount(edited);
         if (length + preamble > WorkspaceEditService.MaximumFileBytes)
         {
-            throw new ToolErrorException(
-                ToolError.InvalidRequest($"The edited file exceeds the size limit: {Path}")
-            );
+            return ToolError.InvalidRequest($"The edited file exceeds the size limit: {Path}");
         }
 
         var bytes = new byte[length + preamble];
         content.AsSpan(0, preamble).CopyTo(bytes);
-        encoding.GetBytes(result.AsSpan(), bytes.AsSpan(preamble));
+        encoding.GetBytes(edited.AsSpan(), bytes.AsSpan(preamble));
         Content = bytes;
+        return Result.Success;
     }
 
-    public FilePreview Describe(WorkspacePaths paths)
+    public Result<FilePreview> Describe(WorkspacePaths paths)
     {
-        var preview = TextPreview.Create(Decode(Original), Decode(Content));
+        if (Decode(Original).IsError(out var beforeError, out var before))
+        {
+            return beforeError;
+        }
+
+        if (Decode(Content).IsError(out var afterError, out var after))
+        {
+            return afterError;
+        }
+
+        var preview = TextPreview.Create(before, after);
         var kind = (Original, Content, CaseOnlyRename) switch
         {
             (null, _, _) => FileOperation.Create,
@@ -95,7 +114,7 @@ internal sealed class EditedDocument(string path, byte[]? original)
         );
     }
 
-    private string Decode(byte[]? content)
+    private Result<string> Decode(byte[]? content)
     {
         if (content is null)
         {
@@ -109,8 +128,8 @@ internal sealed class EditedDocument(string path, byte[]? original)
         }
         catch (DecoderFallbackException)
         {
-            throw new ToolErrorException(
-                ToolError.InvalidRequest($"The file is not valid {encoding.WebName} text: {Path}")
+            return ToolError.InvalidRequest(
+                $"The file is not valid {encoding.WebName} text: {Path}"
             );
         }
     }

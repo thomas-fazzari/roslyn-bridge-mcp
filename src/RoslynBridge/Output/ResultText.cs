@@ -47,10 +47,10 @@ internal static partial class ResultText
     public static string ResolvedFiles(IEnumerable<string> files) =>
         string.Concat(files.Select(file => $"{ResolvedFilePrefix}{file}\n"));
 
-    public static string Error(ToolError error, int? rpcCode)
+    public static string Error(ToolError error)
     {
         var text = new StringBuilder(ErrorPrefix).Append(error.Code);
-        if (rpcCode is { } code)
+        if (error.RpcCode is { } code)
         {
             text.Append(CultureInfo.InvariantCulture, $" (LSP {code})");
         }
@@ -122,12 +122,12 @@ internal static partial class ResultText
     private static string SectionBlock(ReportSection section, int budget, string heading)
     {
         var header = $"{heading} {section.Label}";
-        if (section.Result.Error is { } error)
+        if (section.Result.IsError(out var error, out var value))
         {
-            return $"{header}\n{Error(error, rpcCode: null)}\n";
+            return $"{header}\n{Error(error)}\n";
         }
 
-        switch (section.Result.Value)
+        switch (value)
         {
             case Locations { Total: 0 } or SymbolList { Total: 0 }:
                 return $"{header}: none\n";
@@ -136,7 +136,7 @@ internal static partial class ResultText
                 AppendSections(inner, nested, budget, heading + "#");
                 return $"{header}\n{Finish(inner)}\n";
             default:
-                return $"{header}\n{Render(section.Result.Value, budget)}\n";
+                return $"{header}\n{Render(value, budget)}\n";
         }
     }
 

@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 using RoslynBridge.Lsp;
-using RoslynBridge.Results;
 
 namespace RoslynBridge.Queries;
 
@@ -10,10 +9,12 @@ internal sealed partial class LspQueries
 {
     // Each candidate costs a hover request
     private const int MaximumNearbyNames = 4;
+    private const string NoNearestHint = " Check the line and character, which start at 1.";
 
     /// <summary>
     /// The error for a position that touches no symbol, such as white space or punctuation beside a name.
     /// It names the nearest symbol on the line. Null when the position touches a symbol.
+    /// A failed Roslyn request returns the error of that request.
     /// </summary>
     /// <param name="parameters">The textDocument and zero-based position of a request.</param>
     public async Task<ToolError?> MissingSymbolAsync(
@@ -21,38 +22,51 @@ internal sealed partial class LspQueries
         CancellationToken cancellationToken
     )
     {
-        if (await HasSymbolAsync(parameters, cancellationToken))
+        var symbolCheck = await HasSymbolAsync(parameters, cancellationToken);
+        if (symbolCheck.IsError(out var error, out var hasSymbol))
+        {
+            return error;
+        }
+
+        if (hasSymbol)
         {
             return null;
         }
 
+        if (
+            parameters["position"]
+                .Read<LspPosition>()
+                .IsError(out var positionError, out var position)
+        )
+        {
+            return positionError;
+        }
+
         var uri = parameters["textDocument"]!["uri"]!.GetValue<string>();
-        var position = parameters["position"].Read<LspPosition>();
         var file = paths.TryGetWorkspaceFile(uri);
         var requested = position.OneBased;
         var message = string.Create(
             CultureInfo.InvariantCulture,
             $"No symbol at {requested.Line}:{requested.Character} of {(file is null ? uri : paths.RelativePath(file))}."
         );
-        var nearest = await NearestSymbolAsync(uri, file, position, cancellationToken);
-        var hint = nearest is var (name, found)
-            ? string.Create(
-                CultureInfo.InvariantCulture,
-                $" The nearest symbol on the line is {name} at {found.Line}:{found.Character}."
-            )
-            : " Check the line and character, which start at 1.";
+        var nearest = await NearestSymbolHintAsync(uri, file, position, cancellationToken);
+        if (nearest.IsError(out var hintError, out var hint))
+        {
+            return hintError;
+        }
+
         return new ToolError(ErrorCodes.SymbolNotFound, message + hint);
     }
 
-    private async Task<bool> HasSymbolAsync(
+    private async Task<Result<bool>> HasSymbolAsync(
         JsonObject parameters,
         CancellationToken cancellationToken
     ) =>
-        (await session.RequestAsync(LspMethods.TextDocumentHover, parameters, cancellationToken))
-            .ToHoverText()
-            .Length > 0;
+        (
+            await session.RequestAsync(LspMethods.TextDocumentHover, parameters, cancellationToken)
+        ).Map(hover => hover.ToHoverText().Length > 0);
 
-    private async Task<(string Name, SourcePosition Position)?> NearestSymbolAsync(
+    private async Task<Result<string>> NearestSymbolHintAsync(
         string uri,
         string? file,
         LspPosition position,
@@ -62,7 +76,7 @@ internal sealed partial class LspQueries
         var lines = SourceLines.TryReadLines(file);
         if (lines is null || position.Line >= lines.Length)
         {
-            return null;
+            return NoNearestHint;
         }
 
         var line = lines[position.Line];
@@ -77,16 +91,23 @@ internal sealed partial class LspQueries
                 ["line"] = position.Line,
                 ["character"] = start,
             };
-            if (await HasSymbolAsync(candidate, cancellationToken))
+            var symbolCheck = await HasSymbolAsync(candidate, cancellationToken);
+            if (symbolCheck.IsError(out var error, out var hasSymbol))
             {
-                return (
-                    line.Substring(start, length),
-                    new LspPosition(position.Line, start).OneBased
+                return error;
+            }
+
+            if (hasSymbol)
+            {
+                var found = new LspPosition(position.Line, start).OneBased;
+                return string.Create(
+                    CultureInfo.InvariantCulture,
+                    $" The nearest symbol on the line is {line.AsSpan(start, length)} at {found.Line}:{found.Character}."
                 );
             }
         }
 
-        return null;
+        return NoNearestHint;
     }
 
     // Keywords and words in comments also match, and the hover check leaves them out

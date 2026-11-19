@@ -146,21 +146,24 @@ internal static class BridgeTelemetry
     public static void CountDiagnosticReport(bool reused) =>
         _diagnosticReports.Add(1, new KeyValuePair<string, object?>(ReportReused, reused));
 
-    public static Task<T> TraceLspAsync<T>(string method, Func<Task<T>> request) =>
+    public static Task<Result<T>> TraceLspAsync<T>(string method, Func<Task<Result<T>>> request) =>
         TraceAsync(
             method,
             ActivityKind.Client,
             _lspDuration,
             new TagList { { RpcSystem, "jsonrpc" }, { RpcMethod, method } },
-            request
+            request,
+            static result => result is ToolError error ? error : null
         );
 
-    public static Task TraceAsync(string name, Histogram<double> duration, Func<Task> operation) =>
-        TraceAsync(name, ActivityKind.Internal, duration, tags: default, async () =>
-        {
-            await operation();
-            return true;
-        });
+    public static Task<Result> TraceAsync(
+        string name,
+        Histogram<double> duration,
+        Func<Task<Result>> operation
+    ) =>
+        TraceAsync(name, ActivityKind.Internal, duration, tags: default, operation, static result =>
+            result is ToolError error ? error : null
+        );
 
     /// <summary>
     /// Marks the activity failed when the tags hold an <see cref="ErrorType"/>.
@@ -191,9 +194,9 @@ internal static class BridgeTelemetry
     public static string ErrorTypeOf(Exception exception) =>
         exception.GetType().FullName ?? exception.GetType().Name;
 
-    public static void MarkFailed(Activity? activity, Exception exception)
+    public static void MarkFailed(Activity? activity, string errorType)
     {
-        activity?.SetTag(ErrorType, ErrorTypeOf(exception));
+        activity?.SetTag(ErrorType, errorType);
         activity?.SetStatus(ActivityStatusCode.Error);
     }
 
@@ -202,14 +205,21 @@ internal static class BridgeTelemetry
         ActivityKind kind,
         Histogram<double> duration,
         TagList tags,
-        Func<Task<T>> operation
+        Func<Task<T>> operation,
+        Func<T, ToolError?> errorOf
     )
     {
         using var activity = Source.StartActivity(name, kind);
         var started = Stopwatch.GetTimestamp();
         try
         {
-            return await operation();
+            var result = await operation();
+            if (errorOf(result) is { } error)
+            {
+                tags.Add(ErrorType, error.Code);
+            }
+
+            return result;
         }
         catch (Exception exception)
         {

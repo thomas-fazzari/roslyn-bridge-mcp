@@ -31,23 +31,18 @@ internal sealed class NavigateTool(LspTool lsp)
         [Description(ToolDescriptions.Character)] int? character = null,
         [Description(ToolDescriptions.Context)] bool context = false,
         [Description(ToolDescriptions.Inherited)] bool inherited = false,
-        [Description(ToolDescriptions.Limit)] int limit = LspRequest.DefaultResultLimit,
+        [Description(ToolDescriptions.Limit)] int limit = Paging.DefaultLimit,
         [Description(ToolDescriptions.Offset)] int offset = 0,
         CancellationToken cancellationToken = default
     ) =>
         lsp.ExecuteAsync(
-            new LspRequest
-            {
-                Limit = limit,
-                Offset = offset,
-                Action = action.ToLspAction(),
-                Symbol = symbol,
-                File = file,
-                Line = line,
-                Character = character,
-                Context = context,
-                Inherited = inherited,
-            },
+            new NavigationRequest(
+                action.ToLspAction(),
+                new SymbolTarget(symbol, file, line, character),
+                inherited,
+                context,
+                new Paging(limit, offset)
+            ),
             cancellationToken
         );
 }

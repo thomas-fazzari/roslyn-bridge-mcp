@@ -16,7 +16,7 @@ internal sealed partial class RoslynConnection
     /// <summary>
     /// Returns the full report, reusing the previous one when Roslyn answers unchanged.
     /// </summary>
-    public async Task<LspDiagnosticReport> DiagnosticReportAsync(
+    public async Task<Result<LspDiagnosticReport>> DiagnosticReportAsync(
         string uri,
         CancellationToken cancellationToken
     )
@@ -30,12 +30,21 @@ internal sealed partial class RoslynConnection
             parameters["previousResultId"] = resultId;
         }
 
-        var result = await RequestAsync(
+        var response = await RequestAsync(
             LspMethods.TextDocumentDiagnostic,
             parameters,
             cancellationToken
         );
-        var report = result.Read<LspDiagnosticReport>();
+        if (response.IsError(out var error, out var result))
+        {
+            return error;
+        }
+
+        if (result.Read<LspDiagnosticReport>().IsError(out var invalid, out var report))
+        {
+            return invalid;
+        }
+
         if (previous is not null && report.Kind is UnchangedReport)
         {
             BridgeTelemetry.CountDiagnosticReport(reused: true);

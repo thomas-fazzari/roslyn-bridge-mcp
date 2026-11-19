@@ -74,14 +74,15 @@ internal sealed class WorkspacePaths(string root)
 
     public string RootUri => new Uri(Root + Path.DirectorySeparatorChar).AbsoluteUri;
 
-    public string Resolve(string file)
+    /// <summary>
+    /// Turns a workspace-relative path, a full path or a file URI from a client or from Roslyn into a full path.
+    /// </summary>
+    public Result<string> Resolve(string file)
     {
         // Path APIs reject a null character with an ArgumentException, which would read as a bridge bug
         if (string.IsNullOrWhiteSpace(file) || file.Contains('\0', StringComparison.Ordinal))
         {
-            throw new ToolErrorException(
-                ToolError.InvalidRequest("Provide a valid workspace file path.")
-            );
+            return ToolError.InvalidRequest("Provide a valid workspace file path.");
         }
 
         var local =
@@ -92,9 +93,7 @@ internal sealed class WorkspacePaths(string root)
         var relative = Relative(fullPath);
         if (IsOutside(relative))
         {
-            throw new ToolErrorException(
-                ToolError.InvalidRequest("The path must be inside the workspace.")
-            );
+            return ToolError.InvalidRequest("The path must be inside the workspace.");
         }
 
         var current = Root;
@@ -106,10 +105,8 @@ internal sealed class WorkspacePaths(string root)
                 : new FileInfo(current);
             if (entry.LinkTarget is not null)
             {
-                throw new ToolErrorException(
-                    ToolError.InvalidRequest(
-                        "Symbolic links inside the workspace are not supported."
-                    )
+                return ToolError.InvalidRequest(
+                    "Symbolic links inside the workspace are not supported."
                 );
             }
         }
@@ -117,7 +114,13 @@ internal sealed class WorkspacePaths(string root)
         return fullPath;
     }
 
-    public string ToUri(string file) => new Uri(Resolve(file)).AbsoluteUri;
+    public Result<string> ToUri(string file) =>
+        Resolve(file).Map(path => new Uri(path).AbsoluteUri);
+
+    /// <summary>
+    /// For a path the bridge already resolved, such as one of an edit receipt.
+    /// </summary>
+    public string FullPath(string relative) => Path.GetFullPath(relative, Root);
 
     /// <summary>
     /// Handles a Windows drive written as c%3A, which <see cref="Uri.LocalPath"/> leaves unusable.
@@ -205,8 +208,8 @@ internal sealed class WorkspacePaths(string root)
 
     public bool IsWatched(string fullPath) => Components(fullPath).All(IsWatchedDirectory);
 
-    public IEnumerable<WorkspaceFile> EnumerateFiles() =>
-        EnumerateFiles(name => !IsExcludedDirectory(name));
+    public Result<List<WorkspaceFile>> EnumerateFiles(CancellationToken cancellationToken) =>
+        EnumerateFiles(name => !IsExcludedDirectory(name), cancellationToken);
 
     public bool ContainsProject()
     {
@@ -221,7 +224,8 @@ internal sealed class WorkspacePaths(string root)
         }
     }
 
-    public IEnumerable<WorkspaceFile> EnumerateWatchedFiles() => EnumerateFiles(IsWatchedDirectory);
+    public Result<List<WorkspaceFile>> EnumerateWatchedFiles(CancellationToken cancellationToken) =>
+        EnumerateFiles(IsWatchedDirectory, cancellationToken);
 
     private static bool EndsWithSegments(string relative, string suffix) =>
         relative.EndsWith(suffix, StringComparison.Ordinal)
@@ -258,22 +262,33 @@ internal sealed class WorkspacePaths(string root)
             ShouldRecursePredicate = (ref entry) => includeDirectory(entry.FileName.ToString()),
         };
 
-    private IEnumerable<WorkspaceFile> EnumerateFiles(Func<string, bool> includeDirectory)
+    private Result<List<WorkspaceFile>> EnumerateFiles(
+        Func<string, bool> includeDirectory,
+        CancellationToken cancellationToken
+    )
     {
-        var count = 0;
-        foreach (var file in Files(includeDirectory))
+        List<WorkspaceFile> files = [];
+        try
         {
-            if (++count > MaximumFileCount)
+            foreach (var file in Files(includeDirectory))
             {
-                throw new ToolErrorException(
-                    ToolError.InvalidRequest(
+                cancellationToken.ThrowIfCancellationRequested();
+                if (files.Count == MaximumFileCount)
+                {
+                    return ToolError.InvalidRequest(
                         $"The workspace exceeds {MaximumFileCount} files. Select a narrower root."
-                    )
-                );
-            }
+                    );
+                }
 
-            yield return file;
+                files.Add(file);
+            }
         }
+        catch (Exception exception) when (ToolError.IsIo(exception))
+        {
+            return ToolError.Io(exception.Message);
+        }
+
+        return files;
     }
 }
 

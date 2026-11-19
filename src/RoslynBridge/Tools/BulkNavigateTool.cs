@@ -27,30 +27,23 @@ internal sealed class BulkNavigateTool(LspTool lsp)
         [Description("Independent navigate queries, each with its own action and target.")]
             BulkQuery[] queries,
         [Description(ToolDescriptions.Context)] bool context = false,
-        [Description(ToolDescriptions.Limit)] int limit = LspRequest.DefaultResultLimit,
+        [Description(ToolDescriptions.Limit)] int limit = Paging.DefaultLimit,
         [Description(ToolDescriptions.Offset)] int offset = 0,
         CancellationToken cancellationToken = default
     ) =>
         lsp.ExecuteAsync(
-            new LspRequest
-            {
-                Action = LspAction.Bulk,
-                Limit = limit,
-                Offset = offset,
-                Context = context,
-                Queries =
+            new BulkRequest(
                 [
-                    .. queries.Select(query => new LspRequest
-                    {
-                        Action = query.Action.ToLspAction(),
-                        Symbol = query.Symbol,
-                        File = query.File,
-                        Line = query.Line,
-                        Character = query.Character,
-                        Inherited = query.Inherited,
-                    }),
+                    .. queries.Select(query => new NavigationRequest(
+                        query.Action.ToLspAction(),
+                        new SymbolTarget(query.Symbol, query.File, query.Line, query.Character),
+                        query.Inherited,
+                        context,
+                        new Paging(limit, offset)
+                    )),
                 ],
-            },
+                new Paging(limit, offset)
+            ),
             cancellationToken
         );
 }

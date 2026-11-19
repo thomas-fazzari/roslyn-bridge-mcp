@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 using RoslynBridge.Editing;
-using RoslynBridge.Results;
 
 namespace RoslynBridge.Tests.Unit.Editing;
 
@@ -25,7 +24,7 @@ public sealed class EditedDocumentTests
             Content = [.. encoding.GetPreamble(), .. encoding.GetBytes(replacement + "😀tail")],
         };
 
-        var result = document.Describe(new WorkspacePaths("."));
+        var result = document.Describe(new WorkspacePaths(".")).Succeeded();
 
         result.Changes[0].Before.Should().Be(prefix);
         result.Changes[0].After.Should().Be(replacement);
@@ -42,13 +41,10 @@ public sealed class EditedDocumentTests
         ];
         var document = new EditedDocument("Source.cs", bytes);
 
-        FluentActions
-            .Invoking(Describe)
+        document
+            .Describe(new WorkspacePaths("."))
+            .ErrorCode()
             .Should()
-            .Throw<ToolErrorException>()
-            .Which.Error.Code.Should()
             .Be(ErrorCodes.InvalidRequest);
-
-        FilePreview Describe() => document.Describe(new WorkspacePaths("."));
     }
 }

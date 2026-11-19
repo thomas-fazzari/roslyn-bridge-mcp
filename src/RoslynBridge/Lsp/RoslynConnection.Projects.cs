@@ -1,8 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Thomas Fazzari
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-using StreamJsonRpc;
-
 namespace RoslynBridge.Lsp;
 
 internal sealed partial class RoslynConnection
@@ -13,52 +11,63 @@ internal sealed partial class RoslynConnection
     /// <summary>
     /// Returns no contexts when the server lacks the extension.
     /// </summary>
-    public async Task<ProjectContext[]> ProjectContextsAsync(
+    public async Task<Result<ProjectContext[]>> ProjectContextsAsync(
         string uri,
         CancellationToken cancellationToken
     )
     {
-        JsonNode? result;
-        try
+        var response = await RequestAsync(
+            LspMethods.TextDocumentGetProjectContexts,
+            new JsonObject { ["_vs_textDocument"] = new JsonObject { ["uri"] = uri } },
+            cancellationToken
+        );
+        if (response.IsError(out var error, out var result))
         {
-            result = await RequestAsync(
-                LspMethods.TextDocumentGetProjectContexts,
-                new JsonObject { ["_vs_textDocument"] = new JsonObject { ["uri"] = uri } },
-                cancellationToken
-            );
-        }
-        catch (RemoteInvocationException)
-        {
-            return [];
+            return error is { RpcCode: not null } ? Array.Empty<ProjectContext>() : error;
         }
 
-        return result is null ? [] : result.Read<ProjectContexts>().Contexts ?? [];
+        if (result is null)
+        {
+            return Array.Empty<ProjectContext>();
+        }
+
+        return result.Read<ProjectContexts>().Map(found => found.Contexts ?? []);
     }
 
     /// <summary>
     /// Returns the files outside every project. Waits for Roslyn to attach files created since the load.
     /// </summary>
-    public async Task<HashSet<string>> WaitForProjectsAsync(
+    public async Task<Result<HashSet<string>>> WaitForProjectsAsync(
         IReadOnlyCollection<string> files,
         CancellationToken cancellationToken
     )
     {
-        var uris = await OpenDocumentsAsync(files, cancellationToken);
+        if (
+            (await OpenDocumentsAsync(files, cancellationToken)).IsError(
+                out var openError,
+                out var uris
+            )
+        )
+        {
+            return openError;
+        }
+
         var pending = files.Zip(uris).ToList();
         var outside = new HashSet<string>(StringComparer.Ordinal);
         var started = Stopwatch.GetTimestamp();
         while (true)
         {
             var states = await Task.WhenAll(
-                pending.Select(async file =>
-                    (
-                        File: file,
-                        Miscellaneous: await IsMiscellaneousAsync(file.Second, cancellationToken)
-                    )
-                )
+                pending.Select(file => IsMiscellaneousAsync(file.Second, cancellationToken))
             );
+            if (states.All().IsError(out var error, out var flags))
+            {
+                return error;
+            }
+
+            var stillOutside = pending.Where((_, index) => flags[index]).ToList();
             pending = [];
-            foreach (var (file, _) in states.Where(state => state.Miscellaneous))
+            foreach (var file in stillOutside)
             {
                 // A file that existed at load and is still outside a project stays there
                 if (_createdFiles.ContainsKey(file.First))
@@ -87,10 +96,12 @@ internal sealed partial class RoslynConnection
         }
     }
 
-    private async Task<bool> IsMiscellaneousAsync(string uri, CancellationToken cancellationToken)
-    {
-        // Servers without the extension cannot report the state, so the file is not held back
-        var contexts = await ProjectContextsAsync(uri, cancellationToken);
-        return contexts.Length > 0 && contexts.All(context => context.IsMiscellaneous);
-    }
+    // Servers without the extension cannot report the state, so the file is not held back
+    private async Task<Result<bool>> IsMiscellaneousAsync(
+        string uri,
+        CancellationToken cancellationToken
+    ) =>
+        (await ProjectContextsAsync(uri, cancellationToken)).Map(contexts =>
+            contexts.Length > 0 && contexts.All(context => context.IsMiscellaneous)
+        );
 }

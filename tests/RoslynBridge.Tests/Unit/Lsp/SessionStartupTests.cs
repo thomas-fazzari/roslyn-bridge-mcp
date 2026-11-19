@@ -30,12 +30,10 @@ public sealed class SessionStartupTests : TempWorkspaceTests
             new BridgeOptions { WorkspaceRoot = Root, ServerPath = server }
         );
 
-        (await FluentActions.Awaiting(Start).Should().ThrowAsync<IOException>())
-            .Which.Message.Should()
-            .Contain("install .NET");
-        return;
+        var started = await session.EnsureStartedAsync(TestCt);
 
-        Task Start() => session.EnsureStartedAsync(TestCt);
+        started.ErrorCode().Should().Be(ErrorCodes.Io);
+        (started is ToolError error ? error.Message : null).Should().Contain("install .NET");
     }
 
     [Fact]

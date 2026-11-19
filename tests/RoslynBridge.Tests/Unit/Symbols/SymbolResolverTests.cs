@@ -128,7 +128,7 @@ public sealed class SymbolResolverTests
 
     private static IEnumerable<SymbolDeclaration> Find(string requested) =>
         SymbolResolver.FindDeclarations(
-            [(File, _documentSymbols.ReadArray<LspSymbol>())],
+            [(File, _documentSymbols.ReadArray<LspSymbol>().Succeeded())],
             SymbolName.Parse(requested)!
         );
 }

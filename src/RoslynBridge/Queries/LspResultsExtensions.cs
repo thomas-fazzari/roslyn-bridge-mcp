@@ -22,17 +22,23 @@ internal static class LspResultsExtensions
         /// <summary>
         /// The offset and limit apply to nested symbols in document order. A skipped symbol leaves its listed members at its level.
         /// </summary>
-        public SymbolList ToSymbolList(WorkspacePaths paths, int limit, int offset = 0) =>
-            result.ReadArray<LspSymbol>().ToSymbolList(paths, limit, offset);
+        public Result<SymbolList> ToSymbolList(WorkspacePaths paths, int limit, int offset = 0) =>
+            result
+                .ReadArray<LspSymbol>()
+                .Map(symbols => symbols.ToSymbolList(paths, limit, offset));
 
         /// <summary>
         /// Call results also list their call sites.
         /// </summary>
-        public SymbolList ToRelatedSymbols(WorkspacePaths paths, int limit, int offset = 0)
+        public Result<SymbolList> ToRelatedSymbols(WorkspacePaths paths, int limit, int offset = 0)
         {
-            var related = result as JsonArray ?? [];
+            var entries = (result as JsonArray ?? []).Select(entry => RelatedSymbol(entry, paths));
+            if (entries.All().IsError(out var error, out var related))
+            {
+                return error;
+            }
+
             var items = related
-                .Select(entry => RelatedSymbol(entry, paths))
                 .OrderBy(item => item.File, StringComparer.Ordinal)
                 .ThenBy(item => item.Position?.Line)
                 .ThenBy(item => item.Position?.Character)
@@ -42,59 +48,58 @@ internal static class LspResultsExtensions
             return new SymbolList(
                 [.. items.Skip(offset).Take(limit)],
                 items.Count,
-                LspRequest.NextOffset(offset, limit, items.Count)
+                Paging.NextOffset(offset, limit, items.Count)
             );
         }
 
         /// <summary>
         /// With <paramref name="skipGenerated"/>, source-generated locations are only counted.
         /// </summary>
-        public Locations ToLocations(
+        public Result<Locations> ToLocations(
             WorkspacePaths paths,
             int limit,
             bool skipGenerated,
             int offset = 0
-        ) => result.FindLocations(paths, skipGenerated).Page(limit, offset);
+        ) => result.FindLocations(paths, skipGenerated).Map(found => found.Page(limit, offset));
 
-        public FoundLocations FindLocations(WorkspacePaths paths, bool skipGenerated)
+        public Result<FoundLocations> FindLocations(WorkspacePaths paths, bool skipGenerated)
         {
-            var locations = result switch
+            var read = result switch
             {
-                null => [],
+                null => Array.Empty<LspLocation>(),
                 JsonArray => result.Read<LspLocation[]>(),
-                JsonObject => [result.Read<LspLocation>()],
-                _ => throw new ToolErrorException(
-                    ToolError.InvalidLspData("Roslyn returned an invalid location result.")
-                ),
+                JsonObject => result.Read<LspLocation>().Map(location => new[] { location }),
+                _ => ToolError.InvalidLspData("Roslyn returned an invalid location result."),
             };
+            if (read.IsError(out var error, out var locations))
+            {
+                return error;
+            }
+
             return locations.FindLocations(paths, skipGenerated);
         }
-
-        public List<SourcePosition> ToHighlightStarts(int kind) =>
-            [
-                .. LspJson
-                    .ReadArray<LspHighlight>(result)
-                    .Where(highlight => highlight.Kind == kind)
-                    .Select(highlight => highlight.Range.Start.OneBased),
-            ];
     }
 
     extension(LspLocation[] locations)
     {
-        public FoundLocations FindLocations(WorkspacePaths paths, bool skipGenerated)
+        public Result<FoundLocations> FindLocations(WorkspacePaths paths, bool skipGenerated)
         {
             var found = new HashSet<(string File, SourcePosition Position)>();
             var generated = 0;
             foreach (var location in locations)
             {
-                var uri = location.ResolvedUri
-                    ?? throw new ToolErrorException(
-                        ToolError.InvalidLspData("Roslyn returned a location without a URI.")
+                if (location.ResolvedUri is not { } uri)
+                {
+                    return ToolError.InvalidLspData("Roslyn returned a location without a URI.");
+                }
+
+                if (location.ResolvedRange is not { } range)
+                {
+                    return ToolError.InvalidLspData(
+                        "Roslyn returned a location without a position."
                     );
-                var range = location.ResolvedRange
-                    ?? throw new ToolErrorException(
-                        ToolError.InvalidLspData("Roslyn returned a location without a position.")
-                    );
+                }
+
                 if (
                     skipGenerated && uri.StartsWith(SourceGeneratedScheme, StringComparison.Ordinal)
                 )
@@ -133,7 +138,7 @@ internal static class LspResultsExtensions
             return new SymbolList(
                 PageSymbols(symbols, paths, ref skipped, ref remaining),
                 total,
-                LspRequest.NextOffset(offset, limit, total)
+                Paging.NextOffset(offset, limit, total)
             );
         }
     }
@@ -154,7 +159,7 @@ internal static class LspResultsExtensions
             return new Locations(
                 files,
                 found.Positions.Count,
-                LspRequest.NextOffset(offset, limit, found.Positions.Count),
+                Paging.NextOffset(offset, limit, found.Positions.Count),
                 found.Generated
             );
         }
@@ -177,13 +182,16 @@ internal static class LspResultsExtensions
             );
     }
 
-    private static SymbolItem RelatedSymbol(JsonNode? entry, WorkspacePaths paths)
+    private static Result<SymbolItem> RelatedSymbol(JsonNode? entry, WorkspacePaths paths)
     {
-        var call = entry.Read<LspCall>();
-        var symbol = call.From ?? call.To;
-        if (symbol is null)
+        if (entry.Read<LspCall>().IsError(out var error, out var call))
         {
-            return Symbol(entry.Read<LspSymbol>(), paths);
+            return error;
+        }
+
+        if ((call.From ?? call.To) is not { } symbol)
+        {
+            return entry.Read<LspSymbol>().Map(found => Symbol(found, paths));
         }
 
         return Symbol(symbol, paths) with

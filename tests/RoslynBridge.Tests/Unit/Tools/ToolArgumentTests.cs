@@ -17,7 +17,7 @@ public sealed class ToolArgumentTests : IAsyncDisposable
         .CreateTempSubdirectory("roslyn-tool-arguments-")
         .FullName;
     private readonly RoslynSession _session;
-    private readonly LspTool _tool;
+    private readonly ToolClient _tool;
     private int _launches;
 
     public ToolArgumentTests()
@@ -35,7 +35,7 @@ public sealed class ToolArgumentTests : IAsyncDisposable
     )
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        await using var server = await ToolServer.StartAsync(_tool, cancellationToken);
+        await using var server = await ToolServer.StartAsync(_tool.Lsp, cancellationToken);
 
         var response = await server.Client.CallToolAsync(
             NavigateTool.Name,
@@ -63,7 +63,7 @@ public sealed class ToolArgumentTests : IAsyncDisposable
     )
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        await using var server = await ToolServer.StartAsync(_tool, cancellationToken);
+        await using var server = await ToolServer.StartAsync(_tool.Lsp, cancellationToken);
 
         var response = await server.Client.CallToolAsync(
             NavigateTool.Name,
@@ -83,7 +83,7 @@ public sealed class ToolArgumentTests : IAsyncDisposable
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         await WriteFileAsync(_root, SourceFile, "class A {}\n");
-        await using var server = await ToolServer.StartAsync(_tool, cancellationToken);
+        await using var server = await ToolServer.StartAsync(_tool.Lsp, cancellationToken);
 
         var response = await server.Client.CallToolAsync(
             BulkNavigateTool.Name,
@@ -106,7 +106,7 @@ public sealed class ToolArgumentTests : IAsyncDisposable
     public async Task QueriesSentAsAStringThatIsNotAnArrayAreRejectedAsync(string queries)
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        await using var server = await ToolServer.StartAsync(_tool, cancellationToken);
+        await using var server = await ToolServer.StartAsync(_tool.Lsp, cancellationToken);
 
         var response = await server.Client.CallToolAsync(
             BulkNavigateTool.Name,
@@ -124,7 +124,7 @@ public sealed class ToolArgumentTests : IAsyncDisposable
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         await WriteFileAsync(_root, SourceFile, "class A {}\n");
-        await using var server = await ToolServer.StartAsync(_tool, cancellationToken);
+        await using var server = await ToolServer.StartAsync(_tool.Lsp, cancellationToken);
 
         var response = await server.Client.CallToolAsync(
             BulkNavigateTool.Name,

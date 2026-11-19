@@ -1,7 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Thomas Fazzari
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-using System.Runtime.ExceptionServices;
 using RoslynBridge.Lsp;
 using RoslynBridge.Results;
 using RoslynBridge.Telemetry;
@@ -19,28 +18,40 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
     /// <summary>
     /// The returned snapshot holds the fingerprints of the files the edit reads.
     /// </summary>
-    public async Task<(IReadOnlyList<FilePreview> Files, WorkspaceSnapshot Snapshot)> PreviewAsync(
+    public async Task<Result<EditPreview>> PreviewAsync(
         JsonObject edit,
         WorkspaceSnapshot snapshot,
         CancellationToken cancellationToken
     )
     {
-        var documents = await PlanAsync(edit, snapshot, cancellationToken);
-        EnsureCurrent(documents, snapshot);
-        return (
-            [
-                .. documents
-                    .Where(document => document.Changed)
-                    .Select(document => document.Describe(paths)),
-            ],
-            snapshot with
-            {
-                Fingerprints = Fingerprints(documents),
-            }
-        );
+        var planned = await PlanAsync(edit, snapshot, cancellationToken);
+        if (planned.IsError(out var planError, out var documents))
+        {
+            return planError;
+        }
+
+        if (EnsureCurrent(documents, snapshot, cancellationToken) is ToolError staleError)
+        {
+            return staleError;
+        }
+
+        return documents
+            .Where(document => document.Changed)
+            .Select(document => document.Describe(paths))
+            .All()
+            .Map(files => new EditPreview(
+                files,
+                snapshot with
+                {
+                    Fingerprints = Fingerprints(documents),
+                }
+            ));
     }
 
-    public async Task<EditReceipt> ApplyAsync(
+    /// <summary>
+    /// Returns an <see cref="EditFailure"/> when the edit fails after it changed a file.
+    /// </summary>
+    public async Task<Result<EditReceipt>> ApplyAsync(
         JsonObject edit,
         WorkspaceSnapshot snapshot,
         CancellationToken cancellationToken,
@@ -54,56 +65,82 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
         );
         try
         {
-            var documents = await PlanAsync(edit, snapshot, cancellationToken);
-            var temporaryFiles = new Dictionary<string, string>(StringComparer.Ordinal);
-            var completedOperations = new List<FileOperation>();
-            var failure = await ApplyMutationsAsync(
+            var result = await ApplyPlannedAsync(edit, snapshot, cancellationToken);
+            if (result is ToolError error)
+            {
+                BridgeTelemetry.MarkFailed(activity, error.Code);
+            }
+
+            return result;
+        }
+        catch (Exception exception)
+        {
+            BridgeTelemetry.MarkFailed(activity, BridgeTelemetry.ErrorTypeOf(exception));
+            throw;
+        }
+    }
+
+    private async Task<Result<EditReceipt>> ApplyPlannedAsync(
+        JsonObject edit,
+        WorkspaceSnapshot snapshot,
+        CancellationToken cancellationToken
+    )
+    {
+        var planned = await PlanAsync(edit, snapshot, cancellationToken);
+        if (planned.IsError(out var planError, out var documents))
+        {
+            return planError;
+        }
+
+        var temporaryFiles = new Dictionary<string, string>(StringComparer.Ordinal);
+        var completedOperations = new List<FileOperation>();
+        ApplyFailure? failure;
+        (ToolError Error, string Path)? cleanupFailure;
+        try
+        {
+            failure = await ApplyMutationsAsync(
                 documents,
                 snapshot,
                 temporaryFiles,
                 completedOperations,
                 cancellationToken
             );
-            var cleanupFailure = CleanupTemporaryFiles(temporaryFiles);
-            BridgeTelemetry.EditOperations.Record(completedOperations.Count);
-            return CompleteApply(completedOperations, failure, cleanupFailure);
         }
-        catch (Exception exception)
+        finally
         {
-            BridgeTelemetry.MarkFailed(activity, exception);
-            throw;
+            cleanupFailure = CleanupTemporaryFiles(temporaryFiles);
         }
+
+        BridgeTelemetry.EditOperations.Record(completedOperations.Count);
+        return CompleteApply(completedOperations, failure, cleanupFailure);
     }
 
-    private static EditReceipt CompleteApply(
+    private static Result<EditReceipt> CompleteApply(
         List<FileOperation> completedOperations,
         ApplyFailure? failure,
-        (Exception Exception, string Path)? cleanupFailure
+        (ToolError Error, string Path)? cleanupFailure
     )
     {
         if (failure is not null)
         {
-            if (completedOperations.Count == 0)
-            {
-                ExceptionDispatchInfo.Throw(failure.Exception);
-            }
-
-            throw new EditApplicationException(
-                new EditReceipt(Applied: false, completedOperations),
-                EditApplicationPhase.Write,
-                failure.Mutation?.Path,
-                failure.Mutation?.Operation,
-                failure.Exception
-            );
+            return completedOperations.Count == 0
+                ? failure.Error
+                : new EditFailure(
+                    failure.Error,
+                    new EditReceipt(Applied: false, completedOperations),
+                    EditApplicationPhase.Write,
+                    failure.Mutation?.Path,
+                    failure.Mutation?.Operation
+                );
         }
-        if (cleanupFailure is { } cleanup)
+
+        if (cleanupFailure is { Error: var cleanupError, Path: var cleanupPath })
         {
-            throw new EditApplicationException(
+            return new EditFailure(
+                cleanupError,
                 new EditReceipt(Applied: true, completedOperations),
                 EditApplicationPhase.Cleanup,
-                cleanup.Path,
-                failedOperation: null,
-                innerException: cleanup.Exception
+                cleanupPath
             );
         }
 
@@ -121,27 +158,41 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
         PendingMutation? pendingMutation = null;
         try
         {
-            await StageAsync(documents, temporaryFiles, cancellationToken);
-            EnsureCurrent(documents, snapshot);
+            if (await StageAsync(documents, temporaryFiles, cancellationToken) is ToolError error)
+            {
+                return new ApplyFailure(error, Mutation: null);
+            }
+
+            if (EnsureCurrent(documents, snapshot, cancellationToken) is ToolError staleError)
+            {
+                return new ApplyFailure(staleError, Mutation: null);
+            }
+
             cancellationToken.ThrowIfCancellationRequested();
-            ApplyDestinationWrites(
+            var written = ApplyDestinationWrites(
                 documents,
                 temporaryFiles,
                 completedOperations,
                 ref pendingMutation
             );
-            ApplyCaseOnlyRenames(documents, completedOperations, ref pendingMutation);
-            ApplySourceDeletions(documents, completedOperations, ref pendingMutation);
-        }
-        catch (Exception exception)
-        {
-            return new ApplyFailure(exception, pendingMutation);
-        }
+            if (written is ToolError writeError)
+            {
+                return new ApplyFailure(writeError, pendingMutation);
+            }
 
-        return null;
+            ApplyCaseOnlyRenames(documents, completedOperations, ref pendingMutation);
+            var deleted = ApplySourceDeletions(documents, completedOperations, ref pendingMutation);
+            return deleted is ToolError deleteError
+                ? new ApplyFailure(deleteError, pendingMutation)
+                : null;
+        }
+        catch (Exception exception) when (ToolError.IsIo(exception))
+        {
+            return new ApplyFailure(ToolError.Io(exception.Message), pendingMutation);
+        }
     }
 
-    private void ApplyDestinationWrites(
+    private Result ApplyDestinationWrites(
         List<EditedDocument> documents,
         Dictionary<string, string> temporaryFiles,
         List<FileOperation> completedOperations,
@@ -157,7 +208,11 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
             var destination = document.Path;
             var temporary = temporaryFiles[destination];
             pendingMutation = new(paths.RelativePath(destination), DestinationOperation(document));
-            paths.Resolve(destination);
+            if (paths.Resolve(destination) is ToolError error)
+            {
+                return error;
+            }
+
             File.Move(temporary, destination, overwrite: true);
             completedOperations.Add(
                 new(
@@ -168,6 +223,8 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
                 )
             );
         }
+
+        return Result.Success;
     }
 
     private void ApplyCaseOnlyRenames(
@@ -194,7 +251,7 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
         }
     }
 
-    private void ApplySourceDeletions(
+    private Result ApplySourceDeletions(
         List<EditedDocument> documents,
         List<FileOperation> completedOperations,
         ref PendingMutation? pendingMutation
@@ -207,33 +264,39 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
         )
         {
             pendingMutation = new(paths.RelativePath(document.Path), FileOperation.Delete);
-            paths.Resolve(document.Path);
+            if (paths.Resolve(document.Path) is ToolError error)
+            {
+                return error;
+            }
+
             File.Delete(document.Path);
             completedOperations.Add(new(paths.RelativePath(document.Path), FileOperation.Delete));
         }
+
+        return Result.Success;
     }
 
-    private (Exception Exception, string Path)? CleanupTemporaryFiles(
+    private (ToolError Error, string Path)? CleanupTemporaryFiles(
         Dictionary<string, string> temporaryFiles
     )
     {
-        (Exception Exception, string Path)? failure = null;
+        (ToolError Error, string Path)? failure = null;
         foreach (var temporary in temporaryFiles.Values)
         {
             try
             {
                 File.Delete(temporary);
             }
-            catch (Exception cleanupException)
+            catch (Exception exception) when (ToolError.IsIo(exception))
             {
-                failure ??= (cleanupException, paths.RelativePath(temporary));
+                failure ??= (ToolError.Io(exception.Message), paths.RelativePath(temporary));
             }
         }
 
         return failure;
     }
 
-    private async Task StageAsync(
+    private async Task<Result> StageAsync(
         List<EditedDocument> documents,
         Dictionary<string, string> temporaryFiles,
         CancellationToken cancellationToken
@@ -245,7 +308,11 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
             )
         )
         {
-            paths.Resolve(document.Path);
+            if (paths.Resolve(document.Path) is ToolError error)
+            {
+                return error;
+            }
+
             Directory.CreateDirectory(Path.GetDirectoryName(document.Path)!);
             var temporary = $"{document.Path}.{Guid.NewGuid():N}.tmp";
             temporaryFiles.Add(document.Path, temporary);
@@ -255,54 +322,78 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
                 File.SetUnixFileMode(temporary, File.GetUnixFileMode(modeSource));
             }
         }
+
+        return Result.Success;
     }
 
-    private async Task<List<EditedDocument>> PlanAsync(
+    private async Task<Result<List<EditedDocument>>> PlanAsync(
         JsonObject edit,
         WorkspaceSnapshot snapshot,
         CancellationToken cancellationToken
     )
     {
         var documents = new Dictionary<string, EditedDocument>(StringComparer.Ordinal);
-        var workspaceEdit = edit.Read<WorkspaceEdit>();
+        if (edit.Read<WorkspaceEdit>().IsError(out var readError, out var workspaceEdit))
+        {
+            return readError;
+        }
+
         if (workspaceEdit is { Changes: not null, DocumentChanges: not null })
         {
-            throw new ToolErrorException(
-                ToolError.InvalidLspData(
-                    "A workspace edit cannot use both changes and documentChanges."
-                )
+            return ToolError.InvalidLspData(
+                "A workspace edit cannot use both changes and documentChanges."
             );
         }
 
         foreach (var (uri, edits) in workspaceEdit.Changes ?? [with(StringComparer.Ordinal)])
         {
-            var document = await GetDocumentAsync(uri, documents, snapshot, cancellationToken);
-            document.Apply(
-                edits
-                    ?? throw new ToolErrorException(ToolError.InvalidLspData("Missing text edits."))
-            );
+            var loaded = await GetDocumentAsync(uri, documents, snapshot, cancellationToken);
+            if (loaded.IsError(out var documentError, out var document))
+            {
+                return documentError;
+            }
+
+            if (ApplyEdits(document, edits) is ToolError editError)
+            {
+                return editError;
+            }
         }
 
         foreach (var operation in workspaceEdit.DocumentChanges ?? [])
         {
-            await PlanOperationAsync(
-                operation
-                    ?? throw new ToolErrorException(
-                        ToolError.InvalidLspData("Missing document operation.")
-                    ),
-                documents,
-                snapshot,
-                cancellationToken
-            );
-            CheckSize(documents.Values);
+            if (operation is null)
+            {
+                return ToolError.InvalidLspData("Missing document operation.");
+            }
+
+            if (
+                await PlanOperationAsync(operation, documents, snapshot, cancellationToken)
+                is ToolError operationError
+            )
+            {
+                return operationError;
+            }
+
+            if (CheckSize(documents.Values) is ToolError sizeError)
+            {
+                return sizeError;
+            }
         }
 
-        CheckSize(documents.Values);
-        ValidateParents(documents);
-        return [.. documents.Values];
+        if (CheckSize(documents.Values) is ToolError error)
+        {
+            return error;
+        }
+
+        if (ValidateParents(documents) is ToolError parentsError)
+        {
+            return parentsError;
+        }
+
+        return documents.Values.ToList();
     }
 
-    private void ValidateParents(Dictionary<string, EditedDocument> documents)
+    private Result ValidateParents(Dictionary<string, EditedDocument> documents)
     {
         foreach (var document in documents.Values.Where(document => document.Content is not null))
         {
@@ -317,159 +408,179 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
                     )
                 )
                 {
-                    throw new ToolErrorException(
-                        ToolError.InvalidRequest($"A file blocks the target directory: {parent}")
+                    return ToolError.InvalidRequest(
+                        $"A file blocks the target directory: {parent}"
                     );
                 }
 
                 parent = Path.GetDirectoryName(parent);
             }
         }
+
+        return Result.Success;
     }
 
-    private async Task PlanOperationAsync(
+    private async Task<Result> PlanOperationAsync(
+        DocumentChange operation,
+        Dictionary<string, EditedDocument> documents,
+        WorkspaceSnapshot snapshot,
+        CancellationToken cancellationToken
+    ) =>
+        operation.Kind switch
+        {
+            null => await PlanTextEditAsync(operation, documents, snapshot, cancellationToken),
+            FileOperation.Create => await PlanCreateAsync(
+                operation,
+                documents,
+                snapshot,
+                cancellationToken
+            ),
+            FileOperation.Rename => await PlanRenameAsync(
+                operation,
+                documents,
+                snapshot,
+                cancellationToken
+            ),
+            FileOperation.Delete => await PlanDeleteAsync(
+                operation,
+                documents,
+                snapshot,
+                cancellationToken
+            ),
+            _ => ToolError.InvalidLspData($"Unsupported workspace operation: {operation.Kind}"),
+        };
+
+    private async Task<Result> PlanTextEditAsync(
         DocumentChange operation,
         Dictionary<string, EditedDocument> documents,
         WorkspaceSnapshot snapshot,
         CancellationToken cancellationToken
     )
     {
-        switch (operation.Kind)
+        if (operation.TextDocument is not { } identifier)
         {
-            case null:
-                await PlanTextEditAsync(operation, documents, snapshot, cancellationToken);
-                break;
-            case FileOperation.Create:
-                await PlanCreateAsync(operation, documents, snapshot, cancellationToken);
-                break;
-            case FileOperation.Rename:
-                await PlanRenameAsync(operation, documents, snapshot, cancellationToken);
-                break;
-            case FileOperation.Delete:
-                await PlanDeleteAsync(operation, documents, snapshot, cancellationToken);
-                break;
-            default:
-                throw new ToolErrorException(
-                    ToolError.InvalidLspData($"Unsupported workspace operation: {operation.Kind}")
-                );
+            return ToolError.InvalidLspData("A document edit needs textDocument.");
         }
-    }
 
-    private async Task PlanTextEditAsync(
-        DocumentChange operation,
-        Dictionary<string, EditedDocument> documents,
-        WorkspaceSnapshot snapshot,
-        CancellationToken cancellationToken
-    )
-    {
-        var identifier = operation.TextDocument
-            ?? throw new ToolErrorException(
-                ToolError.InvalidLspData("A document edit needs textDocument.")
-            );
-        var document = await GetDocumentAsync(
-            identifier.Uri,
-            documents,
-            snapshot,
-            cancellationToken
-        );
-        if (identifier.Version is { } version)
+        var loaded = await GetDocumentAsync(identifier.Uri, documents, snapshot, cancellationToken);
+        if (loaded.IsError(out var error, out var document))
         {
-            if (
+            return error;
+        }
+
+        if (
+            identifier.Version is { } version
+            && (
                 !snapshot.DocumentVersions.TryGetValue(document.OriginalPath, out var expected)
                 || version != expected
             )
-            {
-                throw new ToolErrorException(
-                    ToolError.StaleEdit(
-                        $"The document version is stale or unknown: {document.Path}"
-                    )
-                );
-            }
+        )
+        {
+            return ToolError.StaleEdit(
+                $"The document version is stale or unknown: {document.Path}"
+            );
         }
 
-        document.Apply(
-            operation.Edits
-                ?? throw new ToolErrorException(ToolError.InvalidLspData("Missing text edits."))
-        );
+        return ApplyEdits(document, operation.Edits);
     }
 
-    private async Task PlanCreateAsync(
+    private async Task<Result> PlanCreateAsync(
         DocumentChange operation,
         Dictionary<string, EditedDocument> documents,
         WorkspaceSnapshot snapshot,
         CancellationToken cancellationToken
     )
     {
-        var document = await GetDocumentAsync(
-            Required(operation.Uri, "uri"),
+        var required = await GetRequiredDocumentAsync(
+            operation.Uri,
+            "uri",
             documents,
             snapshot,
             cancellationToken
         );
+        if (required.IsError(out var error, out var document))
+        {
+            return error;
+        }
+
         if (document.Content is not null && operation.Options is not { Overwrite: true })
         {
-            if (operation.Options is { IgnoreIfExists: true })
-            {
-                return;
-            }
-
-            throw new ToolErrorException(
-                ToolError.InvalidRequest($"The file already exists: {document.Path}")
-            );
+            return operation.Options is { IgnoreIfExists: true }
+                ? Result.Success
+                : ToolError.InvalidRequest($"The file already exists: {document.Path}");
         }
 
         document.Content = [];
+        return Result.Success;
     }
 
-    private async Task PlanRenameAsync(
+    private async Task<Result> PlanRenameAsync(
         DocumentChange operation,
         Dictionary<string, EditedDocument> documents,
         WorkspaceSnapshot snapshot,
         CancellationToken cancellationToken
     )
     {
-        var source = await GetDocumentAsync(
-            Required(operation.OldUri, "oldUri"),
+        var sourceDocument = await GetRequiredDocumentAsync(
+            operation.OldUri,
+            "oldUri",
             documents,
             snapshot,
             cancellationToken
         );
-        if (source.Content is null)
+        if (sourceDocument.IsError(out var sourceError, out var source))
         {
-            throw new ToolErrorException(
-                ToolError.InvalidRequest($"The file to rename does not exist: {source.Path}")
-            );
+            return sourceError;
         }
 
-        var newUri = Required(operation.NewUri, "newUri");
-        var destinationPath = ResolveEditPath(newUri);
+        if (source.Content is null)
+        {
+            return ToolError.InvalidRequest($"The file to rename does not exist: {source.Path}");
+        }
+
+        if (operation.NewUri is not { } newUri)
+        {
+            return MissingProperty("newUri");
+        }
+
+        if (ResolveEditPath(newUri).IsError(out var pathError, out var destinationPath))
+        {
+            return pathError;
+        }
+
         if (IsCaseOnlyAlias(source, destinationPath, snapshot))
         {
             source.Path = destinationPath;
-            return;
+            return Result.Success;
         }
 
-        var destination = await GetDocumentAsync(newUri, documents, snapshot, cancellationToken);
+        var destinationDocument = await GetDocumentAsync(
+            newUri,
+            documents,
+            snapshot,
+            cancellationToken
+        );
+        if (destinationDocument.IsError(out var destinationError, out var destination))
+        {
+            return destinationError;
+        }
+
         if (ReferenceEquals(source, destination))
         {
-            return;
+            return Result.Success;
         }
 
         if (destination.Content is not null && operation.Options is not { Overwrite: true })
         {
-            if (operation.Options is { IgnoreIfExists: true })
-            {
-                return;
-            }
-
-            throw new ToolErrorException(
-                ToolError.InvalidRequest($"The rename target already exists: {destination.Path}")
-            );
+            return operation.Options is { IgnoreIfExists: true }
+                ? Result.Success
+                : ToolError.InvalidRequest($"The rename target already exists: {destination.Path}");
         }
 
         destination.Content = source.Content;
         destination.ModeSource = source.ModeSource;
         source.Content = null;
+        return Result.Success;
     }
 
     private static bool IsCaseOnlyAlias(
@@ -489,7 +600,7 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
             || StringComparer.Ordinal.Equals(source.OriginalPath, destination)
         );
 
-    private async Task PlanDeleteAsync(
+    private async Task<Result> PlanDeleteAsync(
         DocumentChange operation,
         Dictionary<string, EditedDocument> documents,
         WorkspaceSnapshot snapshot,
@@ -498,35 +609,58 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
     {
         if (operation.Options is { Recursive: true })
         {
-            throw new ToolErrorException(
-                ToolError.InvalidRequest("Recursive delete operations are not supported.")
-            );
+            return ToolError.InvalidRequest("Recursive delete operations are not supported.");
         }
 
-        var document = await GetDocumentAsync(
-            Required(operation.Uri, "uri"),
+        var required = await GetRequiredDocumentAsync(
+            operation.Uri,
+            "uri",
             documents,
             snapshot,
             cancellationToken
         );
+        if (required.IsError(out var error, out var document))
+        {
+            return error;
+        }
+
         if (document.Content is null && operation.Options is not { IgnoreIfNotExists: true })
         {
-            throw new ToolErrorException(
-                ToolError.InvalidRequest($"The file to delete does not exist: {document.Path}")
-            );
+            return ToolError.InvalidRequest($"The file to delete does not exist: {document.Path}");
         }
 
         document.Content = null;
+        return Result.Success;
     }
 
-    private async Task<EditedDocument> GetDocumentAsync(
+    private async Task<Result<EditedDocument>> GetRequiredDocumentAsync(
+        string? uri,
+        string property,
+        Dictionary<string, EditedDocument> documents,
+        WorkspaceSnapshot snapshot,
+        CancellationToken cancellationToken
+    )
+    {
+        if (uri is null)
+        {
+            return MissingProperty(property);
+        }
+
+        return await GetDocumentAsync(uri, documents, snapshot, cancellationToken);
+    }
+
+    private async Task<Result<EditedDocument>> GetDocumentAsync(
         string uri,
         Dictionary<string, EditedDocument> documents,
         WorkspaceSnapshot snapshot,
         CancellationToken cancellationToken
     )
     {
-        var path = ResolveEditPath(uri);
+        if (ResolveEditPath(uri).IsError(out var pathError, out var path))
+        {
+            return pathError;
+        }
+
         if (documents.TryGetValue(path, out var document))
         {
             return document;
@@ -542,25 +676,30 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
 
         if (Directory.Exists(path))
         {
-            throw new ToolErrorException(
-                ToolError.InvalidRequest($"Workspace edits support files only: {path}")
-            );
+            return ToolError.InvalidRequest($"Workspace edits support files only: {path}");
         }
 
-        var content = await ReadOriginalAsync(path, snapshot, cancellationToken);
+        var original = await ReadOriginalAsync(path, snapshot, cancellationToken);
+        if (original.IsError(out var readError, out var content))
+        {
+            return readError;
+        }
+
         document = new EditedDocument(path, content);
         documents.Add(path, document);
-        CheckSize(documents.Values);
-        return document;
+        return CheckSize(documents.Values) is ToolError sizeError ? sizeError : document;
     }
+
+    private static Result ApplyEdits(EditedDocument document, TextEdit?[]? edits) =>
+        edits is null ? ToolError.InvalidLspData("Missing text edits.") : document.Apply(edits);
 
     private static string DestinationOperation(EditedDocument document) =>
         document.Original is null ? FileOperation.Create : FileOperation.Change;
 
-    private static string Required(string? value, string property) =>
-        value ?? throw new ToolErrorException(ToolError.InvalidLspData($"Missing {property}."));
+    private static ToolError MissingProperty(string property) =>
+        ToolError.InvalidLspData($"Missing {property}.");
 
-    private static void CheckSize(Dictionary<string, EditedDocument>.ValueCollection documents)
+    private static Result CheckSize(Dictionary<string, EditedDocument>.ValueCollection documents)
     {
         var total = documents.Sum(document =>
             (long)(document.Original?.Length ?? 0)
@@ -570,17 +709,16 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
                     : document.Content?.Length ?? 0
             )
         );
-        if (documents.Count > MaximumEditedFiles || total > MaximumEditBytes)
-        {
-            throw new ToolErrorException(
-                ToolError.InvalidRequest(
-                    $"The workspace edit exceeds {MaximumEditedFiles} files or {MaximumEditBytes / BytesPerMebibyte} MiB."
-                )
-            );
-        }
+        return documents.Count > MaximumEditedFiles || total > MaximumEditBytes
+            ? ToolError.InvalidRequest(
+                $"The workspace edit exceeds {MaximumEditedFiles} files or {MaximumEditBytes / BytesPerMebibyte} MiB."
+            )
+            : Result.Success;
     }
 
     private readonly record struct PendingMutation(string Path, string Operation);
 
-    private sealed record ApplyFailure(Exception Exception, PendingMutation? Mutation);
+    private sealed record ApplyFailure(ToolError Error, PendingMutation? Mutation);
 }
+
+internal sealed record EditPreview(IReadOnlyList<FilePreview> Files, WorkspaceSnapshot Snapshot);

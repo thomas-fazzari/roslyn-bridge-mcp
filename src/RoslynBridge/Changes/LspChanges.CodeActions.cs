@@ -17,32 +17,38 @@ internal sealed partial class LspChanges
     private const string ClientCommandPrefix = "roslyn.client.";
 
     private async Task<Result<ToolResult>> CodeActionsAsync(
-        LspRequest request,
+        CodeActionsRequest request,
         CancellationToken cancellationToken
     )
     {
-        var snapshot = await CaptureAsync(cancellationToken);
+        if ((await CaptureAsync(cancellationToken)).IsError(out var captureError, out var snapshot))
+        {
+            return captureError;
+        }
+
         var target = request.Diagnostic is null
             ? await SelectionAsync(request, cancellationToken)
             : await DiagnosticRangeAsync(request, cancellationToken);
-        if (target.Error is { } error)
+        if (target.IsError(out var targetError, out var parameters))
         {
-            return error;
+            return targetError;
         }
 
-        snapshot = await WithDocumentVersionsAsync(snapshot, cancellationToken);
+        var versioned = await WithDocumentVersionsAsync(snapshot, cancellationToken);
         // Roslyn computes the diagnostics in the range itself, so the context stays empty
-        var parameters = target.Value;
         parameters["context"] = new JsonObject { ["diagnostics"] = new JsonArray() };
-        var response =
-            await session.RequestAsync(
-                LspMethods.TextDocumentCodeAction,
-                parameters,
-                cancellationToken
-            ) as JsonArray
-            ?? [];
+        var listed = await session.RequestAsync(
+            LspMethods.TextDocumentCodeAction,
+            parameters,
+            cancellationToken
+        );
+        if (listed.IsError(out var requestError, out var response))
+        {
+            return requestError;
+        }
+
         var choices = new List<CodeActionChoice>();
-        foreach (var action in response.OfType<JsonObject>())
+        foreach (var action in (response as JsonArray ?? []).OfType<JsonObject>())
         {
             AddChoices(action, choices);
         }
@@ -56,28 +62,30 @@ internal sealed partial class LspChanges
 
         var pending = new PendingChange(
             request.Action,
-            snapshot,
+            versioned,
             Edit: null,
             Command: null,
             choices
         );
         if (request.ActionIndex is not null)
         {
-            return await SelectActionAsync(pending, request, cancellationToken);
+            return await SelectActionAsync(
+                pending,
+                request.ActionIndex,
+                request.Apply,
+                cancellationToken
+            );
         }
 
-        if (request.Apply)
-        {
-            return ToolError.InvalidRequest("Choose actionIndex before applying a code action.");
-        }
-
-        return Listing(Remember(pending), choices, request);
+        return request.Apply
+            ? ToolError.InvalidRequest("Choose actionIndex before applying a code action.")
+            : Listing(Remember(pending), choices, request);
     }
 
     private static ActionListing Listing(
         string proposalId,
         List<CodeActionChoice> choices,
-        LspRequest request
+        CodeActionsRequest request
     )
     {
         var shown = choices
@@ -88,7 +96,7 @@ internal sealed partial class LspChanges
             proposalId,
             [
                 .. shown
-                    .Take(request.Limit)
+                    .Take(request.Page.Limit)
                     .Select(entry => new ListedAction(
                         entry.Index,
                         entry.Item.Kind,
@@ -96,7 +104,7 @@ internal sealed partial class LspChanges
                     )),
             ],
             shown.Count,
-            shown.Count > request.Limit,
+            shown.Count > request.Page.Limit,
             choices.Count - shown.Count
         );
     }
@@ -107,12 +115,23 @@ internal sealed partial class LspChanges
         && string.Equals(path[0]?.GetValue<string>(), SuppressionGroup, StringComparison.Ordinal);
 
     private async Task<Result<JsonObject>> SelectionAsync(
-        LspRequest request,
+        CodeActionsRequest request,
         CancellationToken cancellationToken
     )
     {
-        var located = await queries.PositionAsync(request, cancellationToken);
-        if (located.Error is { } error)
+        if (request is { Target.Symbol: not null } and not { EndLine: null, EndCharacter: null })
+        {
+            return ToolError.InvalidRequest(
+                "Pass symbol with an optional file, or a file with a line and character."
+            );
+        }
+
+        var position = await queries.PositionAsync(
+            request.Target,
+            request.Action,
+            cancellationToken
+        );
+        if (position.IsError(out var error, out var parameters))
         {
             return error;
         }
@@ -122,7 +141,6 @@ internal sealed partial class LspChanges
             return ToolError.InvalidRequest("The selection end must follow its start.");
         }
 
-        var parameters = located.Value;
         var start = parameters["position"]!;
         parameters.Remove("position");
         parameters["range"] = new JsonObject
@@ -134,16 +152,14 @@ internal sealed partial class LspChanges
     }
 
     private async Task<Result<JsonObject>> DiagnosticRangeAsync(
-        LspRequest request,
+        CodeActionsRequest request,
         CancellationToken cancellationToken
     )
     {
         if (
             request
             is not {
-                File: not null,
-                Symbol: null,
-                Character: null,
+                Target: { File: { } file, Line: var line, Symbol: null, Character: null },
                 EndLine: null,
                 EndCharacter: null,
             }
@@ -154,24 +170,40 @@ internal sealed partial class LspChanges
             );
         }
 
-        var uri = await session.OpenDocumentAsync(request.File, cancellationToken);
-        var report = await session.DiagnosticReportAsync(uri, cancellationToken);
+        if (
+            (await session.OpenDocumentAsync(file, cancellationToken)).IsError(
+                out var openError,
+                out var uri
+            )
+        )
+        {
+            return openError;
+        }
+
+        var reported = await session.DiagnosticReportAsync(uri, cancellationToken);
+        if (reported.IsError(out var reportError, out var report))
+        {
+            return reportError;
+        }
+
         var diagnostic = (report.Items ?? [])
             .Where(item =>
                 string.Equals(
                     item.CodeText(),
                     request.Diagnostic,
                     StringComparison.OrdinalIgnoreCase
-                ) && (request.Line is not { } line || item.Range.Start.Line == line - 1)
+                ) && (line is not { } wanted || item.Range.Start.Line == wanted - 1)
             )
             .MinBy(item => item.Range.Start);
         if (diagnostic is null)
         {
-            var place = request.Line is { } target
-                ? string.Create(CultureInfo.InvariantCulture, $" on line {target}")
+            var place = line is { } wanted
+                ? string.Create(CultureInfo.InvariantCulture, $" on line {wanted}")
                 : string.Empty;
+            // The open accepted the file, so its URI is inside the workspace
+            var relative = paths.RelativePath(paths.TryGetWorkspaceFile(uri)!);
             return ToolError.InvalidRequest(
-                $"{paths.RelativePath(paths.Resolve(request.File))} has no {request.Diagnostic} diagnostic{place}."
+                $"{relative} has no {request.Diagnostic} diagnostic{place}."
             );
         }
 
@@ -226,12 +258,13 @@ internal sealed partial class LspChanges
 
     private async Task<Result<ToolResult>> SelectActionAsync(
         PendingChange pending,
-        LspRequest request,
+        int? actionIndex,
+        bool apply,
         CancellationToken cancellationToken
     )
     {
         var choices = pending.Actions!;
-        if (request.ActionIndex is not >= 0 || request.ActionIndex >= choices.Count)
+        if (actionIndex is not >= 0 || actionIndex >= choices.Count)
         {
             return ToolError.InvalidRequest(
                 "Select a valid actionIndex from the code action listing."
@@ -239,11 +272,11 @@ internal sealed partial class LspChanges
         }
 
         // CompleteAsync rejects a stale snapshot before any preview or write
-        var choice = choices[request.ActionIndex.Value];
+        var choice = choices[actionIndex.Value];
         var action = (JsonObject)choice.Action.DeepClone();
-        var resolved = choice switch
+        var resolution = (choice.Scope, action["data"]) switch
         {
-            { Scope: { } scope } => await session.RequestAsync(
+            ({ } scope, _) => await session.RequestAsync(
                 LspMethods.CodeActionResolveFixAll,
                 new JsonObject
                 {
@@ -253,13 +286,18 @@ internal sealed partial class LspChanges
                 },
                 cancellationToken
             ),
-            _ when action["data"] is not null => await session.RequestAsync(
+            (null, not null) => await session.RequestAsync(
                 LspMethods.CodeActionResolve,
                 action,
                 cancellationToken
             ),
             _ => action,
         };
+        if (resolution.IsError(out var error, out var resolved))
+        {
+            return error;
+        }
+
         if (resolved is not JsonObject value)
         {
             return ToolError.InvalidLspData("Roslyn could not resolve the code action.");
@@ -280,30 +318,30 @@ internal sealed partial class LspChanges
         }
 
         var selected = new PendingChange(
-            request.Action,
+            pending.Action,
             pending.Snapshot,
             value["edit"] as JsonObject,
             command
         );
-        if (selected.Edit is null && selected.Command is null)
-        {
-            return ToolError.InvalidLspData("The selected action contains no edit or command.");
-        }
-
-        return await CompleteAsync(selected, request.Apply, cancellationToken);
+        return selected.Edit is null && selected.Command is null
+            ? ToolError.InvalidLspData("The selected action contains no edit or command.")
+            : await CompleteAsync(selected, apply, cancellationToken);
     }
 
     // A request with an end also has a line and character, because a symbol cannot take one
-    private static bool HasValidEnd(LspRequest request) =>
+    private static bool HasValidEnd(CodeActionsRequest request) =>
         request is { EndLine: null, EndCharacter: null }
         || (
             request.EndLine > 0
             && request.EndCharacter > 0
-            && request.EndLine >= request.Line
-            && (request.EndLine != request.Line || request.EndCharacter >= request.Character)
+            && request.EndLine >= request.Target.Line
+            && (
+                request.EndLine != request.Target.Line
+                || request.EndCharacter >= request.Target.Character
+            )
         );
 
-    private static JsonNode EndPosition(LspRequest request, JsonNode start) =>
+    private static JsonNode EndPosition(CodeActionsRequest request, JsonNode start) =>
         request is { EndLine: { } line, EndCharacter: { } character }
             ? new JsonObject { ["line"] = line - 1, ["character"] = character - 1 }
             : start.DeepClone();

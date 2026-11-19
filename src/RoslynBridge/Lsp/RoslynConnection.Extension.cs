@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 using Microsoft.Extensions.Logging;
-using StreamJsonRpc;
 
 namespace RoslynBridge.Lsp;
 
@@ -30,7 +29,7 @@ internal sealed partial class RoslynConnection
     /// Finds references inside Roslyn, without the batching delay of textDocument/references.
     /// </summary>
     /// <param name="parameters">The textDocument and zero-based position of the request.</param>
-    public Task<ExtensionReferences> FindReferencesAsync(
+    public Task<Result<ExtensionReferences>> FindReferencesAsync(
         JsonObject parameters,
         CancellationToken cancellationToken
     ) =>
@@ -44,7 +43,7 @@ internal sealed partial class RoslynConnection
     /// Finds callers inside Roslyn, with the calls through base and interface members.
     /// </summary>
     /// <param name="parameters">The textDocument and zero-based position of the request.</param>
-    public Task<ExtensionCallers> FindCallersAsync(
+    public Task<Result<ExtensionCallers>> FindCallersAsync(
         JsonObject parameters,
         CancellationToken cancellationToken
     ) =>
@@ -71,42 +70,41 @@ internal sealed partial class RoslynConnection
         }
 
         // A failure of this long search says nothing about the other handlers, so they stay active
-        JsonNode? result;
-        try
-        {
-            result = await RequestAsync(
-                LspMethods.WorkspaceDispatchExtensionMessage,
-                new JsonObject
+        var searched = await RequestAsync(
+            LspMethods.WorkspaceDispatchExtensionMessage,
+            new JsonObject
+            {
+                ["messageName"] = UnusedMessage,
+                ["message"] = new JsonObject
                 {
-                    ["messageName"] = UnusedMessage,
-                    ["message"] = new JsonObject
-                    {
-                        ["files"] = new JsonArray([
-                            .. files.Select(file => JsonValue.Create(file)),
-                        ]),
-                    }.ToJsonString(),
-                },
-                cancellationToken
-            );
-        }
-        catch (RemoteInvocationException exception)
-            when (exception.ErrorCode is RequestCancelledCode or ServerCancelledCode)
+                    ["files"] = new JsonArray([.. files.Select(file => JsonValue.Create(file))]),
+                }.ToJsonString(),
+            },
+            cancellationToken
+        );
+        if (searched.IsError(out var error, out var result))
         {
-            return ToolError.InvalidLspData(
-                "Roslyn cancelled the search for unused symbols. Retry the call."
-            );
-        }
-        catch (RemoteRpcException exception)
-        {
-            return UnusedFailure(exception.Message);
+            return error switch
+            {
+                { RpcCode: RequestCancelledCode or ServerCancelledCode } =>
+                    ToolError.InvalidLspData(
+                        "Roslyn cancelled the search for unused symbols. Retry the call."
+                    ),
+                { Code: ErrorCodes.Lsp } => UnusedFailure(error.Message),
+                _ => error,
+            };
         }
 
-        return ExtensionResponse(result) is { } response && JsonNode.Parse(response) is { } found
-            ? found
+        return ExtensionResponse(result) is { } response
+            ? LspJson.Parse<JsonNode>(response)
             : UnusedFailure(ExtensionError(result));
     }
 
-    private async Task<T> DispatchDocumentMessageAsync<T>(
+    // Roslyn cancels a request when the workspace changes, which says nothing about the extension
+    private static bool IsCancelled(ToolError error) =>
+        error.RpcCode is RequestCancelledCode or ServerCancelledCode;
+
+    private async Task<Result<T>> DispatchDocumentMessageAsync<T>(
         string messageName,
         JsonObject parameters,
         CancellationToken cancellationToken
@@ -118,30 +116,30 @@ internal sealed partial class RoslynConnection
             return T.NotFound;
         }
 
-        JsonNode? result;
-        try
+        var dispatched = await RequestAsync(
+            LspMethods.TextDocumentDispatchExtensionMessage,
+            new JsonObject
+            {
+                ["messageName"] = messageName,
+                ["message"] = parameters["position"]!.ToJsonString(),
+                ["textDocument"] = parameters["textDocument"]!.DeepClone(),
+            },
+            cancellationToken
+        );
+        if (dispatched.IsError(out var error, out var result))
         {
-            result = await RequestAsync(
-                LspMethods.TextDocumentDispatchExtensionMessage,
-                new JsonObject
-                {
-                    ["messageName"] = messageName,
-                    ["message"] = parameters["position"]!.ToJsonString(),
-                    ["textDocument"] = parameters["textDocument"]!.DeepClone(),
-                },
-                cancellationToken
-            );
-        }
-        // Roslyn cancels a request when the workspace changes, which says nothing about the extension
-        catch (RemoteInvocationException exception)
-            when (exception.ErrorCode is RequestCancelledCode or ServerCancelledCode)
-        {
-            return T.NotFound;
-        }
-        catch (RemoteRpcException exception)
-        {
-            DisableDocumentHandlers(exception.Message);
-            return T.NotFound;
+            if (IsCancelled(error))
+            {
+                return T.NotFound;
+            }
+
+            if (error is { Code: ErrorCodes.Lsp })
+            {
+                DisableDocumentHandlers(error.Message);
+                return T.NotFound;
+            }
+
+            return error;
         }
 
         if (ExtensionResponse(result) is not { } response)
@@ -150,40 +148,38 @@ internal sealed partial class RoslynConnection
             return T.NotFound;
         }
 
-        try
+        if (LspJson.Parse<T>(response).IsError(out var invalid, out var answer))
         {
-            return JsonSerializer.Deserialize<T>(response, LspJson.Options)
-                ?? throw new JsonException("The response is null.");
-        }
-        catch (JsonException exception)
-        {
-            DisableDocumentHandlers(exception.Message);
+            DisableDocumentHandlers(invalid.Message);
             return T.NotFound;
         }
+
+        return answer;
     }
 
-    private async Task ActivateExtensionAsync(CancellationToken cancellationToken)
+    private async Task<Result> ActivateExtensionAsync(CancellationToken cancellationToken)
     {
         if (!File.Exists(_extensionPath))
         {
             LogExtensionUnavailable(logger, $"{_extensionPath} is missing");
-            return;
+            return Result.Success;
         }
 
-        JsonNode? result;
-        try
+        var activated = await RequestAsync(
+            LspMethods.ServerActivateExtension,
+            new JsonObject { ["assemblyFilePath"] = _extensionPath },
+            cancellationToken
+        );
+        if (activated.IsError(out var error, out var result))
         {
-            result = await RequestAsync(
-                LspMethods.ServerActivateExtension,
-                new JsonObject { ["assemblyFilePath"] = _extensionPath },
-                cancellationToken
-            );
-        }
-        // A server without the extension handlers reports an unknown method
-        catch (RemoteRpcException exception)
-        {
-            LogExtensionUnavailable(logger, exception.Message);
-            return;
+            // A server without the extension handlers reports an unknown method
+            if (error is not { Code: ErrorCodes.Lsp })
+            {
+                return error;
+            }
+
+            LogExtensionUnavailable(logger, error.Message);
+            return Result.Success;
         }
 
         var unregistered = Unregistered(result?["documentMessageHandlers"], _documentMessages);
@@ -199,6 +195,8 @@ internal sealed partial class RoslynConnection
         {
             LogUnusedUnavailable(logger, ActivationError(result, unregistered));
         }
+
+        return Result.Success;
     }
 
     // One warning per session is enough, and a broken handler would fail every request the same way
