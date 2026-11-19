@@ -31,7 +31,13 @@ internal sealed class ToolClient : IDisposable
             paths,
             session,
             queries,
-            new LspChanges(session, paths, new WorkspaceEditService(paths), queries),
+            new LspChanges(
+                session,
+                paths,
+                new WorkspaceEditService(paths),
+                queries,
+                NullLogger<LspChanges>.Instance
+            ),
             NullLogger<LspTool>.Instance
         );
     }

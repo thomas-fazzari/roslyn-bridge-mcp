@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Thomas Fazzari
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+using Microsoft.Extensions.Logging;
 using RoslynBridge.Editing;
 using RoslynBridge.Lsp;
 using RoslynBridge.Queries;
@@ -14,10 +15,12 @@ internal sealed partial class LspChanges(
     RoslynSession session,
     WorkspacePaths paths,
     WorkspaceEditService edits,
-    LspQueries queries
+    LspQueries queries,
+    ILogger<LspChanges> logger
 )
 {
     internal const int MaximumPendingProposals = 8;
+    private const int MaximumCheckedFiles = 128;
     private static readonly TimeSpan _proposalLifetime = TimeSpan.FromMinutes(5);
 
     // Insertion order is the creation order, so eviction and expiry start at index 0
@@ -31,17 +34,30 @@ internal sealed partial class LspChanges(
     public async Task<Result<ToolResult>> ExecuteAsync(
         EditRequest request,
         CancellationToken cancellationToken
-    ) =>
-        request switch
-        {
-            { ProposalId: not null } => await UseProposalAsync(request, cancellationToken),
-            RenameRequest rename => await RenameAsync(rename, cancellationToken),
-            RenameFileRequest renameFile => await RenameFileAsync(renameFile, cancellationToken),
-            CodeActionsRequest codeActions => await CodeActionsAsync(
-                codeActions,
-                cancellationToken
-            ),
-        };
+    )
+    {
+        var routed = await RouteAsync(request, cancellationToken);
+        var result = await WithDiagnosticsAsync(routed, cancellationToken);
+        if (result is EditFailure)
+            RecoverFromPartialApplication();
+
+        return result;
+    }
+
+    /// <summary>
+    /// Runs a command of a raw request. It adds no diagnostics.
+    /// </summary>
+    public async Task<Result<EditReceipt>> ExecuteCommandAsync(
+        JsonObject command,
+        CancellationToken cancellationToken
+    )
+    {
+        var result = await RunCommandAsync(command, cancellationToken);
+        if (result is EditFailure)
+            RecoverFromPartialApplication();
+
+        return result;
+    }
 
     internal async Task<Result<ToolResult>> CompleteAsync(
         PendingChange change,
@@ -80,7 +96,7 @@ internal sealed partial class LspChanges(
             {
                 result = result with { CommandExecuted = false };
                 if (
-                    (await ExecuteCommandAsync(change.Command, cancellationToken)).IsError(
+                    (await RunCommandAsync(change.Command, cancellationToken)).IsError(
                         out var commandError,
                         out var commandReceipt
                     )
@@ -98,7 +114,7 @@ internal sealed partial class LspChanges(
                 };
             }
 
-            // ExecuteCommandAsync synchronizes only the edits of the command's callbacks
+            // RunCommandAsync synchronizes only the edits of the command's callbacks
             phase = EditApplicationPhase.Synchronize;
             if (await SynchronizeAsync(applied, cancellationToken) is ToolError error)
                 return AfterWrites(result, phase, error);
@@ -114,7 +130,22 @@ internal sealed partial class LspChanges(
         };
     }
 
-    public async Task<Result<EditReceipt>> ExecuteCommandAsync(
+    private async Task<Result<ToolResult>> RouteAsync(
+        EditRequest request,
+        CancellationToken cancellationToken
+    ) =>
+        request switch
+        {
+            { ProposalId: not null } => await UseProposalAsync(request, cancellationToken),
+            RenameRequest rename => await RenameAsync(rename, cancellationToken),
+            RenameFileRequest renameFile => await RenameFileAsync(renameFile, cancellationToken),
+            CodeActionsRequest codeActions => await CodeActionsAsync(
+                codeActions,
+                cancellationToken
+            ),
+        };
+
+    private async Task<Result<EditReceipt>> RunCommandAsync(
         JsonObject command,
         CancellationToken cancellationToken
     )
@@ -430,4 +461,64 @@ internal sealed partial class LspChanges(
         _pending.Add(id, change);
         return id;
     }
+
+    private void RecoverFromPartialApplication()
+    {
+        // Files changed outside the bridge's synchronization, so Roslyn starts again from disk
+        _pending.Clear();
+        session.RequireReload();
+    }
+
+    /// <summary>
+    /// Adds the diagnostics of the changed files to an applied edit.
+    /// </summary>
+    private async Task<Result<ToolResult>> WithDiagnosticsAsync(
+        Result<ToolResult> result,
+        CancellationToken cancellationToken
+    )
+    {
+        if (result is not EditReceipt { Synchronized: true } receipt)
+            return result;
+
+        string[] files =
+        [
+            .. receipt
+                .Operations.Select(operation => paths.FullPath(operation.Path))
+                .Distinct(StringComparer.Ordinal)
+                .Where(path => WorkspacePaths.IsCSharpFile(path) && File.Exists(path)),
+        ];
+        if (files.Length is 0 or > MaximumCheckedFiles)
+            return receipt;
+
+        // The edit is already applied, so a failed check returns the receipt without diagnostics
+        var checkedFiles = await queries
+            .DiagnosticsAsync(
+                files,
+                new DiagnosticsRequest(
+                    File: null,
+                    DiagnosticSeverity.Warning,
+                    Ids: null,
+                    Summary: false,
+                    Paging.Default
+                ),
+                cancellationToken
+            )
+            .OrCancelledAsync();
+        if (checkedFiles.IsError(out var error, out var report))
+        {
+            DiagnosticsFailed(logger, error.Code, error.Message);
+            return receipt;
+        }
+
+        return receipt with
+        {
+            Diagnostics = report,
+        };
+    }
+
+    [LoggerMessage(
+        Level = LogLevel.Warning,
+        Message = "LSP diagnostics failed with {Code}: {Reason}"
+    )]
+    private static partial void DiagnosticsFailed(ILogger logger, string code, string reason);
 }

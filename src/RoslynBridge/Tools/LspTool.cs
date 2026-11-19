@@ -25,7 +25,6 @@ internal sealed partial class LspTool(
 ) : IDisposable
 {
     private const int MaximumErrorCharacters = 2_000;
-    private const int MaximumCheckedFiles = 128;
 
     private static readonly FrozenSet<string> _readOnlyMethods = new[]
     {
@@ -190,9 +189,6 @@ internal sealed partial class LspTool(
     {
         if (error is EditFailure failure)
         {
-            // Files changed outside the bridge's synchronization, so Roslyn starts again from disk
-            changes.Clear();
-            session.RequireReload();
             OperationFailed(logger, action, failure.Code, failure.Message);
             return ApplicationFailure(failure, cancellationToken.IsCancellationRequested);
         }
@@ -208,53 +204,6 @@ internal sealed partial class LspTool(
             OperationFailed(logger, action, error.Code, error.Message);
 
         return Failure(error);
-    }
-
-    /// <summary>
-    /// Adds the diagnostics of the changed files to an applied edit.
-    /// </summary>
-    private async Task<Result<ToolResult>> WithDiagnosticsAsync(
-        Result<ToolResult> result,
-        CancellationToken cancellationToken
-    )
-    {
-        if (result is not EditReceipt { Synchronized: true } receipt)
-            return result;
-
-        string[] files =
-        [
-            .. receipt
-                .Operations.Select(operation => paths.FullPath(operation.Path))
-                .Distinct(StringComparer.Ordinal)
-                .Where(path => WorkspacePaths.IsCSharpFile(path) && File.Exists(path)),
-        ];
-        if (files.Length is 0 or > MaximumCheckedFiles)
-            return receipt;
-
-        // The edit is already applied, so a failed check returns the receipt without diagnostics
-        var checkedFiles = await queries
-            .DiagnosticsAsync(
-                files,
-                new DiagnosticsRequest(
-                    File: null,
-                    DiagnosticSeverity.Warning,
-                    Ids: null,
-                    Summary: false,
-                    Paging.Default
-                ),
-                cancellationToken
-            )
-            .OrCancelledAsync();
-        if (checkedFiles.IsError(out var error, out var report))
-        {
-            OperationFailed(logger, LspAction.Diagnostics, error.Code, error.Message);
-            return receipt;
-        }
-
-        return receipt with
-        {
-            Diagnostics = report,
-        };
     }
 
     private async Task<Result<ToolResult>> DispatchAsync(
@@ -311,10 +260,7 @@ internal sealed partial class LspTool(
                 navigation,
                 cancellationToken
             ),
-            EditRequest edit => await WithDiagnosticsAsync(
-                await changes.ExecuteAsync(edit, cancellationToken),
-                cancellationToken
-            ),
+            EditRequest edit => await changes.ExecuteAsync(edit, cancellationToken),
             RawLspRequest raw => await RawRequestAsync(raw, cancellationToken),
         };
     }
