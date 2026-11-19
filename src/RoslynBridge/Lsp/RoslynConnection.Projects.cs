@@ -5,7 +5,7 @@ using StreamJsonRpc;
 
 namespace RoslynBridge.Lsp;
 
-internal sealed partial class RoslynSession
+internal sealed partial class RoslynConnection
 {
     internal static readonly TimeSpan ProjectAttachTimeout = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan _projectAttachPollInterval = TimeSpan.FromMilliseconds(200);

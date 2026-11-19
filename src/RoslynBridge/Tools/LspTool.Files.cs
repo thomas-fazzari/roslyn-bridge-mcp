@@ -3,7 +3,6 @@
 
 using System.Buffers;
 using System.Collections.ObjectModel;
-using RoslynBridge.Lsp;
 using RoslynBridge.Requests;
 
 namespace RoslynBridge.Tools;
@@ -39,7 +38,7 @@ internal sealed partial class LspTool
         var candidates =
             request.Action is LspAction.RenameFile
                 ? known
-                : known.Where(RoslynSession.IsCSharpFile);
+                : known.Where(WorkspacePaths.IsCSharpFile);
         var resolved = new Dictionary<string, string>(StringComparer.Ordinal);
         var ambiguous = new Dictionary<string, ToolError>(StringComparer.Ordinal);
         foreach (var name in names)

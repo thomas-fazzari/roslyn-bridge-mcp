@@ -3,14 +3,14 @@
 
 namespace RoslynBridge.Lsp;
 
-internal sealed partial class RoslynSession
+internal sealed partial class RoslynConnection
 {
     private const int FileChangeBatchSize = 128;
 
     // On Windows, the 8 KB default overflows on a branch switch or a restore, which forces a full rescan
     private const int WatcherBufferBytes = 64 * 1024;
 
-    internal void QueueFile(string path)
+    private void QueueFile(string path)
     {
         if (!paths.IsWatched(path))
         {
@@ -185,7 +185,7 @@ internal sealed partial class RoslynSession
     {
         foreach (var batch in changes.Chunk(FileChangeBatchSize))
         {
-            if (!_watchRegistrations.IsEmpty)
+            if (callbacks.WatchesFiles)
             {
                 await NotifyAsync(
                     LspMethods.WorkspaceDidChangeWatchedFiles,
@@ -244,7 +244,7 @@ internal sealed partial class RoslynSession
     }
 
     private static bool IsSourceFileAddedOrRemoved(FileChange change) =>
-        change.Type is FileCreated or FileDeleted && IsCSharpFile(change.Path);
+        change.Type is FileCreated or FileDeleted && WorkspacePaths.IsCSharpFile(change.Path);
 
     private IEnumerable<string> NearestProjects(
         string path,

@@ -52,6 +52,11 @@ internal sealed class FakeRoslynServer : IRoslynServer
     public JsonObject Capabilities { get; set; } = [];
 
     /// <summary>
+    /// Runs before the fake answers the shutdown request. Defaults to nothing.
+    /// </summary>
+    public Func<Task> OnShutdown { get; set; } = () => Task.CompletedTask;
+
+    /// <summary>
     /// Only didOpen, didChange, didClose, didChangeWatchedFiles, solution/open and project/open, in arrival order.
     /// </summary>
     public IReadOnlyCollection<(string Method, JsonNode? Parameters)> Notifications =>
@@ -337,7 +342,7 @@ internal sealed class FakeRoslynServer : IRoslynServer
             server.Handle(LspMethods.WorkspaceExecuteCommand, parameters);
 
         [JsonRpcMethod(LspMethods.Shutdown)]
-        public static void Shutdown() { }
+        public Task ShutdownAsync() => server.OnShutdown();
 
         [JsonRpcMethod(LspMethods.Exit)]
         public void Exit() => server.Crash();

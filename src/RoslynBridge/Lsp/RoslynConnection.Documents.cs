@@ -5,7 +5,7 @@ using RoslynBridge.Telemetry;
 
 namespace RoslynBridge.Lsp;
 
-internal sealed partial class RoslynSession
+internal sealed partial class RoslynConnection
 {
     internal const int MaximumOpenDocuments = 1000;
     private const int MaximumDocumentCharacters = 1024 * 1024;
@@ -20,9 +20,6 @@ internal sealed partial class RoslynSession
 
     private readonly Dictionary<string, OpenDocument> _documents = [with(StringComparer.Ordinal)];
     private readonly LinkedList<string> _openedOrder = [];
-    private readonly ConcurrentDictionary<string, byte> _watchRegistrations = new(
-        StringComparer.Ordinal
-    );
     private readonly ConcurrentDictionary<string, byte> _pendingFiles = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, byte> _createdFiles = new(StringComparer.Ordinal);
     private Dictionary<string, FileStamp> _workspaceFiles = [with(StringComparer.Ordinal)];
@@ -127,42 +124,13 @@ internal sealed partial class RoslynSession
         return [.. _workspaceFiles.Keys];
     }
 
-    internal void RegisterCapabilities(RegistrationParams parameters)
-    {
-        foreach (var registration in parameters.Registrations)
-        {
-            if (
-                string.Equals(
-                    registration.Method,
-                    LspMethods.WorkspaceDidChangeWatchedFiles,
-                    StringComparison.Ordinal
-                )
-            )
-            {
-                _watchRegistrations[registration.Id] = 0;
-            }
-        }
-    }
-
-    internal void UnregisterCapabilities(UnregistrationParams parameters)
-    {
-        foreach (var registration in parameters.Unregisterations)
-        {
-            _watchRegistrations.TryRemove(registration.Id, out _);
-        }
-    }
-
-    internal static bool IsCSharpFile(string path) =>
-        path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)
-        || path.EndsWith(".csx", StringComparison.OrdinalIgnoreCase);
-
     private async Task<string> OpenDocumentCoreAsync(
         string file,
         CancellationToken cancellationToken
     )
     {
         var path = paths.Resolve(file);
-        if (!IsCSharpFile(path))
+        if (!WorkspacePaths.IsCSharpFile(path))
         {
             throw new ToolErrorException(
                 ToolError.InvalidRequest($"Only C# files can be opened: {paths.RelativePath(path)}")
@@ -332,7 +300,7 @@ internal sealed partial class RoslynSession
         CancellationToken cancellationToken
     )
     {
-        if (_documents.ContainsKey(path) || !IsCSharpFile(path))
+        if (_documents.ContainsKey(path) || !WorkspacePaths.IsCSharpFile(path))
         {
             return;
         }
