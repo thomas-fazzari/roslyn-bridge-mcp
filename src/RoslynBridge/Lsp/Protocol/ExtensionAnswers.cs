@@ -101,9 +101,11 @@ internal sealed record ExtensionExpression(
 /// <param name="Calls">
 /// LSP incoming calls for callers, which may also name the member they go through, and outgoing calls for callees.
 /// </param>
+/// <param name="External">For callees, the number of distinct methods outside the workspace that the member calls. Callers leave it at 0.</param>
 internal sealed record ExtensionCalls(
     [property: JsonRequired] bool Found,
-    [property: JsonRequired] LspCall[] Calls
+    [property: JsonRequired] LspCall[] Calls,
+    int External = 0
 ) : IExtensionAnswer<ExtensionCalls>
 {
     public static ExtensionCalls NotFound { get; } = new(Found: false, []);

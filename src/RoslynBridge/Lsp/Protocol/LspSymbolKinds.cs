@@ -51,6 +51,12 @@ internal static class LspSymbolKinds
                 or LspSymbolKind.Function
                 or LspSymbolKind.Operator;
 
+    /// <summary>
+    /// Whether the compiler can insert calls into a member of this kind, such as a Dispose or a base constructor call.
+    /// </summary>
+    public static bool CanHideCalls(LspSymbolKind kind) =>
+        IsInvocable(kind) || kind is LspSymbolKind.Property or LspSymbolKind.Event;
+
     public static bool IsType(LspSymbolKind kind) =>
         kind
             is LspSymbolKind.Class

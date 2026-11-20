@@ -14,11 +14,12 @@ namespace RoslynBridge.Extension;
 /// <remarks>
 /// <para>Like that handler, it lists the members declared in source, with their call sites in the requested declaration.</para>
 /// <para>A property, field or event is listed as well, so that the caller can count the accesses.</para>
+/// <para>Methods outside the workspace are counted, not listed. The implicit call to the constructor of object is not counted.</para>
 /// </remarks>
 internal sealed class CalleesHandler
     : IExtensionDocumentMessageHandler<PositionRequest, CalleesResponse>
 {
-    private static readonly CalleesResponse _notFound = new(Found: false, []);
+    private static readonly CalleesResponse _notFound = new(Found: false, [], External: 0);
 
     public async Task<CalleesResponse> ExecuteAsync(
         PositionRequest message,
@@ -66,12 +67,10 @@ internal sealed class CalleesHandler
         if (!walked)
             return _notFound;
 
-        return await CallsAsync(walker.Calls, solution, cancellationToken) is { } calls
-            ? new CalleesResponse(Found: true, calls)
-            : _notFound;
+        return await CallsAsync(walker.Calls, solution, cancellationToken);
     }
 
-    private static async Task<List<OutgoingCall>?> CallsAsync(
+    private static async Task<CalleesResponse> CallsAsync(
         IReadOnlyList<CallSite> sites,
         Solution solution,
         CancellationToken cancellationToken
@@ -85,22 +84,17 @@ internal sealed class CalleesHandler
         {
             var declared = CallItems.DeclaringSymbol(callee.Key!);
             // The URI of a generated document needs its generator's identity, which Roslyn keeps internal
-            if (CallItems.IsOnlyGenerated(declared, solution))
-                return null;
-
-            if (
-                await CallItems.CreateAsync(
+            var item = CallItems.IsOnlyGenerated(declared, solution)
+                ? CallItems.CreateUnlocated(callee.Key!)
+                : await CallItems.CreateAsync(
                     callee.Key!,
                     declared,
                     solution,
                     near: null,
                     cancellationToken
-                )
-                is not { } item
-            )
-            {
+                );
+            if (item is null)
                 continue;
-            }
 
             calls.Add(
                 new OutgoingCall(
@@ -114,8 +108,40 @@ internal sealed class CalleesHandler
             );
         }
 
-        return calls;
+        return new CalleesResponse(Found: true, calls, ExternalCount(sites, cancellationToken));
     }
+
+    private static int ExternalCount(
+        IReadOnlyList<CallSite> sites,
+        CancellationToken cancellationToken
+    ) =>
+        sites
+            .Where(site =>
+                IsExternalMethod(site.Callee)
+                && !IsImplicitObjectConstructorCall(site, cancellationToken)
+            )
+            .Select(site => site.Callee)
+            .Distinct(SymbolEqualityComparer.Default)
+            .Count();
+
+    private static bool IsExternalMethod(ISymbol callee) =>
+        callee is IMethodSymbol { ContainingType.IsAnonymousType: false }
+        && !IsDeclaredInSource(callee);
+
+    // The compiler reports the call at the declaration of a class ctor without a base initializer
+    private static bool IsImplicitObjectConstructorCall(
+        CallSite call,
+        CancellationToken cancellationToken
+    ) =>
+        call.Callee
+            is IMethodSymbol
+            {
+                MethodKind: MethodKind.Constructor,
+                ContainingType.SpecialType: SpecialType.System_Object,
+            }
+        && call.Site.SourceTree?.GetRoot(cancellationToken)
+            .FindNode(call.Site.SourceSpan, getInnermostNodeForTie: true)
+            is ConstructorDeclarationSyntax;
 
     // Declarations without a body, such as a type of a primary ctor, stay with callHierarchy
     private static bool HasBody(SyntaxNode declaration) =>

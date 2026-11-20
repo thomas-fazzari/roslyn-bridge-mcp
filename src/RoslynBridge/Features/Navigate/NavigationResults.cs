@@ -132,16 +132,21 @@ internal sealed record Locations(
 }
 
 /// <param name="Accesses">Property, field and constant accesses left out of callees.</param>
+/// <param name="External">The number of methods outside the workspace left out of callees.</param>
 /// <param name="Hierarchy">The action, when Roslyn found a symbol to expand.</param>
+/// <param name="CompilerCallsMissing">True when the list comes from callHierarchy, which misses the calls that the compiler inserts.</param>
 internal sealed record RelatedSymbols(
     IReadOnlyList<SymbolItem> Items,
     int Total,
     int? NextOffset,
     int Accesses = 0,
-    LspAction? Hierarchy = null
+    int External = 0,
+    LspAction? Hierarchy = null,
+    bool CompilerCallsMissing = false
 ) : ToolResult
 {
-    public override bool IsEmpty => Total == 0;
+    public override bool IsEmpty =>
+        Total == 0 && Accesses == 0 && External == 0 && !CompilerCallsMissing;
 
     internal override void Write(StringBuilder text, int budget)
     {
@@ -162,7 +167,25 @@ internal sealed record RelatedSymbols(
                 $"{Accesses} property, field or constant accesses omitted\n"
             );
         }
+
+        if (External > 0)
+        {
+            text.Append(
+                CultureInfo.InvariantCulture,
+                $"{External} callees outside the workspace omitted\n"
+            );
+        }
+
+        if (this is { CompilerCallsMissing: true, Hierarchy: { } action })
+            AppendCompilerCallsMissing(text, action);
     }
+
+    private static void AppendCompilerCallsMissing(StringBuilder text, LspAction hierarchy) =>
+        text.Append(
+            hierarchy is LspAction.Callers
+                ? "calls through base or interface members and compiler-inserted calls not included\n"
+                : "compiler-inserted calls not included\n"
+        );
 
     private static void AppendNoRelated(StringBuilder text, LspAction hierarchy)
     {

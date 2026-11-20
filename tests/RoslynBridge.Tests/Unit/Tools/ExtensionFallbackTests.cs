@@ -167,7 +167,15 @@ public sealed class ExtensionFallbackTests : TempWorkspaceTests
 
         var response = await tool.ExecuteAsync(Request(LspAction.Callers), TestCt);
 
-        ResultLines.Locations(ResponseText(response)).Should().Equal(expectedFile);
+        var item = $"{expectedFile}:1:7 method {CallerName}";
+        string[] expected = activated
+            ? [item]
+            :
+            [
+                item,
+                "calls through base or interface members and compiler-inserted calls not included",
+            ];
+        ResultLines.Lines(ResponseText(response)).Should().Equal(expected);
     }
 
     [Fact]
@@ -199,7 +207,53 @@ public sealed class ExtensionFallbackTests : TempWorkspaceTests
 
         var response = await tool.ExecuteAsync(Request(LspAction.Callees), TestCt);
 
-        ResultLines.Locations(ResponseText(response)).Should().Equal(HierarchyCallerFile);
+        ResultLines
+            .Lines(ResponseText(response))
+            .Should()
+            .Equal(
+                $"{HierarchyCallerFile}:1:7 method {CallerName}",
+                "compiler-inserted calls not included"
+            );
+    }
+
+    [Fact]
+    public async Task ImpactKeepsTheCompilerCallsMarkerOfAnEmptyCallersSectionAsync()
+    {
+        await WriteFileAsync(Root, SourceFile, "class A {}\n");
+        await using var session = CreateSession(
+            Root,
+            Answering(
+                new(StringComparer.Ordinal)
+                {
+                    [LspMethods.TextDocumentPrepareCallHierarchy] = new JsonArray(
+                        new JsonObject
+                        {
+                            ["name"] = CallerName,
+                            ["kind"] = (int)LspSymbolKind.Method,
+                        }
+                    ),
+                    [LspMethods.CallHierarchyIncomingCalls] = new JsonArray(),
+                    [LspMethods.TextDocumentDefinition] = new JsonArray(),
+                    [LspMethods.TextDocumentReferences] = new JsonArray(),
+                    [LspMethods.TextDocumentImplementation] = new JsonArray(),
+                }
+            )
+        );
+        using var tool = CreateTool(Root, session);
+
+        var response = await tool.ExecuteAsync(Request(LspAction.Impact), TestCt);
+
+        ResultLines
+            .Lines(ResponseText(response))
+            .Should()
+            .Equal(
+                "## references: none",
+                "## callers",
+                "no callers",
+                "reflection or code outside the workspace may still call the member",
+                "calls through base or interface members and compiler-inserted calls not included",
+                "## implementation: none"
+            );
     }
 
     [Fact]
