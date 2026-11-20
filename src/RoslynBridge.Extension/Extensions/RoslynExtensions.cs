@@ -24,8 +24,7 @@ internal static class RoslynExtensions
         /// False on lines hidden by <c>#line hidden</c>, which Roslyn leaves out of references.
         /// </summary>
         public bool IsVisibleSourceLocation(CancellationToken cancellationToken) =>
-            location.IsInSource
-            && location.SourceTree is { } tree
+            location is { IsInSource: true, SourceTree: { } tree }
             && !tree.IsHiddenPosition(location.SourceSpan.Start, cancellationToken);
     }
 

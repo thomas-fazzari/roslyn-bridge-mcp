@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Thomas Fazzari
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+using RoslynBridge.Lsp.Protocol;
 using RoslynBridge.Results;
 using RoslynBridge.Telemetry;
 
@@ -15,7 +16,7 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
     private const int MaximumEditedFiles = 256;
 
     /// <summary>
-    /// The returned snapshot holds the fingerprints of the files the edit reads.
+    /// The returned snapshot has the fingerprints of the files the edit reads.
     /// </summary>
     public async Task<Result<EditPreview>> PreviewAsync(
         WorkspaceEdit edit,
@@ -124,17 +125,14 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
                 );
         }
 
-        if (cleanupFailure is { Error: var cleanupError, Path: var cleanupPath })
-        {
-            return new EditFailure(
+        return cleanupFailure is { Error: var cleanupError, Path: var cleanupPath }
+            ? new EditFailure(
                 cleanupError,
                 new EditReceipt(Applied: true, completedOperations),
                 EditApplicationPhase.Cleanup,
                 cleanupPath
-            );
-        }
-
-        return new EditReceipt(Applied: true, completedOperations);
+            )
+            : new EditReceipt(Applied: true, completedOperations);
     }
 
     private async Task<ApplyFailure?> ApplyMutationsAsync(
@@ -221,12 +219,12 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
             )
         )
         {
-            pendingMutation = new(paths.RelativePath(document.Path), FileOperation.Rename);
+            pendingMutation = new(paths.RelativePath(document.Path), FileChange.Rename);
             File.Move(document.OriginalPath, document.Path, overwrite: true);
             completedOperations.Add(
                 new(
                     paths.RelativePath(document.Path),
-                    FileOperation.Rename,
+                    FileChange.Rename,
                     paths.RelativePath(document.OriginalPath)
                 )
             );
@@ -245,12 +243,12 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
             )
         )
         {
-            pendingMutation = new(paths.RelativePath(document.Path), FileOperation.Delete);
+            pendingMutation = new(paths.RelativePath(document.Path), FileChange.Delete);
             if (paths.Resolve(document.Path) is ToolError error)
                 return error;
 
             File.Delete(document.Path);
-            completedOperations.Add(new(paths.RelativePath(document.Path), FileOperation.Delete));
+            completedOperations.Add(new(paths.RelativePath(document.Path), FileChange.Delete));
         }
 
         return Result.Success;
@@ -554,8 +552,8 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
         return CheckSize(documents.Values) is ToolError sizeError ? sizeError : document;
     }
 
-    private static string DestinationOperation(EditedDocument document) =>
-        document.Original is null ? FileOperation.Create : FileOperation.Change;
+    private static FileChange DestinationOperation(EditedDocument document) =>
+        document.Original is null ? FileChange.Create : FileChange.Change;
 
     private static Result CheckSize(Dictionary<string, EditedDocument>.ValueCollection documents)
     {
@@ -574,7 +572,7 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
             : Result.Success;
     }
 
-    private readonly record struct PendingMutation(string Path, string Operation);
+    private readonly record struct PendingMutation(string Path, FileChange Operation);
 
     private sealed record ApplyFailure(ToolError Error, PendingMutation? Mutation);
 }

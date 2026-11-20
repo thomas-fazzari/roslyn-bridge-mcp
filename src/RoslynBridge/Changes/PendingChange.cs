@@ -2,25 +2,34 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 using RoslynBridge.Editing;
-using RoslynBridge.Requests;
+using RoslynBridge.Lsp.Protocol;
 
 namespace RoslynBridge.Changes;
 
+/// <summary>
+/// A change computed against <paramref name="Snapshot"/>, which a later call previews or applies.
+/// </summary>
 [DebuggerDisplay("{Action} created {CreatedAt}, {Snapshot.Files.Count} files")]
-internal sealed record PendingChange(
-    LspAction Action,
-    WorkspaceSnapshot Snapshot,
-    WorkspaceEdit Edit,
-    JsonObject? Command,
-    IReadOnlyList<CodeActionChoice>? Actions = null
-)
+internal closed record PendingChange(LspAction Action, WorkspaceSnapshot Snapshot)
 {
     public DateTimeOffset CreatedAt { get; } = DateTimeOffset.UtcNow;
 }
 
-internal sealed record CodeActionChoice(
-    string Title,
-    string? Kind,
-    JsonObject Action,
-    string? Scope
-);
+/// <summary>
+/// An edit that Roslyn computed, with the command that completes it.
+/// </summary>
+internal sealed record ProposedEdit(
+    LspAction Action,
+    WorkspaceSnapshot Snapshot,
+    WorkspaceEdit Edit,
+    LspCommand? Command = null
+) : PendingChange(Action, Snapshot);
+
+/// <summary>
+/// Code actions listed for a selection. The caller picks one by its index.
+/// </summary>
+internal sealed record ActionChoices(
+    LspAction Action,
+    WorkspaceSnapshot Snapshot,
+    IReadOnlyList<LspCodeAction> Actions
+) : PendingChange(Action, Snapshot);

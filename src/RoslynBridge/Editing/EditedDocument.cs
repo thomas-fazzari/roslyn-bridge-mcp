@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Thomas Fazzari
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+using RoslynBridge.Lsp.Protocol;
 using RoslynBridge.Results;
 
 namespace RoslynBridge.Editing;
@@ -86,10 +87,10 @@ internal sealed class EditedDocument(string path, byte[]? original)
         var preview = TextPreview.Create(before, after);
         var kind = (Original, Content, CaseOnlyRename) switch
         {
-            (null, _, _) => FileOperation.Create,
-            (_, null, _) => FileOperation.Delete,
-            (_, _, true) => FileOperation.Rename,
-            _ => FileOperation.Change,
+            (null, _, _) => FileChange.Create,
+            (_, null, _) => FileChange.Delete,
+            (_, _, true) => FileChange.Rename,
+            _ => FileChange.Change,
         };
         return new FilePreview(
             new FileOperation(

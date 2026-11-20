@@ -3,10 +3,9 @@
 
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
-using RoslynBridge.Requests;
+using RoslynBridge.Common;
 using RoslynBridge.Settings;
 using RoslynBridge.Tests.Assertions;
-using RoslynBridge.Tools;
 using static RoslynBridge.Tests.Unit.TestHelpers;
 
 namespace RoslynBridge.Tests.Integration.Roslyn;
@@ -77,7 +76,7 @@ internal sealed class RoslynTestWorkspace : IAsyncDisposable
 
     public async Task<CallToolResult> CallRawAsync(LspRequest request)
     {
-        var (tool, arguments) = ToolCall(request);
+        var (tool, arguments) = request.ToolCall();
         return await Client.CallToolAsync(tool, arguments, cancellationToken: _cancellationToken);
     }
 
@@ -169,102 +168,6 @@ internal sealed class RoslynTestWorkspace : IAsyncDisposable
         }
     }
 
-    /// <summary>
-    /// Calls the tool that owns the action, with flat arguments, as an agent would.
-    /// </summary>
-    private static (string Tool, Dictionary<string, object?> Arguments) ToolCall(LspRequest request)
-    {
-        var (tool, parameters) = request.Action switch
-        {
-            LspAction.Diagnostics => (
-                DiagnosticsTool.Name,
-                ["file", "severity", "limit", "offset"]
-            ),
-            LspAction.Symbols => (SymbolsTool.Name, ["file", "query", "unused", "limit", "offset"]),
-            _ when request.IsNavigation => (
-                NavigateTool.Name,
-                new[]
-                {
-                    "action",
-                    "symbol",
-                    "file",
-                    "line",
-                    "character",
-                    "context",
-                    "inherited",
-                    "limit",
-                    "offset",
-                }
-            ),
-            LspAction.Bulk => (BulkNavigateTool.Name, ["queries", "context", "limit", "offset"]),
-            _ when request.IsEdit => (
-                EditTool.Name,
-                [
-                    "action",
-                    "symbol",
-                    "file",
-                    "line",
-                    "character",
-                    "endLine",
-                    "endCharacter",
-                    "newName",
-                    "diagnostic",
-                    "actionIndex",
-                    "proposalId",
-                    "apply",
-                    "all",
-                    "limit",
-                ]
-            ),
-            _ => (ServerTool.Name, ["action", "method", "parameters", "apply"]),
-        };
-
-        return (tool, Arguments(request, parameters));
-    }
-
-    private static Dictionary<string, object?> Arguments(LspRequest request, string[] names)
-    {
-        var values = new Dictionary<string, object?>(StringComparer.Ordinal)
-        {
-            ["action"] = JsonNamingPolicy.SnakeCaseLower.ConvertName(request.Action.ToString()),
-            ["file"] = request.File,
-            ["symbol"] = request.Symbol,
-            ["severity"] = request.Severity?.ToString().ToLowerInvariant(),
-            ["line"] = request.Line,
-            ["character"] = request.Character,
-            ["endLine"] = request.EndLine,
-            ["endCharacter"] = request.EndCharacter,
-            ["query"] = request.Query,
-            ["newName"] = request.NewName,
-            ["diagnostic"] = request.Diagnostic,
-            ["actionIndex"] = request.ActionIndex,
-            ["proposalId"] = request.ProposalId,
-            ["method"] = request.Method,
-            ["parameters"] = request.Parameters,
-            ["apply"] = request.Apply ? true : null,
-            ["all"] = request.All ? true : null,
-            ["context"] = request.Context ? true : null,
-            ["inherited"] = request.Inherited ? true : null,
-            ["unused"] = request.Unused ? true : null,
-            ["limit"] = request.Limit,
-            ["offset"] = request.Offset,
-            ["queries"] = request.Queries.Count > 0 ? QueryArguments(request.Queries) : null,
-        };
-
-        return names
-            .Where(name => values[name] is not null)
-            .ToDictionary(name => name, name => values[name], StringComparer.Ordinal);
-    }
-
-    private static List<Dictionary<string, object?>> QueryArguments(
-        IEnumerable<LspRequest> queries
-    ) =>
-        [
-            .. queries.Select(query =>
-                Arguments(query, ["action", "symbol", "file", "line", "character", "inherited"])
-            ),
-        ];
-
     private async Task RestoreAsync()
     {
         using var process = new Process();
@@ -303,7 +206,7 @@ internal sealed class RoslynTestWorkspace : IAsyncDisposable
                 WorkingDirectory = _directory.FullName,
                 ArgumentList =
                 {
-                    typeof(LspTool).Assembly.Location,
+                    typeof(ToolPipeline).Assembly.Location,
                     LaunchArguments.WorkspaceArgument,
                     _directory.FullName,
                     LaunchArguments.StartupTimeoutArgument,

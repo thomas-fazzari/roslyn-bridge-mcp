@@ -76,7 +76,7 @@ internal sealed partial class WorkspaceEditService
         if (paths.EnumerateFiles(cancellationToken).IsError(out var error, out var files))
             return error;
 
-        // Build output under obj also holds generated props and editorconfig files, so only sources count
+        // Build output under obj also contains generated props and editorconfig files, so only sources count
         var projectFiles = 0;
         foreach (var file in files.Where(file => IsProjectFile(file.Path)))
         {

@@ -3,8 +3,10 @@
 
 using System.ComponentModel;
 using Microsoft.Extensions.Logging;
+using RoslynBridge.Lsp.Protocol;
 using RoslynBridge.Settings;
 using RoslynBridge.Telemetry;
+using static RoslynBridge.Lsp.SessionState;
 
 namespace RoslynBridge.Lsp;
 
@@ -20,68 +22,85 @@ internal sealed partial class RoslynSession(
     ILogger<RoslynSession> logger
 ) : IAsyncDisposable
 {
-    private RoslynConnection? _connection;
-    private CancellationTokenSource? _startupCancellation;
-    private Task<Result>? _startup;
-    private bool _disposed;
+    private SessionState _state = new Stopped();
 
-    public JsonObject? Capabilities => _connection?.Capabilities;
+    public JsonObject? Capabilities => CurrentConnection?.Capabilities;
 
-    public bool IsRunning => _connection is { IsAlive: true };
+    /// <summary>
+    /// Changes each time a Roslyn connection stops, so state tied to one Roslyn process can tell it is stale.
+    /// </summary>
+    public int Generation { get; private set; }
 
-    public bool IsLoading => _startup is { IsCompleted: false };
+    public bool IsRunning => CurrentConnection?.IsAlive is true;
 
-    public bool IsReady => IsRunning && _startup is { IsCompletedSuccessfully: true };
+    public bool IsLoading => _state is Launching or Initializing;
+
+    public bool IsReady => _state is Ready { Connection.IsAlive: true };
 
     /// <summary>
     /// The latest unfinished progress while the workspace loads, otherwise null.
     /// </summary>
-    public LoadProgress? Progress => IsLoading ? _connection?.Progress : null;
-
-    public Func<
-        JsonObject,
-        CancellationToken,
-        Task<ApplyWorkspaceEditResult>
-    >? ApplyWorkspaceEditAsync { get; private set; }
+    public LoadProgress? Progress =>
+        _state switch
+        {
+            Initializing { Connection.Progress: var progress } => progress,
+            Stopped or Launching or Ready or Failed or Disposed => null,
+        };
 
     private RoslynConnection Connection =>
-        _connection ?? throw new InvalidOperationException("The Roslyn session is not started.");
-
-    public void RequireReload() => _connection?.RequireRestart();
+        CurrentConnection
+        ?? throw new InvalidOperationException("The Roslyn session is not started.");
 
     /// <summary>
-    /// Routes workspace/applyEdit requests to <paramref name="handler"/> until the result is disposed.
-    /// Without a handler, the bridge refuses them.
+    /// Restarts Roslyn before the next request, unless a connection newer than <paramref name="generation"/> already reads the files from disk.
     /// </summary>
-    public IDisposable HandleWorkspaceEdits(
-        Func<JsonObject, CancellationToken, Task<ApplyWorkspaceEditResult>> handler
-    )
+    public void RequireReload(int generation)
     {
-        ApplyWorkspaceEditAsync = handler;
-        return new WorkspaceEditScope(this);
+        if (generation == Generation)
+            CurrentConnection?.RequireRestart();
     }
 
+    [SuppressMessage(
+        "Reliability",
+        "CA2000:Dispose objects before losing scope",
+        Justification = "The session disposes the cancellation source when it stops the load."
+    )]
     public async Task StartLoadingAsync()
     {
-        ObjectDisposedException.ThrowIf(_disposed, this);
+        ObjectDisposedException.ThrowIf(_state is Disposed, this);
         if (IsReady || IsLoading)
             return;
 
         await StopConnectionAsync();
-        _startupCancellation?.Dispose();
-        _startupCancellation = new CancellationTokenSource();
-        var cancellationToken = _startupCancellation.Token;
-        _startup = Task.Run(
-            () =>
-                BridgeTelemetry.TraceAsync(
-                    "roslyn_bridge.workspace.load",
-                    BridgeTelemetry.LoadDuration,
-                    () => StartAsync(cancellationToken)
-                ),
-            cancellationToken
+        var cancellation = new CancellationTokenSource();
+        // The load updates the state, so it waits until the state points to this load
+        var published = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously
         );
+        var startup = Task.Run(
+            async () =>
+            {
+                await published.Task;
+                try
+                {
+                    return await BridgeTelemetry.TraceAsync(
+                        "roslyn_bridge.workspace.load",
+                        BridgeTelemetry.LoadDuration,
+                        () => StartAsync(cancellation)
+                    );
+                }
+                finally
+                {
+                    // Every load that leaves no ready connection ends here (crash included)
+                    Advance(cancellation, static load => new Failed(load));
+                }
+            },
+            cancellation.Token
+        );
+        _state = new Launching(new SessionLoad(startup, cancellation));
+        published.SetResult();
         // A load started at launch has no caller until the first tool call
-        _ = _startup.ContinueWith(
+        _ = startup.ContinueWith(
             LogLoadFailure,
             CancellationToken.None,
             TaskContinuationOptions.NotOnCanceled,
@@ -95,7 +114,12 @@ internal sealed partial class RoslynSession(
     public async Task<Result> EnsureStartedAsync(CancellationToken cancellationToken)
     {
         await StartLoadingAsync();
-        var startup = _startup!;
+        var state = _state;
+        if (state is Ready)
+            return Result.Success;
+
+        var startup = LoadOf(state)?.Startup
+            ?? throw new InvalidOperationException("The Roslyn session is not started.");
         try
         {
             return await startup.WaitAsync(settings.CurrentValue.StartupTimeout, cancellationToken);
@@ -171,28 +195,42 @@ internal sealed partial class RoslynSession(
     ) => Connection.WaitForProjectsAsync(files, cancellationToken);
 
     public Task<Result<ExtensionReferences>> FindReferencesAsync(
-        JsonObject parameters,
+        DocumentPosition position,
         CancellationToken cancellationToken
-    ) => Connection.FindReferencesAsync(parameters, cancellationToken);
+    ) => Connection.FindReferencesAsync(position, cancellationToken);
 
     public Task<Result<ExtensionCallers>> FindCallersAsync(
-        JsonObject parameters,
+        DocumentPosition position,
         CancellationToken cancellationToken
-    ) => Connection.FindCallersAsync(parameters, cancellationToken);
+    ) => Connection.FindCallersAsync(position, cancellationToken);
 
-    public Task<Result<JsonNode>> FindUnusedAsync(
+    /// <summary>
+    /// Routes the workspace/applyEdit requests of the command to <paramref name="onEdit"/>.
+    /// </summary>
+    public Task<Result<JsonNode?>> ExecuteCommandAsync(
+        LspCommand command,
+        WorkspaceEditHandler onEdit,
+        CancellationToken cancellationToken
+    ) => Connection.ExecuteCommandAsync(command, onEdit, cancellationToken);
+
+    public Task<Result<UnusedReport>> FindUnusedAsync(
         IReadOnlyCollection<string> files,
         CancellationToken cancellationToken
     ) => Connection.FindUnusedAsync(files, cancellationToken);
 
     public async ValueTask DisposeAsync()
     {
-        if (_disposed)
+        if (_state is Disposed)
             return;
 
-        _disposed = true;
-        await StopAsync();
-        _startupCancellation?.Dispose();
+        try
+        {
+            await StopAsync();
+        }
+        finally
+        {
+            _state = new Disposed();
+        }
     }
 
     [SuppressMessage(
@@ -200,7 +238,7 @@ internal sealed partial class RoslynSession(
         "CA2000:Dispose objects before losing scope",
         Justification = "The session disposes the connection when it stops."
     )]
-    private async Task<Result> StartAsync(CancellationToken cancellationToken)
+    private async Task<Result> StartAsync(CancellationTokenSource cancellation)
     {
         var options = settings.CurrentValue;
         IRoslynServer server;
@@ -213,32 +251,34 @@ internal sealed partial class RoslynSession(
             return ToolError.Io(exception.Message);
         }
 
-        _connection = new RoslynConnection(
+        var connection = new RoslynConnection(
             server,
             options,
-            settings,
             paths,
-            new ClientCallbacks(this, paths, logger),
+            new ClientCallbacks(paths, logger),
             logger
         );
+        Advance(cancellation, load => new Initializing(load, connection));
         Result started;
         try
         {
-            started = await _connection.StartAsync(cancellationToken);
+            started = await connection.StartAsync(cancellation.Token);
         }
         catch (Exception exception) when (ToolError.IsIo(exception))
         {
-            await StopConnectionAsync();
+            await AbandonAsync(cancellation, connection);
             return ToolError.Io(exception.Message);
         }
         catch
         {
-            await StopConnectionAsync();
+            await AbandonAsync(cancellation, connection);
             throw;
         }
 
         if (started is ToolError)
-            await StopConnectionAsync();
+            await AbandonAsync(cancellation, connection);
+        else
+            Advance(cancellation, _ => new Ready(connection));
 
         return started;
     }
@@ -264,14 +304,53 @@ internal sealed partial class RoslynSession(
         }
     }
 
+    private RoslynConnection? CurrentConnection =>
+        _state switch
+        {
+            Initializing { Connection: var connection } => connection,
+            Ready { Connection: var connection } => connection,
+            Stopped or Launching or Failed or Disposed => null,
+        };
+
+    private static SessionLoad? LoadOf(SessionState state) =>
+        state switch
+        {
+            Launching { Load: var load } => load,
+            Initializing { Load: var load } => load,
+            Failed { Load: var load } => load,
+            Stopped or Ready or Disposed => null,
+        };
+
+    // Ignores a load that has failed, or that Stop or Reload has replaced since it began
+    private void Advance(CancellationTokenSource cancellation, Func<SessionLoad, SessionState> next)
+    {
+        var state = _state;
+        if (state is not (Launching or Initializing) || LoadOf(state) is not { } load)
+            return;
+
+        if (load.Cancellation == cancellation)
+            _state = next(load);
+    }
+
+    // The load stays active until the connection is disposed, so Stop waits for the Roslyn process to exit
+    private async Task AbandonAsync(
+        CancellationTokenSource cancellation,
+        RoslynConnection connection
+    )
+    {
+        Advance(cancellation, static load => new Launching(load));
+        await DisposeConnectionAsync(connection);
+    }
+
     private async Task StopAsync()
     {
-        if (_startup is { IsCompleted: false } startup)
+        var state = _state;
+        if (state is Launching or Initializing && LoadOf(state) is { } load)
         {
-            await _startupCancellation!.CancelAsync();
+            await load.Cancellation.CancelAsync();
             try
             {
-                await startup;
+                await load.Startup;
             }
             catch (Exception exception)
             {
@@ -284,10 +363,18 @@ internal sealed partial class RoslynSession(
 
     private async Task StopConnectionAsync()
     {
-        var connection = _connection;
-        _connection = null;
+        var connection = CurrentConnection;
+        LoadOf(_state)?.Cancellation.Dispose();
+
+        _state = new Stopped();
         if (connection is not null)
-            await connection.DisposeAsync();
+            await DisposeConnectionAsync(connection);
+    }
+
+    private async Task DisposeConnectionAsync(RoslynConnection connection)
+    {
+        Generation++;
+        await connection.DisposeAsync();
     }
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "Stopped Roslyn while it was loading.")]
@@ -301,9 +388,32 @@ internal sealed partial class RoslynSession(
 
     [LoggerMessage(Level = LogLevel.Error, Message = "Roslyn failed to load the workspace.")]
     private static partial void LogLoadCrashed(ILogger logger, Exception exception);
-
-    private sealed class WorkspaceEditScope(RoslynSession session) : IDisposable
-    {
-        public void Dispose() => session.ApplyWorkspaceEditAsync = null;
-    }
 }
+
+internal closed record SessionState
+{
+    internal sealed record Stopped : SessionState;
+
+    /// <summary>
+    /// The load has no connection. It starts Roslyn, or stops a connection that failed to load.
+    /// </summary>
+    internal sealed record Launching(SessionLoad Load) : SessionState;
+
+    /// <summary>
+    /// Roslyn runs and loads the workspace.
+    /// </summary>
+    internal sealed record Initializing(SessionLoad Load, RoslynConnection Connection)
+        : SessionState;
+
+    internal sealed record Ready(RoslynConnection Connection) : SessionState;
+
+    /// <summary>
+    /// The load ended without a ready connection. The next call starts a new load.
+    /// </summary>
+    internal sealed record Failed(SessionLoad Load) : SessionState;
+
+    internal sealed record Disposed : SessionState;
+}
+
+/// <param name="Cancellation">Stops the load. The session disposes it when it stops a load that did not reach Ready.</param>
+internal sealed record SessionLoad(Task<Result> Startup, CancellationTokenSource Cancellation);

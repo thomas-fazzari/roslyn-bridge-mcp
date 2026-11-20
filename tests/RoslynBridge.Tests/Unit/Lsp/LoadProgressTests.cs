@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 using RoslynBridge.Lsp;
-using RoslynBridge.Requests;
+using RoslynBridge.Lsp.Protocol;
 using RoslynBridge.Settings;
 using RoslynBridge.Tests.Assertions;
 using RoslynBridge.Tests.Fakes;

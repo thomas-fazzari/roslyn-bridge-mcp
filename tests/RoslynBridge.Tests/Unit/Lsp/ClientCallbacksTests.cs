@@ -13,9 +13,7 @@ public sealed class ClientCallbacksTests : TempWorkspaceTests
     public async Task ApplyEditOutsideAToolCallIsNotAppliedAsync()
     {
         var source = await WriteFileAsync(Root, SourceFile, "class Before {}");
-        var paths = new WorkspacePaths(Root);
-        await using var session = CreateSession(paths.Root, RoslynProcess.Start);
-        var callbacks = CreateCallbacks(session, paths);
+        var callbacks = new ClientCallbacks(new WorkspacePaths(Root), NullLogger.Instance);
 
         var response = await callbacks.ApplyEditAsync(
             new ApplyWorkspaceEditParams(RenameClassEdit(source)),
@@ -25,9 +23,6 @@ public sealed class ClientCallbacksTests : TempWorkspaceTests
         response.Applied.Should().BeFalse();
         await AssertFileTextAsync(source, "class Before {}");
     }
-
-    private static ClientCallbacks CreateCallbacks(RoslynSession session, WorkspacePaths paths) =>
-        new(session, paths, NullLogger.Instance);
 
     private static JsonObject RenameClassEdit(string source) =>
         WorkspaceChanges(source, TextEdit(0, 6, 0, 12, "After"));

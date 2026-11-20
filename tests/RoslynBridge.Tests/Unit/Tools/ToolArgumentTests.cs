@@ -2,9 +2,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 using ModelContextProtocol.Protocol;
+using RoslynBridge.Features.BulkNavigate;
+using RoslynBridge.Features.Navigate;
 using RoslynBridge.Lsp;
 using RoslynBridge.Tests.Assertions;
-using RoslynBridge.Tools;
 using static RoslynBridge.Tests.Unit.TestHelpers;
 
 namespace RoslynBridge.Tests.Unit.Tools;
@@ -17,14 +18,9 @@ public sealed class ToolArgumentTests : IAsyncDisposable
         .CreateTempSubdirectory("roslyn-tool-arguments-")
         .FullName;
     private readonly RoslynSession _session;
-    private readonly ToolClient _tool;
     private int _launches;
 
-    public ToolArgumentTests()
-    {
-        _session = CreateSession(_root, FakeServer(_ => _launches++));
-        _tool = CreateTool(_root, _session);
-    }
+    public ToolArgumentTests() => _session = CreateSession(_root, FakeServer(_ => _launches++));
 
     [Theory(Timeout = 30_000)]
     [InlineData("limt", "limit")]
@@ -35,7 +31,7 @@ public sealed class ToolArgumentTests : IAsyncDisposable
     )
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        await using var server = await ToolServer.StartAsync(_tool.Lsp, cancellationToken);
+        await using var server = await ToolServer.StartAsync(_root, _session, cancellationToken);
 
         var response = await server.Client.CallToolAsync(
             NavigateTool.Name,
@@ -63,7 +59,7 @@ public sealed class ToolArgumentTests : IAsyncDisposable
     )
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        await using var server = await ToolServer.StartAsync(_tool.Lsp, cancellationToken);
+        await using var server = await ToolServer.StartAsync(_root, _session, cancellationToken);
 
         var response = await server.Client.CallToolAsync(
             NavigateTool.Name,
@@ -83,7 +79,7 @@ public sealed class ToolArgumentTests : IAsyncDisposable
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         await WriteFileAsync(_root, SourceFile, "class A {}\n");
-        await using var server = await ToolServer.StartAsync(_tool.Lsp, cancellationToken);
+        await using var server = await ToolServer.StartAsync(_root, _session, cancellationToken);
 
         var response = await server.Client.CallToolAsync(
             BulkNavigateTool.Name,
@@ -106,7 +102,7 @@ public sealed class ToolArgumentTests : IAsyncDisposable
     public async Task QueriesSentAsAStringThatIsNotAnArrayAreRejectedAsync(string queries)
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        await using var server = await ToolServer.StartAsync(_tool.Lsp, cancellationToken);
+        await using var server = await ToolServer.StartAsync(_root, _session, cancellationToken);
 
         var response = await server.Client.CallToolAsync(
             BulkNavigateTool.Name,
@@ -124,7 +120,7 @@ public sealed class ToolArgumentTests : IAsyncDisposable
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         await WriteFileAsync(_root, SourceFile, "class A {}\n");
-        await using var server = await ToolServer.StartAsync(_tool.Lsp, cancellationToken);
+        await using var server = await ToolServer.StartAsync(_root, _session, cancellationToken);
 
         var response = await server.Client.CallToolAsync(
             BulkNavigateTool.Name,
@@ -149,7 +145,6 @@ public sealed class ToolArgumentTests : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        _tool.Dispose();
         await _session.DisposeAsync();
         Directory.Delete(_root, recursive: true);
     }

@@ -119,10 +119,13 @@ internal static partial class SymbolExtensions
         /// such as overrides, interface implementations, constructors and operators.
         /// </summary>
         public bool CanBeUnused =>
-            !symbol.IsImplicitlyDeclared
-            && !symbol.IsOverride
-            && !symbol.ImplementsInterfaceMember
-            && !symbol.IsNamedByDebuggerDisplay
+            symbol
+                is {
+                    IsImplicitlyDeclared: false,
+                    IsOverride: false,
+                    ImplementsInterfaceMember: false,
+                    IsNamedByDebuggerDisplay: false
+                }
             && symbol switch
             {
                 INamedTypeSymbol type => type.TypeKind
@@ -223,8 +226,9 @@ internal static partial class SymbolExtensions
         // An assembly outside the base class library, as a host, web or plugin framework ships
         private bool IsFromFramework =>
             !symbol.Locations.Any(location => location.IsInSource)
-            && symbol.ContainingAssembly?.Name is { } name
-            && name is not ("mscorlib" or "netstandard" or "System")
+            && symbol.ContainingAssembly?.Name
+                is { } name
+                    and not ("mscorlib" or "netstandard" or "System")
             && !name.StartsWith("System.", StringComparison.Ordinal);
 
         /// <summary>

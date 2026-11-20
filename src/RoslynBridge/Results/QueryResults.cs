@@ -1,53 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Thomas Fazzari
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-using RoslynBridge.Requests;
+using static RoslynBridge.Results.ResultText;
 
 namespace RoslynBridge.Results;
-
-/// <param name="File">A workspace-relative path, or the URI of an external or generated file.</param>
-internal sealed record FileLocations(
-    string File,
-    IReadOnlyList<SourcePosition> Positions,
-    IReadOnlyDictionary<int, string>? Lines = null
-);
-
-/// <param name="Generated">Source-generated occurrences left out.</param>
-/// <param name="Access">Reads or Writes when the references are filtered to that access.</param>
-internal sealed record Locations(
-    IReadOnlyList<FileLocations> Files,
-    int Total,
-    int? NextOffset,
-    int Generated,
-    LspAction? Access = null
-) : ToolResult;
-
-/// <param name="Total">Nested symbols included.</param>
-/// <param name="Accesses">Property, field and constant accesses left out of callees.</param>
-internal sealed record SymbolList(
-    IReadOnlyList<SymbolItem> Items,
-    int Total,
-    int? NextOffset,
-    int Accesses = 0,
-    LspAction? Hierarchy = null
-) : ToolResult;
-
-internal sealed record HoverText(string Text) : ToolResult;
-
-/// <param name="Via">The names of the unused symbols that reference it.</param>
-/// <param name="TestsOnly">True when test projects reference it.</param>
-internal sealed record UnusedSymbol(SymbolItem Symbol, IReadOnlyList<string> Via, bool TestsOnly);
-
-/// <param name="Skipped">Declarations left out because a framework may reach them by reflection.</param>
-/// <param name="Incomplete">Selected files that no project compiles, so they were not checked.</param>
-internal sealed record UnusedSymbols(
-    IReadOnlyList<UnusedSymbol> Items,
-    int Total,
-    int? NextOffset,
-    int FilesChecked,
-    int Skipped,
-    IReadOnlyList<string> Incomplete
-) : ToolResult;
 
 internal sealed record Diagnostic(
     SourcePosition Start,
@@ -77,22 +33,65 @@ internal sealed record DiagnosticReport(
     IReadOnlyList<string> MiscellaneousFiles,
     int CodeCount,
     bool FilteredByIds
-) : ToolResult;
+) : ToolResult
+{
+    internal override void Write(StringBuilder text, int budget)
+    {
+        foreach (var file in Files)
+        {
+            text.Append(file.File).Append('\n');
+            foreach (var diagnostic in file.Diagnostics)
+            {
+                text.Append(Indent)
+                    .Append(Position(diagnostic.Start))
+                    .Append(' ')
+                    .Append(diagnostic.Severity.ToString().ToLowerInvariant());
+                if (diagnostic.Code is { } code)
+                    text.Append(' ').Append(code);
 
-internal sealed record SourcePart(SymbolItem Symbol, int FirstLine, int LastLine, string Text);
+                text.Append(' ').Append(OneLine(diagnostic.Message)).Append('\n');
+            }
+        }
 
-/// <param name="OmittedLines">Declaration lines left out to fit the response.</param>
-internal sealed record SourceParts(IReadOnlyList<SourcePart> Parts, int OmittedLines) : ToolResult;
+        foreach (var summary in Codes)
+        {
+            var example = summary.Example;
+            if (example.Code is { } code)
+                text.Append(code).Append(' ');
 
-/// <param name="Members">Names are relative to the type.</param>
-internal sealed record TypeMembers(
-    SymbolItem Type,
-    IReadOnlyList<SymbolItem> Members,
-    int Total,
-    int? NextOffset
-) : ToolResult;
+            text.Append(CultureInfo.InvariantCulture, $"x{summary.Count} ")
+                .Append(example.Severity.ToString().ToLowerInvariant())
+                .Append(' ')
+                .Append(summary.File)
+                .Append(':')
+                .Append(Position(example.Start))
+                .Append(' ')
+                .Append(OneLine(example.Message))
+                .Append('\n');
+        }
 
-/// <param name="Result">The error when the section could not produce a result.</param>
-internal sealed record ReportSection(string Label, Result<ToolResult> Result);
+        text.Append(Count(FilesChecked, "file", "files"))
+            .Append(" checked, ")
+            .Append(
+                Total == 0
+                    ? "no diagnostics"
+                    : $"{Count(Total, "diagnostic", "diagnostics")} in {Count(FilesWithDiagnostics, "file", "files")}"
+            );
+        if (BelowSeverity > 0)
+            text.Append(CultureInfo.InvariantCulture, $", {BelowSeverity} below the severity");
 
-internal sealed record SectionsReport(IReadOnlyList<ReportSection> Sections) : ToolResult;
+        if (FilteredByIds)
+            text.Append(", filtered by ids");
+
+        text.Append('\n');
+        var (total, noun) = CodeCount > 0 ? (CodeCount, "codes") : (Total, "diagnostics");
+        AppendTruncation(text, total, noun, NextOffset);
+
+        if (MiscellaneousFiles.Count > 0)
+        {
+            text.Append("incomplete: not in a project, no semantic diagnostics: ")
+                .AppendJoin(' ', MiscellaneousFiles)
+                .Append('\n');
+        }
+    }
+}

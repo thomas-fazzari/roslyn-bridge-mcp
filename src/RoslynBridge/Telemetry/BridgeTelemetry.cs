@@ -31,9 +31,9 @@ internal static class BridgeTelemetry
     private const string RpcMethod = "rpc.method";
     private const string ReportReused = "roslyn_bridge.report.reused";
 
-    internal static readonly ActivitySource Source = new(Name, Program.Version);
+    internal static readonly ActivitySource Source = new(Name, BridgeVersion.Current);
 
-    private static readonly Meter _meter = new(Name, Program.Version);
+    private static readonly Meter _meter = new(Name, BridgeVersion.Current);
 
     internal static readonly Histogram<double> ToolDuration = _meter.CreateHistogram<double>(
         "roslyn_bridge.tool.duration",
@@ -111,7 +111,7 @@ internal static class BridgeTelemetry
                 .ConfigureResource(static resource =>
                     resource
                         .Clear()
-                        .AddService(ServiceName, serviceVersion: Program.Version)
+                        .AddService(ServiceName, serviceVersion: BridgeVersion.Current)
                         .AddTelemetrySdk()
                         .AddEnvironmentVariableDetector()
                 )
@@ -164,7 +164,7 @@ internal static class BridgeTelemetry
         );
 
     /// <summary>
-    /// Marks the activity failed when the tags hold an <see cref="ErrorType"/>.
+    /// Marks the activity failed when the tags contain an <see cref="ErrorType"/>.
     /// </summary>
     public static void Complete(
         Activity? activity,

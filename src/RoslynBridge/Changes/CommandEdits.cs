@@ -3,6 +3,7 @@
 
 using RoslynBridge.Editing;
 using RoslynBridge.Lsp;
+using RoslynBridge.Lsp.Protocol;
 using RoslynBridge.Results;
 
 namespace RoslynBridge.Changes;
@@ -26,12 +27,11 @@ internal sealed class CommandEdits(
 
     private WorkspaceSnapshot _snapshot = snapshot;
     private TaskCompletionSource? _callbacksDrained;
-    private ToolError? _failure;
     private int _activeCallbacks;
     private bool _accepting = true;
     private bool _applied = true;
 
-    public ToolError? Failure => _failure;
+    public ToolError? Failure { get; private set; }
 
     public bool HasChanges => _paths.Count != 0;
 
@@ -47,11 +47,10 @@ internal sealed class CommandEdits(
     }
 
     public async Task<ApplyWorkspaceEditResult> ApplyAsync(
-        JsonObject edit,
+        Result<WorkspaceEdit> edit,
         CancellationToken callbackToken
     )
     {
-        ArgumentNullException.ThrowIfNull(edit);
         if (!TryBeginCallback())
             return RejectedResponse();
 
@@ -81,7 +80,7 @@ internal sealed class CommandEdits(
                 if (!IsAcceptingEdits())
                     return RejectedResponse();
 
-                return WorkspaceEdit.Parse(edit).IsError(out var parseError, out var parsed)
+                return edit.IsError(out var parseError, out var parsed)
                     ? FailCallback(parseError, EditApplicationPhase.Write, applied: false)
                     : await ApplyAndCaptureAsync(parsed, linked.Token);
             }
@@ -203,13 +202,13 @@ internal sealed class CommandEdits(
         lock (_admission)
         {
             _applied &= applied;
-            _failure ??=
+            Failure ??=
                 applied && error is not EditFailure
                     ? new EditFailure(error, BuildResult(), phase)
                     : error;
 
             _accepting = false;
-            return new ApplyWorkspaceEditResult(applied, _failure.Message);
+            return new ApplyWorkspaceEditResult(applied, Failure.Message);
         }
     }
 

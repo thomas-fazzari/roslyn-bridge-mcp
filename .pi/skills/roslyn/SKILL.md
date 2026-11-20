@@ -20,7 +20,7 @@ description: Use the mcp__roslyn__* tools for any C# task, before grep or readin
 
 ## Diagnostics
 
-- Check only the files the task touches, such as `src/RoslynBridge/Tools/{NavigateTool,SymbolsTool}.cs`. Avoid scanning the whole workspace, split by project, with `"summary":true`.
+- Check only the files the task touches, such as `src/RoslynBridge/Features/{Navigate/NavigateTool,Symbols/SymbolsTool}.cs`. Avoid scanning the whole workspace, split by project, with `"summary":true`.
 - After a timeout, narrow the scope. If one file still times out, report it and stop.
 - A truncated, incomplete, failed or `ids`-filtered result does not prove the files are clean. An `incomplete:` line lists files outside any project.
 - Diagnostics do not replace `mise run check`.

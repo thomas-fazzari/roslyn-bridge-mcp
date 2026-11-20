@@ -91,7 +91,7 @@ internal static class TextPreview
         ];
     }
 
-    // Too large to diff, but a line-by-line comparison is linear and holds when no line was added
+    // Too large to diff, but a line-by-line comparison is linear and exact when no line was added
     private static List<LineBlock>? AlignedLines(string oldText, string newText)
     {
         var oldLines = TextEdits.GetLines(oldText);

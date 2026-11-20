@@ -5,7 +5,12 @@ using System.Text.RegularExpressions;
 using Microsoft.Extensions.DependencyInjection;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
-using RoslynBridge.Tools;
+using RoslynBridge.Features.BulkNavigate;
+using RoslynBridge.Features.Diagnostics;
+using RoslynBridge.Features.Edit;
+using RoslynBridge.Features.Navigate;
+using RoslynBridge.Features.Server;
+using RoslynBridge.Features.Symbols;
 
 namespace RoslynBridge.Tests.Unit.Tools;
 
@@ -20,11 +25,13 @@ public sealed partial class ToolSchemaTests
     // An LSP method name in the lsp tool description
     private static readonly string[] _otherCamelCaseWords = ["executeCommand"];
 
+    public static TheoryData<string> QueryTools =>
+        [DiagnosticsTool.Name, NavigateTool.Name, BulkNavigateTool.Name, SymbolsTool.Name];
+
+    public static TheoryData<string> WritingTools => [EditTool.Name, ServerTool.Name];
+
     [Theory]
-    [InlineData(DiagnosticsTool.Name)]
-    [InlineData(NavigateTool.Name)]
-    [InlineData(BulkNavigateTool.Name)]
-    [InlineData(SymbolsTool.Name)]
+    [MemberData(nameof(QueryTools))]
     public void MarksQueryToolsReadOnly(string name)
     {
         var annotations = _tools[name].Annotations!;
@@ -34,8 +41,7 @@ public sealed partial class ToolSchemaTests
     }
 
     [Theory]
-    [InlineData(EditTool.Name)]
-    [InlineData(ServerTool.Name)]
+    [MemberData(nameof(WritingTools))]
     public void MarksToolsThatCanWriteFilesDestructive(string name)
     {
         var annotations = _tools[name].Annotations!;
@@ -48,7 +54,7 @@ public sealed partial class ToolSchemaTests
     [Fact]
     public void ServerInstructionsFitClientLimits()
     {
-        const string instructions = ToolDescriptions.ServerInstructions;
+        const string instructions = BridgeServices.ServerInstructions;
         instructions.Length.Should().BeLessThanOrEqualTo(2_048);
         instructions.Split("\n\n")[0].Length.Should().BeLessThanOrEqualTo(512);
     }
@@ -66,40 +72,37 @@ public sealed partial class ToolSchemaTests
                 ServerTool.Name,
             ]);
 
-    [Theory]
-    [InlineData(DiagnosticsTool.Name, new string[0], null)]
-    [InlineData(
-        NavigateTool.Name,
-        new[] { "action" },
-        new[]
+    public static TheoryData<string, string[], string[]?> ToolArguments =>
+        new()
         {
-            "definition",
-            "type_definition",
-            "implementation",
-            "references",
-            "hover",
-            "callers",
-            "callees",
-            "supertypes",
-            "subtypes",
-            "source",
-            "members",
-            "impact",
-            "reads",
-            "writes",
-        }
-    )]
-    [InlineData(SymbolsTool.Name, new string[0], null)]
-    [InlineData(
-        EditTool.Name,
-        new[] { "action" },
-        new[] { "rename", "rename_file", "code_actions" }
-    )]
-    [InlineData(
-        ServerTool.Name,
-        new[] { "action" },
-        new[] { "status", "capabilities", "reload", "request" }
-    )]
+            { DiagnosticsTool.Name, [], null },
+            {
+                NavigateTool.Name,
+                ["action"],
+                [
+                    "definition",
+                    "type_definition",
+                    "implementation",
+                    "references",
+                    "hover",
+                    "callers",
+                    "callees",
+                    "supertypes",
+                    "subtypes",
+                    "source",
+                    "members",
+                    "impact",
+                    "reads",
+                    "writes",
+                ]
+            },
+            { SymbolsTool.Name, [], null },
+            { EditTool.Name, ["action"], ["rename", "rename_file", "code_actions"] },
+            { ServerTool.Name, ["action"], ["status", "capabilities", "reload", "request"] },
+        };
+
+    [Theory]
+    [MemberData(nameof(ToolArguments))]
     public void DeclaresFlatArgumentsAndOnlyTheToolActions(
         string name,
         string[] required,
@@ -188,7 +191,7 @@ public sealed partial class ToolSchemaTests
                         : null
                 )
             )
-            .Append(ToolDescriptions.ServerInstructions)
+            .Append(BridgeServices.ServerInstructions)
             .OfType<string>()
             .SelectMany(text => pattern.Matches(text).Select(match => match.Value))
             .Distinct(StringComparer.Ordinal);

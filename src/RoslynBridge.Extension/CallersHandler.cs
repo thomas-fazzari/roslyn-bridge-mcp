@@ -51,8 +51,9 @@ internal sealed class CallersHandler
             var sites = caller
                 .Locations.Where(location =>
                     location.IsVisibleSourceLocation(cancellationToken)
-                    && solution.GetDocument(location.SourceTree) is { FilePath: { } path } site
-                    && site is not SourceGeneratedDocument
+                    && solution.GetDocument(location.SourceTree)
+                        is { FilePath: { } path }
+                            and not SourceGeneratedDocument
                     && seen.Add((path, location.SourceSpan))
                 )
                 .ToList();

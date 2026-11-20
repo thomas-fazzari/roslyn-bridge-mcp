@@ -3,6 +3,7 @@
 
 using System.IO.Pipelines;
 using Microsoft.Extensions.Logging;
+using RoslynBridge.Lsp.Protocol;
 using RoslynBridge.Settings;
 using RoslynBridge.Telemetry;
 using StreamJsonRpc;
@@ -17,7 +18,6 @@ namespace RoslynBridge.Lsp;
 internal sealed partial class RoslynConnection(
     IRoslynServer server,
     BridgeOptions launched,
-    SettingsMonitor settings,
     WorkspacePaths paths,
     ClientCallbacks callbacks,
     ILogger logger
@@ -34,18 +34,21 @@ internal sealed partial class RoslynConnection(
     private readonly CancellationTokenSource _lifetime = new();
     private JsonRpc? _rpc;
     private Task? _stderrTask;
-    private bool _restartRequired;
 
     public JsonObject? Capabilities { get; private set; }
 
-    public bool IsAlive =>
-        !_restartRequired
-        && !server.HasExited
-        && _rpc is { IsDisposed: false, Completion.IsCompleted: false };
+    public bool IsAlive
+    {
+        get =>
+            !field
+            && !server.HasExited
+            && _rpc is { IsDisposed: false, Completion.IsCompleted: false };
+        private set;
+    }
 
     public LoadProgress? Progress => callbacks.Progress;
 
-    public void RequireRestart() => _restartRequired = true;
+    public void RequireRestart() => IsAlive = true;
 
     public Task<Result> StartAsync(CancellationToken cancellationToken)
     {
@@ -78,6 +81,16 @@ internal sealed partial class RoslynConnection(
             InvokeAsync(method, parameters, cancellationToken)
         );
 
+    // Roslyn sends the command's workspace/applyEdit requests over the connection that runs it
+    public Task<Result<JsonNode?>> ExecuteCommandAsync(
+        LspCommand command,
+        WorkspaceEditHandler onEdit,
+        CancellationToken cancellationToken
+    ) =>
+        callbacks.RoutingEditsAsync(onEdit, () =>
+            RequestAsync(LspMethods.WorkspaceExecuteCommand, command.Raw, cancellationToken)
+        );
+
     public async Task<Result> NotifyAsync(
         string method,
         JsonNode? parameters,
@@ -94,7 +107,7 @@ internal sealed partial class RoslynConnection(
         }
         catch (Exception exception) when (exception is ConnectionLostException or IOException)
         {
-            _restartRequired = true;
+            IsAlive = true;
             return ToolError.Io(
                 await WithStderrAsync($"Roslyn exited during '{method}'.", cancellationToken)
             );
@@ -102,7 +115,7 @@ internal sealed partial class RoslynConnection(
         catch (OperationCanceledException)
         {
             // A canceled write may still reach Roslyn, so document versions are untrusted until a reload
-            _restartRequired = true;
+            IsAlive = true;
             throw;
         }
     }
@@ -131,7 +144,7 @@ internal sealed partial class RoslynConnection(
     {
         var rpc = Rpc;
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeout.CancelAfter(settings.CurrentValue.RequestTimeout);
+        timeout.CancelAfter(launched.RequestTimeout);
         try
         {
             return await rpc.InvokeWithParameterObjectAsync<JsonNode?>(
@@ -159,7 +172,7 @@ internal sealed partial class RoslynConnection(
         catch (Exception exception) when (exception is ConnectionLostException or IOException)
         {
             // A write to a dead process fails with a broken pipe before the connection loss is noticed
-            _restartRequired = true;
+            IsAlive = true;
             return ToolError.Io(
                 await WithStderrAsync($"Roslyn exited during '{method}'.", cancellationToken)
             );
@@ -263,19 +276,21 @@ internal sealed partial class RoslynConnection(
         if (await OpenConfiguredProjectsAsync(cancellationToken) is ToolError openError)
             return openError;
 
-        var initializationOrDisconnect = Task.WhenAny(callbacks.Initialized, rpc.Completion);
-
-        var completed = await initializationOrDisconnect.WaitAsync(cancellationToken);
-        await completed;
+        // A message that does not parse faults the completion, which is a disconnect too
+        var completed = await Task.WhenAny(callbacks.Initialized, rpc.Completion)
+            .WaitAsync(cancellationToken);
         if (completed != callbacks.Initialized)
         {
+            var reason = rpc.Completion.Exception?.GetBaseException().Message;
             return ToolError.Io(
                 await WithStderrAsync(
-                    "Roslyn disconnected while loading the workspace.",
+                    $"Roslyn disconnected while loading the workspace. {reason}".TrimEnd(),
                     cancellationToken
                 )
             );
         }
+
+        await completed;
 
         if (ScanWorkspace(cancellationToken).IsError(out var scanError, out var files))
             return scanError;
@@ -364,8 +379,21 @@ internal sealed partial class RoslynConnection(
             LogShutdownFailure(logger, exception);
         }
 
-        if (!server.HasExited)
-            server.Kill();
+        try
+        {
+            if (!server.HasExited)
+                server.Kill();
+        }
+        // Killing the tree fails when a child process cannot be stopped
+        catch (Exception exception)
+            when (exception
+                    is AggregateException
+                        or InvalidOperationException
+                        or System.ComponentModel.Win32Exception
+            )
+        {
+            LogShutdownFailure(logger, exception);
+        }
 
         await server.WaitForExitAsync(CancellationToken.None);
     }

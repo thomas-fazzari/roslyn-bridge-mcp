@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 using RoslynBridge.Lsp;
+using RoslynBridge.Lsp.Protocol;
 using RoslynBridge.Tests.Fakes;
 using static RoslynBridge.Tests.Unit.TestHelpers;
 
@@ -96,7 +97,7 @@ public sealed class SessionDocumentTests : TempWorkspaceTests
         await using var session = CreateSession(Root, FakeServer(servers.Add));
         (await session.EnsureStartedAsync(TestCt)).ErrorCode().Should().BeNull();
         servers[0].OnShutdown = () => RegisterWatchedFilesAsync(servers[0]);
-        session.RequireReload();
+        session.RequireReload(session.Generation);
         (await session.EnsureStartedAsync(TestCt)).ErrorCode().Should().BeNull();
 
         var path = await WriteFileAsync(Root, "Added.cs", "class Added {}");

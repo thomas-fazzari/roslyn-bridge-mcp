@@ -1,8 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Thomas Fazzari
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-using RoslynBridge.Lsp;
-using RoslynBridge.Results;
+using RoslynBridge.Lsp.Protocol;
 
 namespace RoslynBridge.Symbols;
 
@@ -24,10 +23,14 @@ internal sealed record SymbolDeclaration(
     bool IsPrivate = false
 )
 {
+    public SourcePosition Position => new(Line, Character);
+
+    public SourceLocation Location => new(File, Position);
+
     public SymbolItem ToItem(WorkspacePaths paths) =>
         new(Name, Kind is { } kind && LspSymbolKinds.TryGetName(kind, out var name) ? name : null)
         {
             File = paths.RelativePath(File),
-            Position = new SourcePosition(Line, Character),
+            Position = Position,
         };
 }

@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Thomas Fazzari
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-using RoslynBridge.Lsp;
+using RoslynBridge.Lsp.Protocol;
 using RoslynBridge.Symbols;
 using static RoslynBridge.Tests.Fakes.LspSymbolJson;
 
