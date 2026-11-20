@@ -92,21 +92,26 @@ internal sealed class FakeRoslynServer : IRoslynServer
     /// <summary>
     /// Returns after the bridge answers a request sent after the notification, so it has handled it.
     /// </summary>
-    public async Task ReportProgressAsync(
+    public Task ReportProgressAsync(
         string token,
         JsonObject value,
         CancellationToken cancellationToken
-    )
-    {
-        await _rpc.NotifyWithParameterObjectAsync(
+    ) =>
+        NotifyClientAsync(
             LspMethods.Progress,
-            new JsonObject { ["token"] = token, ["value"] = value }
+            new JsonObject { ["token"] = token, ["value"] = value },
+            cancellationToken
         );
-        await _rpc.InvokeWithCancellationAsync<JsonNode?>(
-            LspMethods.WorkspaceWorkspaceFolders,
-            cancellationToken: cancellationToken
+
+    /// <summary>
+    /// Sends window/logMessage. Returns after the bridge answers a request sent after it, so it has handled it.
+    /// </summary>
+    public Task LogMessageAsync(string message, CancellationToken cancellationToken) =>
+        NotifyClientAsync(
+            LspMethods.WindowLogMessage,
+            new JsonObject { ["type"] = 1, ["message"] = message },
+            cancellationToken
         );
-    }
 
     public void Crash()
     {
@@ -131,6 +136,19 @@ internal sealed class FakeRoslynServer : IRoslynServer
         Crash();
         Input.Dispose();
         Error.Dispose();
+    }
+
+    private async Task NotifyClientAsync(
+        string method,
+        JsonObject parameters,
+        CancellationToken cancellationToken
+    )
+    {
+        await _rpc.NotifyWithParameterObjectAsync(method, parameters);
+        await _rpc.InvokeWithCancellationAsync<JsonNode?>(
+            LspMethods.WorkspaceWorkspaceFolders,
+            cancellationToken: cancellationToken
+        );
     }
 
     private sealed class Target(FakeRoslynServer server)

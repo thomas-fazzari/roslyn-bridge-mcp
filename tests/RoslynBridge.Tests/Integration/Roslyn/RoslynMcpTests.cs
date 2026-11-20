@@ -35,6 +35,8 @@ public sealed partial class RoslynMcpTests
     private const string UnusedFixture = "Unused";
     private const string UnusedKeptFixture = "UnusedKept";
     private const string MultiTargetFixture = "MultiTarget";
+    private const string BrokenProjectFixture = "BrokenProject";
+    private const string BrokenTestProject = "Broken/Broken.csproj";
     private const string LeftoversTestFile = "Application/Leftovers.cs";
     private const string LeftoverChecksTestFile = "Checks/LeftoverChecks.cs";
     private const string KeptTestFile = "Application/Kept.cs";
@@ -970,6 +972,25 @@ public sealed partial class RoslynMcpTests
         );
 
         symbols.Should().Contain(ContractTestFile).And.NotContain(ImplementationTestFile);
+    }
+
+    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    public async Task StatusListsAProjectThatFailedToLoadAsync()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var workspace = await RoslynTestWorkspace.CreateAsync(
+            cancellationToken,
+            settings: $$"""{ "projects": ["{{ContractTestProject}}", "{{BrokenTestProject}}"] }""",
+            overlay: BrokenProjectFixture
+        );
+        await workspace.CallAsync(new LspRequest { Action = LspAction.Symbols, Query = "Greeter" });
+
+        var status = await workspace.CallAsync(new LspRequest { Action = LspAction.Status });
+
+        status
+            .Should()
+            .Contain($"\nproject not loaded: {BrokenTestProject}: ")
+            .And.NotContain($"project not loaded: {ContractTestProject}");
     }
 
     [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]

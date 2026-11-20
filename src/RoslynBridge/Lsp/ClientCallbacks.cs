@@ -24,6 +24,10 @@ internal sealed partial class ClientCallbacks(WorkspacePaths paths, ILogger logg
     private const string ProgressBegin = "begin";
     private const string ProgressReport = "report";
     private const string ProgressEnd = "end";
+    private const string ErrorMarker = "Error while loading ";
+    private const string WarningMarker = "Warning while loading ";
+    private const string PathEnd = ": ";
+    private const string ProjectExtensionSuffix = "proj";
 
     private readonly TaskCompletionSource _initialized = new(
         TaskCreationOptions.RunContinuationsAsynchronously
@@ -36,6 +40,8 @@ internal sealed partial class ClientCallbacks(WorkspacePaths paths, ILogger logg
     // Replaced as a whole, so readers never wait for a notification
     private ImmutableList<TrackedProgress> _progress = [];
 
+    private ImmutableDictionary<LocationFile, ProjectIssue> _projectIssues = [];
+
     private WorkspaceEditHandler? _applyEdit;
 
     internal Task Initialized => _initialized.Task;
@@ -46,6 +52,12 @@ internal sealed partial class ClientCallbacks(WorkspacePaths paths, ILogger logg
     /// The latest unfinished progress, otherwise null.
     /// </summary>
     internal LoadProgress? Progress => Volatile.Read(ref _progress).LastOrDefault()?.Progress;
+
+    /// <summary>
+    /// The latest load error or warning per project, as of its last load attempt. Roslyn logs no success.
+    /// </summary>
+    internal ImmutableArray<ProjectIssue> ProjectIssues =>
+        [.. Volatile.Read(ref _projectIssues).Values];
 
     /// <summary>
     /// Routes workspace/applyEdit requests to <paramref name="handler"/> while <paramref name="run"/> runs.
@@ -143,6 +155,7 @@ internal sealed partial class ClientCallbacks(WorkspacePaths paths, ILogger logg
     [JsonRpcMethod(LspMethods.WindowLogMessage, UseSingleObjectParameterDeserialization = true)]
     public void LogMessage(MessageParams parameters)
     {
+        RecordProjectIssue(parameters.Message);
         if (!logger.IsEnabled(LogLevel.Debug))
             return;
 
@@ -155,6 +168,88 @@ internal sealed partial class ClientCallbacks(WorkspacePaths paths, ILogger logg
 
     [JsonRpcMethod(LspMethods.WindowShowMessage, UseSingleObjectParameterDeserialization = true)]
     public void ShowMessage(MessageParams parameters) => LogMessage(parameters);
+
+    // An error stays over a later warning of the same project, otherwise the latest issue wins
+    private void RecordProjectIssue(string message)
+    {
+        if (ParseProjectIssue(message) is not { } issue)
+            return;
+
+        ImmutableInterlocked.AddOrUpdate(ref _projectIssues, issue.Project, issue, (_, current) =>
+            current.Kind is ProjectIssueKind.Error && issue.Kind is ProjectIssueKind.Warning
+                ? current
+                : issue
+        );
+    }
+
+    /// <summary>
+    /// Reads "[scope] Error while loading PROJECT: MESSAGE", where Roslyn may add several bracketed groups.
+    /// </summary>
+    private ProjectIssue? ParseProjectIssue(string message)
+    {
+        var text = message.AsSpan(0, Math.Min(message.Length, MaximumLogMessageCharacters));
+        var lineEnd = text.IndexOfAny('\r', '\n');
+        if (lineEnd >= 0)
+            text = text[..lineEnd];
+
+        while (text.StartsWith('['))
+        {
+            var groupEnd = text.IndexOf(']');
+            if (groupEnd < 0)
+                return null;
+
+            text = text[(groupEnd + 1)..].TrimStart();
+        }
+
+        ProjectIssueKind kind;
+        if (text.StartsWith(ErrorMarker, StringComparison.Ordinal))
+        {
+            kind = ProjectIssueKind.Error;
+            text = text[ErrorMarker.Length..];
+        }
+        else if (text.StartsWith(WarningMarker, StringComparison.Ordinal))
+        {
+            kind = ProjectIssueKind.Warning;
+            text = text[WarningMarker.Length..];
+        }
+        else
+        {
+            return null;
+        }
+
+        var pathEnd = ProjectPathEnd(text);
+        if (pathEnd < 0)
+            return null;
+
+        return Uri.TryCreate(text[..pathEnd].ToString(), UriKind.Absolute, out var uri)
+            ? new ProjectIssue(
+                paths.LocationOf(uri.AbsoluteUri),
+                kind,
+                text[(pathEnd + PathEnd.Length)..].Trim().ToString()
+            )
+            : null;
+    }
+
+    // The path may hold spaces and ": ", so it ends at the first ": " that follows a project extension
+    private static int ProjectPathEnd(ReadOnlySpan<char> text)
+    {
+        var offset = 0;
+        while (offset < text.Length)
+        {
+            var index = text[offset..].IndexOf(PathEnd, StringComparison.Ordinal);
+            if (index < 0)
+                return -1;
+
+            index += offset;
+            var extension = Path.GetExtension(text[..index]);
+            if (extension.EndsWith(ProjectExtensionSuffix, StringComparison.OrdinalIgnoreCase))
+                return index;
+
+            offset = index + 1;
+        }
+
+        return -1;
+    }
 
     /// <summary>
     /// A report for an unknown token leaves the progress unchanged.

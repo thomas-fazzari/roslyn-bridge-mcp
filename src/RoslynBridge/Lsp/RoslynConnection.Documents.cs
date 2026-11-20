@@ -27,6 +27,7 @@ internal sealed partial class RoslynConnection
 
     private FileSystemWatcher? _watcher;
     private int _scanRequested;
+    private string? _watcherFailure;
 
     public async Task<Dictionary<WorkspaceFilePath, int>> CopyDocumentVersionsAsync(
         CancellationToken cancellationToken

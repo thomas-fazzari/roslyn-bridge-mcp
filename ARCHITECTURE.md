@@ -45,7 +45,8 @@ flowchart LR
 
 ## Calls and edits
 
-- One tool call runs at a time. Before a request, the session sends Roslyn the files that changed on disk.
+- One tool call runs at a time. Before a request, the session sends Roslyn the files that changed on disk. When the file watcher fails, it scans the whole workspace instead.
+- `lsp status` answers from state kept for the Roslyn process, without a Roslyn request. That state includes the project load errors and warnings that Roslyn logs.
 - An edit is computed against a snapshot of the workspace. The bridge refuses it when a file it touches or a project file changed since.
 - A failure after a write makes Roslyn reload the workspace from disk.
 - A proposal belongs to one Roslyn process. A reload or a restart makes it unknown.
