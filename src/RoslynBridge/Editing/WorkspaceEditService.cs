@@ -454,8 +454,13 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
             );
         }
 
-        if (ResolveEditPath(operation.NewUri).IsError(out var pathError, out var destinationPath))
+        if (
+            ResolveEditPath(operation.NewUri, isRenameTarget: true)
+                .IsError(out var pathError, out var destinationPath)
+        )
+        {
             return pathError;
+        }
 
         if (IsCaseOnlyAlias(source, destinationPath, snapshot))
         {

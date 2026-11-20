@@ -23,11 +23,14 @@ internal sealed class RenameFileHandler(
         if (!session.SupportsFileRename)
             return ToolError.InvalidRequest("Roslyn does not advertise file rename support.");
 
-        if (paths.ToUri(request.File).IsError(out var oldError, out var oldUri))
+        if (paths.Resolve(request.File).IsError(out var oldError, out var oldFile))
             return oldError;
 
-        if (paths.ToUri(request.NewName).IsError(out var newError, out var newUri))
+        if (paths.ResolveRenameTarget(request.NewName).IsError(out var newError, out var newFile))
             return newError;
+
+        var oldUri = oldFile.ToUri();
+        var newUri = newFile.ToUri();
 
         var captured = await executor.CaptureAsync(cancellationToken);
         if (captured.IsError(out var captureError, out var snapshot))
