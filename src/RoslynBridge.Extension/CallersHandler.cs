@@ -4,12 +4,12 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Extensions;
 using Microsoft.CodeAnalysis.FindSymbols;
-using Microsoft.CodeAnalysis.Text;
 
 namespace RoslynBridge.Extension;
 
 /// <summary>
-/// Finds callers as callHierarchy/incomingCalls does, plus the calls through base and interface members.
+/// Finds callers as callHierarchy/incomingCalls does, plus the calls through base and interface members
+/// and the calls that the compiler inserts without call syntax.
 /// </summary>
 /// <remarks>
 /// The incomingCalls handler keeps only direct calls, so it misses every call made through an interface.
@@ -43,74 +43,97 @@ internal sealed class CallersHandler
         var solution = document.Project.Solution;
         var callers = await SymbolFinder.FindCallersAsync(symbol, solution, cancellationToken);
         // Each target framework of a project has its own tree and calling symbol for the same file
-        var seen = new HashSet<(string, TextSpan)>();
-        var calls = new List<IncomingCall>();
+        var seen = new HashSet<SourceSite>();
+        var found = new Callers();
         // Direct callers come first, so a call site listed under several members stays direct
         foreach (var caller in callers)
         {
-            var sites = caller
-                .Locations.Where(location =>
-                    location.IsVisibleSourceLocation(cancellationToken)
-                    && solution.GetDocument(location.SourceTree)
-                        is { FilePath: { } path }
-                            and not SourceGeneratedDocument
-                    && seen.Add((path, location.SourceSpan))
-                )
-                .ToList();
+            found.Add(
+                caller.CallingSymbol,
+                caller.IsDirect ? null : caller.CalledSymbol.MemberName,
+                Unseen(caller.Locations, solution, seen, cancellationToken)
+            );
+        }
+
+        foreach (var call in await ImplicitCallers.FindAsync(symbol, solution, cancellationToken))
+        {
+            found.Add(
+                call.Caller,
+                through: null,
+                Unseen([call.Site], solution, seen, cancellationToken)
+            );
+        }
+
+        var calls = new List<IncomingCall>();
+        foreach (var caller in found.InOrder)
+        {
+            var declared = CallItems.DeclaringSymbol(caller.Symbol);
+            var sites = caller.Sites.OrderBy(site => site.SourceSpan.Start).ToList();
             if (
-                sites.Count == 0
-                || await ItemAsync(caller.CallingSymbol, solution, sites[0], cancellationToken)
-                    is not { } item
+                await CallItems.CreateAsync(
+                    declared,
+                    declared,
+                    solution,
+                    sites[0].SourceTree,
+                    cancellationToken
+                )
+                is not { } item
             )
             {
                 continue;
             }
 
             calls.Add(
-                new IncomingCall(
-                    item,
-                    [.. sites.Select(site => site.ToLspRange())],
-                    caller.IsDirect ? null : caller.CalledSymbol.MemberName
-                )
+                new IncomingCall(item, [.. sites.Select(site => site.ToLspRange())], caller.Through)
             );
         }
 
         return new CallersResponse(Found: true, calls);
     }
 
-    private static async Task<CallItem?> ItemAsync(
-        ISymbol caller,
+    private static List<Location> Unseen(
+        IEnumerable<Location> locations,
         Solution solution,
-        Location site,
+        HashSet<SourceSite> seen,
         CancellationToken cancellationToken
-    )
-    {
-        // An implicit constructor has no declaration, so its type stands in for it
-        var declared = caller is IMethodSymbol { DeclaringSyntaxReferences.IsEmpty: true } method
-            ? method.ContainingType
-            : caller;
-        var references = declared.DeclaringSyntaxReferences;
-        var reference = references.FirstOrDefault(syntax => syntax.SyntaxTree == site.SourceTree)
-            ?? references.FirstOrDefault();
-        if (
-            reference is null
-            || solution.GetDocument(reference.SyntaxTree)?.FilePath is not { } path
-        )
-        {
-            return null;
-        }
+    ) =>
+        [
+            .. locations.Where(location =>
+                location.IsVisibleSourceLocation(cancellationToken)
+                && solution.GetDocument(location.SourceTree)
+                    is { FilePath: { } path }
+                        and not SourceGeneratedDocument
+                && seen.Add(new SourceSite(path, location.SourceSpan))
+            ),
+        ];
 
-        var declaration = await reference.GetSyntaxAsync(cancellationToken);
-        var name = declared.Locations.FirstOrDefault(location =>
-            location.SourceTree == reference.SyntaxTree
-            && declaration.Span.Contains(location.SourceSpan)
-        );
-        return new CallItem(
-            declared.MemberName,
-            declared.LspKind,
-            path.ToLspUri(),
-            declaration.GetLocation().ToLspRange(),
-            (name ?? declaration.GetLocation()).ToLspRange()
-        );
+    private sealed record Caller(ISymbol Symbol, string? Through, List<Location> Sites);
+
+    private readonly record struct CallerKey(DeclarationKey? Declaration, string? Through);
+
+    // The calls of one member, direct or through the same base or interface member
+    private sealed class Callers
+    {
+        private readonly Dictionary<CallerKey, Caller> _byKey = [];
+        private readonly List<Caller> _inOrder = [];
+
+        public IReadOnlyList<Caller> InOrder => _inOrder;
+
+        public void Add(ISymbol symbol, string? through, List<Location> sites)
+        {
+            if (sites.Count == 0)
+                return;
+
+            var key = new CallerKey(CallItems.DeclaringSymbol(symbol).DeclarationKey, through);
+            if (_byKey.TryGetValue(key, out var existing))
+            {
+                existing.Sites.AddRange(sites);
+                return;
+            }
+
+            var caller = new Caller(symbol, through, sites);
+            _byKey.Add(key, caller);
+            _inOrder.Add(caller);
+        }
     }
 }

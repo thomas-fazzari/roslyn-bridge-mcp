@@ -183,8 +183,10 @@ references - Find the references to a symbol. Use definition for its declaration
 reads - Find the references that read a field, property, local, parameter or event.
 writes - Find the references that write it.
 callers - Find the methods that call this method, with their call sites,
-  including calls through the base or interface members it implements.
-callees - Find the methods this method calls, with the call sites in its file.
+  including calls through the base or interface members it implements and
+  calls that the compiler inserts, such as the Dispose of a foreach.
+callees - Find the methods this method calls, with the call sites in its file,
+  including calls that the compiler inserts.
 supertypes - Find the base types and interfaces of a type.
 subtypes - Find the types that derive from or implement a type.
 hover - Read type information and documentation.
@@ -298,6 +300,28 @@ Send everything after the kind back unchanged as the symbol argument. A result
 outside the workspace keeps Roslyn's name. The calls line is present only for
 callers and callees. callees lists calls only. A final line counts the
 property, field and constant accesses it leaves out.
+callers and callees include the calls that the compiler inserts without call
+syntax. Their call site is the first token of the construct: foreach, await
+(also for await foreach and await using), using, the operator, the type or
+opening parenthesis of a positional pattern, the keyword of a query clause (the
+first token of a second ordering), the first token of the condition for operator
+true or false, $" of an interpolated string, or ^ or .. of an index or range.
+The inserted calls are:
+- the Dispose of a foreach, the DisposeAsync of an await using, and every member
+  an await foreach calls
+- the IsCompleted and GetResult of an await
+- the Deconstruct of a positional pattern
+- the methods of a query expression, such as Select or Where
+- the constructor and Append methods of an interpolated string handler
+- the Length, Count, indexer or Slice behind ^ and .., and operator true or
+  false in an if, while, do, for or ?: condition
+- the instance operators of C# 14, such as += or ++
+callers leaves out calls of a user-defined implicit conversion, calls that use
+an Index or Range variable instead of ^ or .. in the code, list patterns, a?[^1]
+and s[1..] on a string. callers of a member that every await calls, such as
+TaskAwaiter.GetResult, binds every await in the workspace. callees lists the
+members declared in the workspace that the code calls, with its operators,
+conversions, foreach, await and using.
 A caller that calls the member through a base or interface member gets a
 through line before its calls line, and a separate entry for its direct calls:
 src/Consumer.cs:7:26 method MyApp.Consumer.Run(IGreeter)

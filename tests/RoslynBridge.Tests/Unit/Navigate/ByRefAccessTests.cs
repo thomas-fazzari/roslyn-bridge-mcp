@@ -50,7 +50,7 @@ public sealed class ByRefAccessTests
     [Fact]
     public void IgnoresAnUnreadableFile()
     {
-        var use = ByRefAccess.Of(null, new SourcePosition(1, 12));
+        var use = ByRefAccess.Of(lines: null, new SourcePosition(1, 12));
 
         use.Should().Be(ByRefUse.None);
     }

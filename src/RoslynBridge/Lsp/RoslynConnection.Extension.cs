@@ -10,6 +10,7 @@ internal sealed partial class RoslynConnection
 {
     internal const string ReferencesMessage = "RoslynBridge.Extension.ReferencesHandler";
     internal const string CallersMessage = "RoslynBridge.Extension.CallersHandler";
+    internal const string CalleesMessage = "RoslynBridge.Extension.CalleesHandler";
     internal const string ExpressionMessage = "RoslynBridge.Extension.ExpressionHandler";
     internal const string UnusedMessage = "RoslynBridge.Extension.UnusedHandler";
     internal const int RequestCancelledCode = -32800;
@@ -25,6 +26,7 @@ internal sealed partial class RoslynConnection
     [
         ReferencesMessage,
         CallersMessage,
+        CalleesMessage,
         ExpressionMessage,
     ];
     private static readonly string[] _workspaceMessages = [UnusedMessage];
@@ -51,10 +53,18 @@ internal sealed partial class RoslynConnection
     /// <summary>
     /// Finds callers inside Roslyn, with the calls through base and interface members.
     /// </summary>
-    public Task<Result<ExtensionCallers>> FindCallersAsync(
+    public Task<Result<ExtensionCalls>> FindCallersAsync(
         DocumentPosition position,
         CancellationToken cancellationToken
-    ) => DispatchWithFallbackAsync<ExtensionCallers>(CallersMessage, position, cancellationToken);
+    ) => DispatchWithFallbackAsync<ExtensionCalls>(CallersMessage, position, cancellationToken);
+
+    /// <summary>
+    /// Finds callees inside Roslyn, with the calls that the compiler inserts without call syntax.
+    /// </summary>
+    public Task<Result<ExtensionCalls>> FindCalleesAsync(
+        DocumentPosition position,
+        CancellationToken cancellationToken
+    ) => DispatchWithFallbackAsync<ExtensionCalls>(CalleesMessage, position, cancellationToken);
 
     /// <summary>
     /// Reads the compiler facts of the expression or declared name at a position. It has no LSP fallback.
@@ -288,9 +298,14 @@ internal sealed partial class RoslynConnection
         {
             ReferencesMessage => "references (uses the LSP request)",
             CallersMessage => "callers (uses the LSP request)",
+            CalleesMessage => "callees (uses the LSP request)",
             ExpressionMessage => "expression (unavailable)",
             UnusedMessage => "unused (unavailable)",
-            _ => throw new ArgumentOutOfRangeException(nameof(messageName), messageName, null),
+            _ => throw new ArgumentOutOfRangeException(
+                nameof(messageName),
+                messageName,
+                message: null
+            ),
         };
 
     private static Result<ExtensionDispatch> ReadDispatch(JsonNode? result) =>
@@ -298,7 +313,7 @@ internal sealed partial class RoslynConnection
 
     [LoggerMessage(
         Level = LogLevel.Warning,
-        Message = "The Roslyn extension is unavailable, references and callers will use the LSP requests, and unused symbols and expressions cannot be listed or described: {Reason}"
+        Message = "The Roslyn extension is unavailable, references, callers and callees will use the LSP requests, and unused symbols and expressions cannot be listed or described: {Reason}"
     )]
     private static partial void LogExtensionUnavailable(ILogger logger, string reason);
 

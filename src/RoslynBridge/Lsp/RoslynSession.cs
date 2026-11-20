@@ -210,10 +210,15 @@ internal sealed partial class RoslynSession(
         CancellationToken cancellationToken
     ) => Connection.FindReferencesAsync(position, cancellationToken);
 
-    public Task<Result<ExtensionCallers>> FindCallersAsync(
+    public Task<Result<ExtensionCalls>> FindCallersAsync(
         DocumentPosition position,
         CancellationToken cancellationToken
     ) => Connection.FindCallersAsync(position, cancellationToken);
+
+    public Task<Result<ExtensionCalls>> FindCalleesAsync(
+        DocumentPosition position,
+        CancellationToken cancellationToken
+    ) => Connection.FindCalleesAsync(position, cancellationToken);
 
     public Task<Result<ExtensionExpression>> DescribeExpressionAsync(
         DocumentPosition position,

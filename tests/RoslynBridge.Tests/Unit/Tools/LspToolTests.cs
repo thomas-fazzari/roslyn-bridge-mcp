@@ -1446,7 +1446,7 @@ public sealed class LspToolTests : TempWorkspaceTests
     {
         await WriteFileAsync(Root, SourceFile, SourceText);
 
-        var none = await DefinitionAnsweredWithAsync(null);
+        var none = await DefinitionAnsweredWithAsync(definitions: null);
         var empty = await DefinitionAnsweredWithAsync(new JsonArray());
 
         ResponseText(empty).Should().Be(ResponseText(none));

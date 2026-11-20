@@ -131,17 +131,17 @@ internal sealed partial class NavigateHandler(
         CancellationToken cancellationToken
     )
     {
-        var callersLookup =
-            request.Action is LspAction.Callers
-                ? await session.FindCallersAsync(position, cancellationToken)
-                : ExtensionCallers.NotFound;
-        if (callersLookup.IsError(out var callersError, out var callers))
-            return callersError;
+        var callsLookup = request.Action switch
+        {
+            LspAction.Callers => await session.FindCallersAsync(position, cancellationToken),
+            LspAction.Callees => await session.FindCalleesAsync(position, cancellationToken),
+            _ => ExtensionCalls.NotFound,
+        };
+        if (callsLookup.IsError(out var callsError, out var calls))
+            return callsError;
 
-        var expansion = callers.Found
-            ? callers
-                .Calls.ToRelatedItems(paths)
-                .Map(related => new Hierarchy(related, Accesses: 0, Prepared: true))
+        var expansion = calls.Found
+            ? RelatedCalls(request.Action, calls.Calls)
             : await ExpandHierarchyAsync(request.Action, position, cancellationToken);
         if (expansion.IsError(out var hierarchyError, out var hierarchy))
             return hierarchyError;
@@ -222,19 +222,30 @@ internal sealed partial class NavigateHandler(
             if (expansion.IsError(out var expandError, out var expanded))
                 return expandError;
 
-            // Outgoing calls also list property, field and constant accesses, which hide the calls
-            var invocable =
-                action is LspAction.Callees
-                    ? [.. expanded.Where(call => LspSymbolKinds.IsInvocable(call.To?.Kind))]
-                    : expanded;
-            accesses += expanded.Length - invocable.Length;
-            if (invocable.ToRelatedItems(paths).IsError(out var callError, out var callItems))
+            if (RelatedCalls(action, expanded).IsError(out var callError, out var calls))
                 return callError;
 
-            related.AddRange(callItems);
+            related.AddRange(calls.Related);
+            accesses += calls.Accesses;
         }
 
         return new Hierarchy(related, accesses, Prepared: items.Length > 0);
+    }
+
+    // Outgoing calls also list property, field and constant accesses, which hide the calls
+    private Result<Hierarchy> RelatedCalls(LspAction action, LspCall[] calls)
+    {
+        var invocable =
+            action is LspAction.Callees
+                ? [.. calls.Where(call => LspSymbolKinds.IsInvocable(call.To?.Kind))]
+                : calls;
+        return invocable
+            .ToRelatedItems(paths)
+            .Map(related => new Hierarchy(
+                related,
+                calls.Length - invocable.Length,
+                Prepared: true
+            ));
     }
 
     /// <param name="Prepared">False when Roslyn found no symbol to expand.</param>

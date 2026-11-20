@@ -4,7 +4,6 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Extensions;
 using Microsoft.CodeAnalysis.FindSymbols;
-using Microsoft.CodeAnalysis.Text;
 
 namespace RoslynBridge.Extension;
 
@@ -75,7 +74,7 @@ internal sealed class ReferencesHandler
             document.Project.Solution,
             cancellationToken
         );
-        var seen = new HashSet<(string?, TextSpan)>();
+        var seen = new HashSet<SourceSite>();
         var locations = new List<LspLocation>();
         var written = new List<LspLocation>();
         var generated = 0;
@@ -86,7 +85,9 @@ internal sealed class ReferencesHandler
             var location = reference.Location;
             if (
                 !location.IsVisibleSourceLocation(cancellationToken)
-                || !seen.Add((reference.Document.FilePath, location.SourceSpan))
+                || !seen.Add(
+                    new SourceSite(reference.Document.FilePath ?? string.Empty, location.SourceSpan)
+                )
             )
             {
                 continue;

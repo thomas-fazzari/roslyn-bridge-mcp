@@ -95,9 +95,14 @@ internal sealed partial class RoslynConnection
 
     private void FailWatching(Exception exception)
     {
-        Interlocked.Exchange(ref _watcher, null)?.Dispose();
-        if (Interlocked.CompareExchange(ref _watcherFailure, exception.Message, null) is null)
+        Interlocked.Exchange(ref _watcher, value: null)?.Dispose();
+        if (
+            Interlocked.CompareExchange(ref _watcherFailure, exception.Message, comparand: null)
+            is null
+        )
+        {
             LogWatcherFailed(logger, exception.Message);
+        }
     }
 
     private async Task<Result> SynchronizeWatchedFilesAsync(CancellationToken cancellationToken)
