@@ -10,12 +10,12 @@ namespace RoslynBridge.Symbols;
 /// <param name="Line">One-based. The position of the name.</param>
 /// <param name="FirstLine">One-based first line of the whole declaration.</param>
 /// <param name="IsPrivate">Roslyn marks an explicit interface implementation as private.</param>
-[DebuggerDisplay("{Name} at {File}:{Line}:{Character}")]
+[DebuggerDisplay("{Name} at {File.RelativePath}:{Line}:{Character}")]
 internal sealed record SymbolDeclaration(
     string Name,
     string Signature,
-    int? Kind,
-    string File,
+    LspSymbolKind Kind,
+    WorkspaceFilePath File,
     int Line,
     int Character,
     int FirstLine,
@@ -25,12 +25,12 @@ internal sealed record SymbolDeclaration(
 {
     public SourcePosition Position => new(Line, Character);
 
-    public SourceLocation Location => new(File, Position);
+    public SourceLocation Location => new(new LocationFile.Workspace(File), Position);
 
-    public SymbolItem ToItem(WorkspacePaths paths) =>
-        new(Name, Kind is { } kind && LspSymbolKinds.TryGetName(kind, out var name) ? name : null)
+    public SymbolItem ToItem() =>
+        new(Name, LspSymbolKinds.TryGetName(Kind, out var name) ? name : null)
         {
-            File = paths.RelativePath(File),
+            File = new LocationFile.Workspace(File),
             Position = Position,
         };
 }

@@ -51,9 +51,9 @@ internal sealed partial class RoslynConnection
     /// <summary>
     /// Finds the declarations of some files that no live code uses.
     /// </summary>
-    /// <param name="files">Full paths of C# files.</param>
+    /// <param name="files">C# files.</param>
     public async Task<Result<UnusedReport>> FindUnusedAsync(
-        IReadOnlyCollection<string> files,
+        IReadOnlyCollection<WorkspaceFilePath> files,
         CancellationToken cancellationToken
     )
     {
@@ -72,7 +72,9 @@ internal sealed partial class RoslynConnection
                 ["messageName"] = UnusedMessage,
                 ["message"] = new JsonObject
                 {
-                    ["files"] = new JsonArray([.. files.Select(file => JsonValue.Create(file))]),
+                    ["files"] = new JsonArray([
+                        .. files.Select(file => JsonValue.Create(file.FullPath)),
+                    ]),
                 }.ToJsonString(),
             },
             cancellationToken

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 using RoslynBridge.Features.Navigate;
+using RoslynBridge.Workspace;
 
 namespace RoslynBridge.Tests.Unit.Navigate;
 
@@ -25,7 +26,7 @@ public sealed class ByRefAccessTests
     {
         ArgumentNullException.ThrowIfNull(marked);
         var column = marked.IndexOf('|', StringComparison.Ordinal);
-        var lines = new[] { "// first", marked.Remove(column, 1) };
+        var lines = new FileLines(["// first", marked.Remove(column, 1)]);
 
         var use = ByRefAccess.Of(lines, new SourcePosition(2, column + 1));
 
@@ -38,7 +39,10 @@ public sealed class ByRefAccessTests
     [InlineData(1, 0)]
     public void IgnoresPositionsOutsideTheText(int line, int character)
     {
-        var use = ByRefAccess.Of(["Update(ref _count)"], new SourcePosition(line, character));
+        var use = ByRefAccess.Of(
+            new FileLines(["Update(ref _count)"]),
+            new SourcePosition(line, character)
+        );
 
         use.Should().Be(ByRefUse.None);
     }

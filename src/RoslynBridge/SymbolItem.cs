@@ -10,7 +10,7 @@ internal sealed record SymbolItem(string Name, string? Kind)
 
     public string? Container { get; init; }
 
-    public string? File { get; init; }
+    public LocationFile? File { get; init; }
 
     public SourcePosition? Position { get; init; }
 

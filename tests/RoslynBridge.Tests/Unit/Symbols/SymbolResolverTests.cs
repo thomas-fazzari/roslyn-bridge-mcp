@@ -9,7 +9,9 @@ namespace RoslynBridge.Tests.Unit.Symbols;
 
 public sealed class SymbolResolverTests
 {
-    private const string File = "/workspace/Shapes.cs";
+    private const string Root = "/workspace";
+
+    private static readonly WorkspaceFilePath _file = TestHelpers.Resolved(Root, "Shapes.cs");
 
     // Document symbols in the shape Roslyn returns them
     private static readonly JsonArray _documentSymbols =
@@ -69,7 +71,7 @@ public sealed class SymbolResolverTests
     {
         var declaration = Find("Box.Value").Should().ContainSingle().Which;
 
-        declaration.File.Should().Be(File);
+        declaration.File.Should().Be(_file);
         (declaration.Line, declaration.Character).Should().Be((7, 5));
     }
 
@@ -108,15 +110,17 @@ public sealed class SymbolResolverTests
         int expected
     )
     {
+        var app = TestHelpers.Resolved(Root, "App/Program.cs");
+        var lib = TestHelpers.Resolved(Root, "Lib/Program.cs");
         var declarations = new[]
         {
-            new SymbolDeclaration("Program", "Program", 5, "/workspace/App/Program.cs", 1, 1, 1, 9),
-            new SymbolDeclaration("Program", "Program", 5, "/workspace/Lib/Program.cs", 1, 1, 1, 9),
+            new SymbolDeclaration("Program", "Program", LspSymbolKind.Class, app, 1, 1, 1, 9),
+            new SymbolDeclaration("Program", "Program", LspSymbolKind.Class, lib, 1, 1, 1, 9),
         };
-        var projects = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal)
+        var projects = new Dictionary<WorkspaceFilePath, HashSet<string>>
         {
-            ["/workspace/App/Program.cs"] = [with(StringComparer.Ordinal), "app"],
-            ["/workspace/Lib/Program.cs"] = secondProject is null
+            [app] = [with(StringComparer.Ordinal), "app"],
+            [lib] = secondProject is null
                 ? [with(StringComparer.Ordinal)]
                 : [with(StringComparer.Ordinal), secondProject],
         };
@@ -128,7 +132,7 @@ public sealed class SymbolResolverTests
 
     private static IEnumerable<SymbolDeclaration> Find(string requested) =>
         SymbolResolver.FindDeclarations(
-            [(File, _documentSymbols.ReadArray<LspSymbol>().Succeeded())],
+            [(_file, _documentSymbols.ReadArray<LspSymbol>().Succeeded())],
             SymbolName.Parse(requested)!
         );
 }

@@ -12,7 +12,7 @@ internal sealed partial class RoslynConnection
     // On Windows, the 8 KB default overflows on a branch switch or a restore, which forces a full rescan
     private const int WatcherBufferBytes = 64 * 1024;
 
-    private void QueueFile(string path)
+    private void QueueFile(WorkspaceFilePath path)
     {
         if (!paths.IsWatched(path))
             return;
@@ -46,12 +46,13 @@ internal sealed partial class RoslynConnection
         _watcher.EnableRaisingEvents = true;
     }
 
-    private void OnFileChanged(object sender, FileSystemEventArgs args) => QueueFile(args.FullPath);
+    private void OnFileChanged(object sender, FileSystemEventArgs args) =>
+        QueueFile(paths.Known(args.FullPath));
 
     private void OnFileRenamed(object sender, RenamedEventArgs args)
     {
-        QueueFile(args.OldFullPath);
-        QueueFile(args.FullPath);
+        QueueFile(paths.Known(args.OldFullPath));
+        QueueFile(paths.Known(args.FullPath));
     }
 
     private void OnWatcherError(object sender, ErrorEventArgs args) =>
@@ -86,7 +87,7 @@ internal sealed partial class RoslynConnection
     }
 
     private async Task<Result> RescanAsync(
-        List<string> changedPaths,
+        List<WorkspaceFilePath> changedPaths,
         CancellationToken cancellationToken
     )
     {
@@ -95,7 +96,7 @@ internal sealed partial class RoslynConnection
 
         var notified = await NotifyFileChangesAsync(
             current,
-            changedPaths.ToHashSet(StringComparer.Ordinal),
+            changedPaths.ToHashSet(),
             cancellationToken
         );
         if (notified is not ToolError)
@@ -104,7 +105,7 @@ internal sealed partial class RoslynConnection
         return notified;
     }
 
-    private void Requeue(List<string> changedPaths, bool scanRequested)
+    private void Requeue(List<WorkspaceFilePath> changedPaths, bool scanRequested)
     {
         if (scanRequested)
             Interlocked.Exchange(ref _scanRequested, 1);
@@ -118,15 +119,15 @@ internal sealed partial class RoslynConnection
     /// <summary>
     /// True for a directory or a deleted directory with known files, as the watcher may not list its files.
     /// </summary>
-    private bool RequiresRescan(List<string> changedPaths)
+    private bool RequiresRescan(List<WorkspaceFilePath> changedPaths)
     {
         HashSet<string>? knownDirectories = null;
         return changedPaths.Exists(path =>
-            Directory.Exists(path)
+            Directory.Exists(path.FullPath)
             || (
                 !_workspaceFiles.ContainsKey(path)
-                && !File.Exists(path)
-                && (knownDirectories ??= KnownDirectories()).Contains(path)
+                && !File.Exists(path.FullPath)
+                && (knownDirectories ??= KnownDirectories()).Contains(path.FullPath)
             )
         );
     }
@@ -137,7 +138,7 @@ internal sealed partial class RoslynConnection
         foreach (var file in _workspaceFiles.Keys)
         {
             // Once a directory is present, its parents are too
-            var directory = Path.GetDirectoryName(file);
+            var directory = Path.GetDirectoryName(file.FullPath);
             while (
                 directory is not null
                 && directory.Length > paths.Root.Length
@@ -152,14 +153,14 @@ internal sealed partial class RoslynConnection
     }
 
     private async Task<Result> SynchronizeChangedPathsAsync(
-        List<string> changedPaths,
+        List<WorkspaceFilePath> changedPaths,
         CancellationToken cancellationToken
     )
     {
         if (changedPaths.Count == 0)
             return Result.Success;
 
-        var updates = new Dictionary<string, FileStamp?>(StringComparer.Ordinal);
+        var updates = new Dictionary<WorkspaceFilePath, FileStamp?>();
         var changes = new List<FileEvent>();
         foreach (var path in changedPaths)
         {
@@ -257,16 +258,19 @@ internal sealed partial class RoslynConnection
         var projectsByDirectory = _workspaceFiles
             .Keys.Where(path =>
                 string.Equals(
-                    Path.GetExtension(path),
+                    Path.GetExtension(path.FullPath),
                     ".csproj",
                     StringComparison.OrdinalIgnoreCase
                 )
             )
-            .ToLookup(path => Path.GetDirectoryName(path) ?? string.Empty, StringComparer.Ordinal);
+            .ToLookup(
+                path => Path.GetDirectoryName(path.FullPath) ?? string.Empty,
+                StringComparer.Ordinal
+            );
         var reloads = batch
             .Where(IsSourceFileAddedOrRemoved)
             .SelectMany(change => NearestProjects(change.Path, projectsByDirectory))
-            .Distinct(StringComparer.Ordinal)
+            .Distinct()
             .Select(project => new FileEvent(project, FileEventType.Changed));
         return batch.Concat(reloads);
     }
@@ -275,12 +279,12 @@ internal sealed partial class RoslynConnection
         change.Type is FileEventType.Created or FileEventType.Deleted
         && WorkspacePaths.IsCSharpFile(change.Path);
 
-    private IEnumerable<string> NearestProjects(
-        string path,
-        ILookup<string, string> projectsByDirectory
+    private IEnumerable<WorkspaceFilePath> NearestProjects(
+        WorkspaceFilePath path,
+        ILookup<string, WorkspaceFilePath> projectsByDirectory
     )
     {
-        var directory = Path.GetDirectoryName(path);
+        var directory = Path.GetDirectoryName(path.FullPath);
         while (directory is not null && directory.Length >= paths.Root.Length)
         {
             if (projectsByDirectory.Contains(directory))
@@ -293,9 +297,9 @@ internal sealed partial class RoslynConnection
     }
 
     private JsonNode ToFileEvent(FileEvent change) =>
-        new JsonObject { ["uri"] = new Uri(change.Path).AbsoluteUri, ["type"] = (int)change.Type };
+        new JsonObject { ["uri"] = change.Path.ToUri(), ["type"] = (int)change.Type };
 
-    private readonly record struct FileEvent(string Path, FileEventType Type);
+    private readonly record struct FileEvent(WorkspaceFilePath Path, FileEventType Type);
 
     // The values of the LSP FileChangeType
     private enum FileEventType

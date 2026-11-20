@@ -22,7 +22,9 @@ public sealed class SessionDocumentTests : TempWorkspaceTests
         (await session.EnsureStartedAsync(TestCt)).ErrorCode().Should().BeNull();
 
         var opened = await Task.WhenAll(
-            Enumerable.Range(0, 8).Select(_ => session.OpenDocumentAsync(path, TestCt))
+            Enumerable
+                .Range(0, 8)
+                .Select(_ => session.OpenDocumentAsync(Resolved(Root, path), TestCt))
         );
 
         opened.Should().AllSatisfy(result => result.ErrorCode().Should().BeNull());
@@ -40,7 +42,7 @@ public sealed class SessionDocumentTests : TempWorkspaceTests
         var servers = new List<FakeRoslynServer>();
         await using var session = CreateSession(Root, FakeServer(servers.Add));
         (await session.EnsureStartedAsync(TestCt)).ErrorCode().Should().BeNull();
-        (await session.OpenDocumentAsync(path, TestCt)).Succeeded();
+        (await session.OpenDocumentAsync(Resolved(Root, path), TestCt)).Succeeded();
 
         File.SetLastWriteTimeUtc(path, written.AddSeconds(1));
         (await session.SynchronizeAsync(TestCt)).ErrorCode().Should().BeNull();
@@ -64,7 +66,7 @@ public sealed class SessionDocumentTests : TempWorkspaceTests
         var servers = new List<FakeRoslynServer>();
         await using var session = CreateSession(Root, FakeServer(servers.Add));
         (await session.EnsureStartedAsync(TestCt)).ErrorCode().Should().BeNull();
-        (await session.OpenDocumentAsync(path, TestCt)).Succeeded();
+        (await session.OpenDocumentAsync(Resolved(Root, path), TestCt)).Succeeded();
         await RegisterWatchedFilesAsync(servers[0]);
 
         File.Delete(path);
@@ -101,7 +103,10 @@ public sealed class SessionDocumentTests : TempWorkspaceTests
         (await session.EnsureStartedAsync(TestCt)).ErrorCode().Should().BeNull();
 
         var path = await WriteFileAsync(Root, "Added.cs", "class Added {}");
-        (await session.SynchronizeFilesAsync([path], TestCt)).ErrorCode().Should().BeNull();
+        (await session.SynchronizeFilesAsync([Resolved(Root, path)], TestCt))
+            .ErrorCode()
+            .Should()
+            .BeNull();
 
         (await ReceivedAsync(session, servers[1], LspMethods.WorkspaceDidChangeWatchedFiles))
             .Should()

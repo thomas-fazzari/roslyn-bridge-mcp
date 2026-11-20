@@ -26,8 +26,8 @@ internal sealed partial class RoslynConnection
     /// <summary>
     /// Returns the files outside every project. Waits for Roslyn to attach files created since the load.
     /// </summary>
-    public async Task<Result<HashSet<string>>> WaitForProjectsAsync(
-        IReadOnlyCollection<string> files,
+    public async Task<Result<HashSet<WorkspaceFilePath>>> WaitForProjectsAsync(
+        IReadOnlyCollection<WorkspaceFilePath> files,
         CancellationToken cancellationToken
     )
     {
@@ -36,7 +36,7 @@ internal sealed partial class RoslynConnection
             return openError;
 
         var pending = files.Zip(uris).ToList();
-        var outside = new HashSet<string>(StringComparer.Ordinal);
+        var outside = new HashSet<WorkspaceFilePath>();
         var started = Stopwatch.GetTimestamp();
         while (true)
         {
@@ -46,7 +46,7 @@ internal sealed partial class RoslynConnection
             if (states.All().IsError(out var error, out var memberships))
                 return error;
 
-            List<(string First, string Second)> waiting = [];
+            List<(WorkspaceFilePath First, string Second)> waiting = [];
             foreach (var (file, membership) in pending.Zip(memberships))
             {
                 if (membership is Membership.InProject)

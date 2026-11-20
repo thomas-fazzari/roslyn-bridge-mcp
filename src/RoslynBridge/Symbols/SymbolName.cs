@@ -62,8 +62,8 @@ internal sealed record SymbolName(ImmutableArray<string> Segments, string? Param
     /// <summary>
     /// Roslyn reports some constructors as methods.
     /// </summary>
-    public int? CorrectedKind(int? reported) =>
-        reported is LspSymbolKinds.Method && NamesItsType ? LspSymbolKinds.Constructor : reported;
+    public LspSymbolKind CorrectedKind(LspSymbolKind reported) =>
+        reported is LspSymbolKind.Method && NamesItsType ? LspSymbolKind.Constructor : reported;
 
     // A member cannot have the name of its type, except a constructor
     private bool NamesItsType =>

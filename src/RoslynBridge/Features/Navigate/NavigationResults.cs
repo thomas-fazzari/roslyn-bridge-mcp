@@ -13,9 +13,8 @@ internal sealed record HoverText(string Text) : ToolResult
     internal override void Write(StringBuilder text, int budget) => text.Append(Text);
 }
 
-/// <param name="File">A workspace-relative path, or the URI of an external or generated file.</param>
 internal sealed record FileLocations(
-    string File,
+    LocationFile File,
     IReadOnlyList<SourcePosition> Positions,
     IReadOnlyDictionary<int, string>? Lines = null
 );
@@ -36,7 +35,7 @@ internal sealed record Locations(
     {
         foreach (var file in Files)
         {
-            text.Append(file.File);
+            text.Append(file.File.Text);
             if (file.Lines is { } lines)
             {
                 text.Append('\n');
@@ -112,7 +111,7 @@ internal sealed record SourceParts(IReadOnlyList<SourcePart> Parts, int OmittedL
     {
         foreach (var part in Parts)
         {
-            text.Append(part.Symbol.File)
+            text.Append(part.Symbol.File?.Text)
                 .Append(CultureInfo.InvariantCulture, $":{part.FirstLine}-{part.LastLine} ")
                 .Append(part.Symbol.Kind)
                 .Append(' ')
@@ -142,7 +141,7 @@ internal sealed record TypeMembers(
     internal override void Write(StringBuilder text, int budget)
     {
         text.Append(Type.Kind).Append(' ').Append(Type.Name).Append('\n');
-        string? file = null;
+        LocationFile? file = null;
         string? baseClass = null;
         foreach (var member in Members)
         {
@@ -156,10 +155,10 @@ internal sealed record TypeMembers(
                 text.Append("inherited from ").Append(container).Append('\n');
             }
 
-            if (!string.Equals(member.File, file, StringComparison.Ordinal))
+            if (member.File != file)
             {
                 file = member.File;
-                text.Append(file).Append('\n');
+                text.Append(file?.Text).Append('\n');
             }
 
             text.Append(Indent)

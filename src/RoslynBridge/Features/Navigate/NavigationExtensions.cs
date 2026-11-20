@@ -27,7 +27,7 @@ internal static class NavigationExtensions
         public Locations Page(Paging page)
         {
             var files = page.Slice(found.Positions)
-                .GroupBy(location => location.File, StringComparer.Ordinal)
+                .GroupBy(location => location.File)
                 .Select(group => new FileLocations(
                     group.Key,
                     [.. group.Select(location => location.Position)]
@@ -47,7 +47,7 @@ internal static class NavigationExtensions
         public RelatedSymbols ToRelatedSymbols(Paging page)
         {
             var items = related
-                .OrderBy(item => item.File, StringComparer.Ordinal)
+                .OrderBy(item => item.File?.Text, StringComparer.Ordinal)
                 .ThenBy(item => item.Position?.Line)
                 .ThenBy(item => item.Position?.Character)
                 .ThenBy(item => item.Name, StringComparer.Ordinal)
@@ -63,7 +63,7 @@ internal static class NavigationExtensions
 
     extension(Locations locations)
     {
-        public Locations WithSourceLines(WorkspacePaths paths)
+        public Locations WithSourceLines()
         {
             var lines = new SourceLines();
             return locations with
@@ -73,7 +73,7 @@ internal static class NavigationExtensions
                     .. locations.Files.Select(file =>
                         file with
                         {
-                            Lines = lines.At(paths.ResultFilePath(file.File), file.Positions),
+                            Lines = lines.At(file.File.WorkspaceFile, file.Positions),
                         }
                     ),
                 ],
@@ -86,7 +86,7 @@ internal static class NavigationExtensions
         /// <summary>
         /// Call sites are in <paramref name="callSiteFile"/> when it is set, otherwise in the item's own file.
         /// </summary>
-        public RelatedSymbols WithSourceLines(WorkspacePaths paths, string? callSiteFile)
+        public RelatedSymbols WithSourceLines(WorkspaceFilePath? callSiteFile)
         {
             var lines = new SourceLines();
             return symbols with
@@ -95,7 +95,7 @@ internal static class NavigationExtensions
                 [
                     .. symbols.Items.Select(item =>
                     {
-                        var ownFile = item.File is null ? null : paths.ResultFilePath(item.File);
+                        var ownFile = item.File?.WorkspaceFile;
                         var (file, positions) =
                             item.Calls.Count > 0
                                 ? (callSiteFile ?? ownFile, item.Calls)

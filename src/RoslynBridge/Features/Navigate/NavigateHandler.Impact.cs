@@ -50,25 +50,23 @@ internal sealed partial class NavigateHandler
             request with
             {
                 Action = action,
-                Target = new SymbolAt(location),
+                Target = new ResolvedAt(location),
             },
             cancellationToken
         );
 
         // Roslyn lists a member that nothing overrides as its own implementation
-        if (action is not LspAction.Implementation || section is not Locations implementations)
-            return section;
-
-        return paths.Resolve(location.File).IsError(out var error, out var path)
-            ? error
-            : Without(implementations, paths.RelativePath(path), location.Position);
+        return action is not LspAction.Implementation || section is not Locations implementations
+            ? section
+            : Without(implementations, location);
     }
 
-    private static Locations Without(Locations locations, string file, SourcePosition position)
+    private static Locations Without(Locations locations, SourceLocation location)
     {
+        var (file, position) = location;
         var files = locations
             .Files.Select(found =>
-                string.Equals(found.File, file, StringComparison.Ordinal)
+                found.File == file
                     ? found with
                     {
                         Positions = [.. found.Positions.Where(other => other != position)],
@@ -99,7 +97,7 @@ internal sealed partial class NavigateHandler
         return items.Any(item =>
             item.Symbol.Uri is { } uri
             && paths.TryGetWorkspaceFile(uri) is { } itemFile
-            && string.Equals(itemFile, file, StringComparison.Ordinal)
+            && itemFile == file
             && item.Symbol.SelectionRange is { } range
             && range.Contains(target.Position)
         );

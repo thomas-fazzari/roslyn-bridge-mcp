@@ -104,7 +104,7 @@ internal sealed partial class ChangeExecutor(
         await session.SynchronizeWorkspaceAsync(cancellationToken) switch
         {
             ToolError error => error,
-            Dictionary<string, FileStamp> files => new WorkspaceSnapshot(
+            Dictionary<WorkspaceFilePath, FileStamp> files => new WorkspaceSnapshot(
                 files,
                 await session.CopyDocumentVersionsAsync(cancellationToken)
             ),
@@ -188,11 +188,11 @@ internal sealed partial class ChangeExecutor(
         CancellationToken cancellationToken
     )
     {
-        string[] files =
+        WorkspaceFilePath[] files =
         [
             .. receipt
-                .Operations.Select(operation => paths.FullPath(operation.Path))
-                .Distinct(StringComparer.Ordinal)
+                .Operations.Select(operation => paths.Known(operation.Path))
+                .Distinct()
                 .Where(WorkspacePaths.IsExistingCSharpFile),
         ];
         if (files.Length is 0 or > MaximumCheckedFiles)
@@ -306,18 +306,18 @@ internal sealed partial class ChangeExecutor(
                     ? [operation.Path, oldPath]
                     : (string[])[operation.Path]
             )
-            .Select(paths.FullPath)
+            .Select(paths.Known)
             .ToList();
         if (await session.SynchronizeFilesAsync(written, cancellationToken) is ToolError error)
             return error;
 
-        string[] created =
+        WorkspaceFilePath[] created =
         [
             .. receipt
                 .Operations.Where(operation =>
                     operation.Kind is FileChange.Create or FileChange.Rename
                 )
-                .Select(operation => paths.FullPath(operation.Path))
+                .Select(operation => paths.Known(operation.Path))
                 .Where(WorkspacePaths.IsExistingCSharpFile),
         ];
         if (created.Length == 0)

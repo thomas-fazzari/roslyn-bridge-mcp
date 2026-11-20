@@ -30,7 +30,7 @@ internal sealed partial class SymbolResolver(RoslynSession session, WorkspacePat
 
         var name = SymbolName.BaseName(requested.Segments[^1]);
         List<WorkspaceMatch>? matches = null;
-        IEnumerable<string> files;
+        IEnumerable<WorkspaceFilePath> files;
         if (file is null)
         {
             var candidates = await CandidateMatchesAsync(requested, cancellationToken);
@@ -92,7 +92,7 @@ internal sealed partial class SymbolResolver(RoslynSession session, WorkspacePat
     /// </summary>
     internal static List<SymbolDeclaration> DistinctSymbols(
         IEnumerable<SymbolDeclaration> declarations,
-        IReadOnlyDictionary<string, HashSet<string>> projectsByFile
+        IReadOnlyDictionary<WorkspaceFilePath, HashSet<string>> projectsByFile
     )
     {
         var symbols = new List<SymbolDeclaration>();
@@ -154,7 +154,7 @@ internal sealed partial class SymbolResolver(RoslynSession session, WorkspacePat
     /// Returns the innermost declaration that contains the line, or null.
     /// </summary>
     public async Task<Result<SymbolDeclaration?>> DeclarationAtAsync(
-        string file,
+        WorkspaceFilePath file,
         int line,
         CancellationToken cancellationToken
     ) =>
@@ -198,7 +198,7 @@ internal sealed partial class SymbolResolver(RoslynSession session, WorkspacePat
     /// Exact matches win over loose ones. A constructor needs its parameter list in the request.
     /// </summary>
     internal static IEnumerable<SymbolDeclaration> FindDeclarations(
-        IEnumerable<(string File, LspSymbol[] Symbols)> documents,
+        IEnumerable<(WorkspaceFilePath File, LspSymbol[] Symbols)> documents,
         SymbolName requested
     )
     {
@@ -241,7 +241,7 @@ internal sealed partial class SymbolResolver(RoslynSession session, WorkspacePat
     private static bool IsPartOf(
         SymbolDeclaration declaration,
         SymbolDeclaration symbol,
-        IReadOnlyDictionary<string, HashSet<string>> projectsByFile
+        IReadOnlyDictionary<WorkspaceFilePath, HashSet<string>> projectsByFile
     ) =>
         string.Equals(declaration.Name, symbol.Name, StringComparison.Ordinal)
         && declaration.IsPrivate == symbol.IsPrivate
@@ -249,37 +249,27 @@ internal sealed partial class SymbolResolver(RoslynSession session, WorkspacePat
 
     // Without known projects, same-named declarations count as parts of one partial type
     private static bool SharesProject(
-        string first,
-        string second,
-        IReadOnlyDictionary<string, HashSet<string>> projectsByFile
+        WorkspaceFilePath first,
+        WorkspaceFilePath second,
+        IReadOnlyDictionary<WorkspaceFilePath, HashSet<string>> projectsByFile
     ) =>
-        string.Equals(first, second, StringComparison.Ordinal)
+        first == second
         || !projectsByFile.TryGetValue(first, out var firstProjects)
         || !projectsByFile.TryGetValue(second, out var secondProjects)
         || firstProjects.Count == 0
         || secondProjects.Count == 0
         || firstProjects.Overlaps(secondProjects);
 
-    private async Task<Result<Dictionary<string, HashSet<string>>>> ProjectsByFileAsync(
+    private async Task<Result<Dictionary<WorkspaceFilePath, HashSet<string>>>> ProjectsByFileAsync(
         List<SymbolDeclaration> declarations,
         CancellationToken cancellationToken
     )
     {
-        var projectsByFile = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
+        var projectsByFile = new Dictionary<WorkspaceFilePath, HashSet<string>>();
         var sharedNames = declarations
             .GroupBy(declaration => declaration.Name, StringComparer.Ordinal)
-            .Where(group =>
-                group
-                    .DistinctBy(declaration => declaration.File, StringComparer.Ordinal)
-                    .Skip(1)
-                    .Any()
-            );
-        foreach (
-            var file in sharedNames
-                .SelectMany(group => group)
-                .Select(d => d.File)
-                .Distinct(StringComparer.Ordinal)
-        )
+            .Where(group => group.DistinctBy(declaration => declaration.File).Skip(1).Any());
+        foreach (var file in sharedNames.SelectMany(group => group).Select(d => d.File).Distinct())
         {
             var opened = await session.OpenDocumentAsync(file, cancellationToken);
             if (opened.IsError(out var openError, out var uri))
@@ -306,10 +296,7 @@ internal sealed partial class SymbolResolver(RoslynSession session, WorkspacePat
         var type = SymbolName.Parse(parts[0].Name)!;
         return (
             await DocumentSymbolsAsync(
-                parts
-                    .Select(part => part.File)
-                    .Distinct(StringComparer.Ordinal)
-                    .Order(StringComparer.Ordinal),
+                parts.Select(part => part.File).Distinct().Order(WorkspaceFilePath.Order),
                 cancellationToken
             )
         ).Map(documents =>
@@ -332,12 +319,14 @@ internal sealed partial class SymbolResolver(RoslynSession session, WorkspacePat
     }
 
     // Opening a document changes the session, so only the symbol requests run concurrently
-    private async Task<Result<List<(string File, LspSymbol[] Symbols)>>> DocumentSymbolsAsync(
-        IEnumerable<string> files,
+    private async Task<
+        Result<List<(WorkspaceFilePath File, LspSymbol[] Symbols)>>
+    > DocumentSymbolsAsync(
+        IEnumerable<WorkspaceFilePath> files,
         CancellationToken cancellationToken
     )
     {
-        var documents = new List<(string File, LspSymbol[] Symbols)>();
+        var documents = new List<(WorkspaceFilePath File, LspSymbol[] Symbols)>();
         // Batches stay within the open documents the session keeps
         foreach (var batch in files.Chunk(RoslynConnection.MaximumOpenDocuments))
         {
@@ -366,7 +355,7 @@ internal sealed partial class SymbolResolver(RoslynSession session, WorkspacePat
     // Namespaces only qualify their members, so they are not declarations here
     private static IEnumerable<DeclaredSymbol> Declarations(
         LspSymbol[] symbols,
-        string file,
+        WorkspaceFilePath file,
         SymbolName? container,
         string? containerDisplay
     )
@@ -396,7 +385,7 @@ internal sealed partial class SymbolResolver(RoslynSession session, WorkspacePat
             var display = SymbolName.WithoutType(rawName);
             display = containerDisplay is null ? display : $"{containerDisplay}.{display}";
             if (
-                kind is not LspSymbolKinds.Namespace
+                kind is not LspSymbolKind.Namespace
                 && symbol is { SelectionRange: { } selection, Range: { } range }
             )
             {
@@ -436,15 +425,15 @@ internal sealed partial class SymbolResolver(RoslynSession session, WorkspacePat
         }
     }
 
-    private SourceLocation? DeclarationLocation(SymbolItem item) =>
-        item is { File: { } file, Position: { } position } && paths.ResultFilePath(file) is { } path
-            ? new SourceLocation(path, position)
+    private static SourceLocation? DeclarationLocation(SymbolItem item) =>
+        item is { File: LocationFile.Workspace file, Position: { } position }
+            ? new SourceLocation(file, position)
             : null;
 
-    private static bool IsExtensionBlock(SymbolName member, int? kind) =>
+    private static bool IsExtensionBlock(SymbolName member, LspSymbolKind kind) =>
         member is { Segments: [var block], Parameters: not null }
         && SymbolName.BaseName(block) is "extension"
-        && kind is not LspSymbolKinds.Method;
+        && kind is not LspSymbolKind.Method;
 
     private async Task<Result<Dictionary<SourceLocation, SymbolDeclaration>>> DeclarationsAtAsync(
         IEnumerable<SourceLocation> positions,
@@ -453,7 +442,10 @@ internal sealed partial class SymbolResolver(RoslynSession session, WorkspacePat
     {
         var wanted = positions.ToHashSet();
         var symbolFiles = await DocumentSymbolsAsync(
-            wanted.Select(position => position.File).Distinct(StringComparer.Ordinal),
+            wanted
+                .Select(position => position.File.WorkspaceFile)
+                .OfType<WorkspaceFilePath>()
+                .Distinct(),
             cancellationToken
         );
         if (symbolFiles.IsError(out var error, out var documents))
@@ -516,7 +508,8 @@ internal sealed partial class SymbolResolver(RoslynSession session, WorkspacePat
                 matches.Add(
                     new WorkspaceMatch(
                         SymbolName.BaseName(found.Segments[^1]),
-                        new SourceLocation(file, range.Start.OneBased),
+                        file,
+                        range.Start.OneBased,
                         result.Kind
                     )
                 );
@@ -529,23 +522,23 @@ internal sealed partial class SymbolResolver(RoslynSession session, WorkspacePat
     private static bool IsNamed(WorkspaceMatch match, string name) =>
         string.Equals(match.Name, name, StringComparison.Ordinal);
 
-    private static IEnumerable<string> FilesNamed(
+    private static IEnumerable<WorkspaceFilePath> FilesNamed(
         IEnumerable<WorkspaceMatch> matches,
         string name
     ) =>
         matches
             .Where(match => IsNamed(match, name))
-            .Select(match => match.Location.File)
-            .Distinct(StringComparer.Ordinal)
-            .Order(StringComparer.Ordinal);
+            .Select(match => match.File)
+            .Distinct()
+            .Order(WorkspaceFilePath.Order);
 
-    private List<SymbolItem> Candidates(IEnumerable<SymbolDeclaration> declarations) =>
+    private static List<SymbolItem> Candidates(IEnumerable<SymbolDeclaration> declarations) =>
         [
             .. declarations
                 .OrderBy(declaration => declaration.Name, StringComparer.Ordinal)
-                .ThenBy(declaration => declaration.File, StringComparer.Ordinal)
+                .ThenBy(declaration => declaration.File, WorkspaceFilePath.Order)
                 .Take(MaximumCandidates)
-                .Select(declaration => declaration.ToItem(paths)),
+                .Select(declaration => declaration.ToItem()),
         ];
 
     private readonly record struct DeclaredSymbol(

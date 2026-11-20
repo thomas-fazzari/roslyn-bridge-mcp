@@ -5,51 +5,56 @@ namespace RoslynBridge.Lsp.Protocol;
 
 internal static class LspSymbolKinds
 {
-    internal const int Namespace = 3;
-    internal const int Method = 6;
-    internal const int Constructor = 9;
-    internal const int Class = 5;
-    private const int Enum = 10;
-    private const int Interface = 11;
-    private const int Function = 12;
-    private const int Struct = 23;
-    private const int Operator = 25;
-
-    private static readonly FrozenDictionary<int, string> _names = new Dictionary<int, string>
+    private static readonly FrozenDictionary<LspSymbolKind, string> _names = new Dictionary<
+        LspSymbolKind,
+        string
+    >
     {
-        [1] = "file",
-        [2] = "module",
-        [Namespace] = "namespace",
-        [4] = "package",
-        [Class] = "class",
-        [Method] = "method",
-        [7] = "property",
-        [8] = "field",
-        [Constructor] = "constructor",
-        [Enum] = "enum",
-        [Interface] = "interface",
-        [Function] = "function",
-        [13] = "variable",
-        [14] = "constant",
-        [15] = "string",
-        [16] = "number",
-        [17] = "boolean",
-        [18] = "array",
-        [19] = "object",
-        [20] = "key",
-        [21] = "null",
-        [22] = "enum_member",
-        [Struct] = "struct",
-        [24] = "event",
-        [Operator] = "operator",
-        [26] = "type_parameter",
+        [LspSymbolKind.File] = "file",
+        [LspSymbolKind.Module] = "module",
+        [LspSymbolKind.Namespace] = "namespace",
+        [LspSymbolKind.Package] = "package",
+        [LspSymbolKind.Class] = "class",
+        [LspSymbolKind.Method] = "method",
+        [LspSymbolKind.Property] = "property",
+        [LspSymbolKind.Field] = "field",
+        [LspSymbolKind.Constructor] = "constructor",
+        [LspSymbolKind.Enum] = "enum",
+        [LspSymbolKind.Interface] = "interface",
+        [LspSymbolKind.Function] = "function",
+        [LspSymbolKind.Variable] = "variable",
+        [LspSymbolKind.Constant] = "constant",
+        [LspSymbolKind.String] = "string",
+        [LspSymbolKind.Number] = "number",
+        [LspSymbolKind.Boolean] = "boolean",
+        [LspSymbolKind.Array] = "array",
+        [LspSymbolKind.Object] = "object",
+        [LspSymbolKind.Key] = "key",
+        [LspSymbolKind.Null] = "null",
+        [LspSymbolKind.EnumMember] = "enum_member",
+        [LspSymbolKind.Struct] = "struct",
+        [LspSymbolKind.Event] = "event",
+        [LspSymbolKind.Operator] = "operator",
+        [LspSymbolKind.TypeParameter] = "type_parameter",
     }.ToFrozenDictionary();
 
-    public static bool TryGetName(int kind, [NotNullWhen(true)] out string? name) =>
+    /// <summary>
+    /// Fails for a kind outside the LSP SymbolKind values, which a server may still send.
+    /// </summary>
+    public static bool TryGetName(LspSymbolKind kind, [NotNullWhen(true)] out string? name) =>
         _names.TryGetValue(kind, out name);
 
-    public static bool IsInvocable(int? kind) =>
-        kind is Method or Constructor or Function or Operator;
+    public static bool IsInvocable(LspSymbolKind? kind) =>
+        kind
+            is LspSymbolKind.Method
+                or LspSymbolKind.Constructor
+                or LspSymbolKind.Function
+                or LspSymbolKind.Operator;
 
-    public static bool IsType(int? kind) => kind is Class or Enum or Interface or Struct;
+    public static bool IsType(LspSymbolKind kind) =>
+        kind
+            is LspSymbolKind.Class
+                or LspSymbolKind.Enum
+                or LspSymbolKind.Interface
+                or LspSymbolKind.Struct;
 }

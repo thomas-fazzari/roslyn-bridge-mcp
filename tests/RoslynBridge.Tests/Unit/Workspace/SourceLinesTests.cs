@@ -3,6 +3,7 @@
 
 using RoslynBridge.Features.Navigate;
 using RoslynBridge.Workspace;
+using static RoslynBridge.Tests.Unit.TestHelpers;
 
 namespace RoslynBridge.Tests.Unit.Workspace;
 
@@ -48,7 +49,7 @@ public sealed class SourceLinesTests : TempWorkspaceTests
             [
                 new SymbolItem("Target", "method")
                 {
-                    File = "Callee.cs",
+                    File = new LocationFile.Workspace(Resolved(Root, "Callee.cs")),
                     Position = new(1, 6),
                     Calls = [new(3, 5)],
                 },
@@ -57,10 +58,7 @@ public sealed class SourceLinesTests : TempWorkspaceTests
             NextOffset: null
         );
 
-        var result = symbols.WithSourceLines(
-            new WorkspacePaths(Root),
-            Path.Combine(Root, "Caller.cs")
-        );
+        var result = symbols.WithSourceLines(Resolved(Root, "Caller.cs"));
 
         result
             .Items[0]
@@ -78,15 +76,9 @@ public sealed class SourceLinesTests : TempWorkspaceTests
         lines![1].Should().HaveLength(SourceLines.MaximumLineCharacters + 1).And.EndWith("…");
     }
 
-    [Fact]
-    public void SkipsLocationsOutsideTheWorkspace() =>
-        Lines("roslyn-source-generated://assembly/Generated.cs", new SourcePosition(1, 1))
-            .Should()
-            .BeNull();
-
     private void Write(string file, string text) =>
         File.WriteAllText(Path.Combine(Root, file), text);
 
     private Dictionary<int, string>? Lines(string file, params SourcePosition[] positions) =>
-        new SourceLines().At(new WorkspacePaths(Root).ResultFilePath(file), positions);
+        new SourceLines().At(Resolved(Root, file), positions);
 }

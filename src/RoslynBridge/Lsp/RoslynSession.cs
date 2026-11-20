@@ -145,17 +145,17 @@ internal sealed partial class RoslynSession(
         CancellationToken cancellationToken
     ) => Connection.RequestAsync(method, parameters, cancellationToken);
 
-    public Task<Dictionary<string, int>> CopyDocumentVersionsAsync(
+    public Task<Dictionary<WorkspaceFilePath, int>> CopyDocumentVersionsAsync(
         CancellationToken cancellationToken
     ) => Connection.CopyDocumentVersionsAsync(cancellationToken);
 
     public Task<Result<string>> OpenDocumentAsync(
-        string file,
+        WorkspaceFilePath file,
         CancellationToken cancellationToken
     ) => Connection.OpenDocumentAsync(file, cancellationToken);
 
     public Task<Result<List<string>>> OpenDocumentsAsync(
-        IReadOnlyCollection<string> files,
+        IReadOnlyCollection<WorkspaceFilePath> files,
         CancellationToken cancellationToken
     ) => Connection.OpenDocumentsAsync(files, cancellationToken);
 
@@ -163,21 +163,22 @@ internal sealed partial class RoslynSession(
         Connection.SynchronizeAsync(cancellationToken);
 
     public Task<Result> SynchronizeFilesAsync(
-        IEnumerable<string> files,
+        IEnumerable<WorkspaceFilePath> files,
         CancellationToken cancellationToken
     ) => Connection.SynchronizeFilesAsync(files, cancellationToken);
 
     public Task<Result> SynchronizeNewFilesAsync(
-        IEnumerable<string> files,
+        IEnumerable<WorkspaceFilePath> files,
         CancellationToken cancellationToken
     ) => Connection.SynchronizeNewFilesAsync(files, cancellationToken);
 
-    public Task<Result<Dictionary<string, FileStamp>>> SynchronizeWorkspaceAsync(
+    public Task<Result<Dictionary<WorkspaceFilePath, FileStamp>>> SynchronizeWorkspaceAsync(
         CancellationToken cancellationToken
     ) => Connection.SynchronizeWorkspaceAsync(cancellationToken);
 
-    public Task<Result<string[]>> WorkspaceFilesAsync(CancellationToken cancellationToken) =>
-        Connection.WorkspaceFilesAsync(cancellationToken);
+    public Task<Result<WorkspaceFilePath[]>> WorkspaceFilesAsync(
+        CancellationToken cancellationToken
+    ) => Connection.WorkspaceFilesAsync(cancellationToken);
 
     public Task<Result<LspDiagnosticReport>> DiagnosticReportAsync(
         string uri,
@@ -189,8 +190,8 @@ internal sealed partial class RoslynSession(
         CancellationToken cancellationToken
     ) => Connection.ProjectContextsAsync(uri, cancellationToken);
 
-    public Task<Result<HashSet<string>>> WaitForProjectsAsync(
-        IReadOnlyCollection<string> files,
+    public Task<Result<HashSet<WorkspaceFilePath>>> WaitForProjectsAsync(
+        IReadOnlyCollection<WorkspaceFilePath> files,
         CancellationToken cancellationToken
     ) => Connection.WaitForProjectsAsync(files, cancellationToken);
 
@@ -214,7 +215,7 @@ internal sealed partial class RoslynSession(
     ) => Connection.ExecuteCommandAsync(command, onEdit, cancellationToken);
 
     public Task<Result<UnusedReport>> FindUnusedAsync(
-        IReadOnlyCollection<string> files,
+        IReadOnlyCollection<WorkspaceFilePath> files,
         CancellationToken cancellationToken
     ) => Connection.FindUnusedAsync(files, cancellationToken);
 

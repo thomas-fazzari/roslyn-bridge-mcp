@@ -36,12 +36,12 @@ public sealed class LspResultsExtensionsTests
         result.Total.Should().Be(3);
         result.NextOffset.Should().BeNull();
         result.Files.Should().HaveCount(2);
-        result.Files[0].File.Should().Be("First.cs");
+        result.Files[0].File.Text.Should().Be("First.cs");
         result
             .Files[0]
             .Positions.Should()
             .Equal(new SourcePosition(1, 5), new SourcePosition(21, 9));
-        result.Files[1].File.Should().Be("Second.cs");
+        result.Files[1].File.Text.Should().Be("Second.cs");
         result.Files[1].Positions.Should().Equal(new SourcePosition(11, 3));
         locations.Should().HaveCount(4);
         locations[0]!["range"].Should().NotBeNull();
@@ -105,7 +105,11 @@ public sealed class LspResultsExtensionsTests
             .ToLocations(_paths, Paging.Default, skipGenerated: false)
             .Succeeded();
 
-        result.Files.Should().ContainSingle().Which.File.Should().Be(value);
+        result
+            .Files.Should()
+            .ContainSingle()
+            .Which.File.Should()
+            .Be(new LocationFile.External(value));
     }
 
     [Fact]
@@ -300,7 +304,9 @@ public sealed class LspResultsExtensionsTests
                 new SymbolItem("Greeter", "class")
                 {
                     Container = "Application",
-                    File = "Application/Greeter.cs",
+                    File = new LocationFile.Workspace(
+                        TestHelpers.Resolved(_paths.Root, "Application/Greeter.cs")
+                    ),
                     Position = new(6, 22),
                 },
             ]);
@@ -327,7 +333,7 @@ public sealed class LspResultsExtensionsTests
         var result = ReadCalls(calls).ToRelatedSymbols(Paging.Default);
 
         var item = result.Items.Should().ContainSingle().Which;
-        item.File.Should().Be("Consumer.cs");
+        item.File!.Text.Should().Be("Consumer.cs");
         item.Position.Should().Be(new SourcePosition(7, 26));
         item.Calls.Should().Equal(new SourcePosition(7, 59), new SourcePosition(8, 3));
     }
@@ -344,10 +350,10 @@ public sealed class LspResultsExtensionsTests
         var all = ReadCalls(calls).ToRelatedSymbols(Paging.Default);
         var page = ReadCalls(calls).ToRelatedSymbols(new Paging(1, 1));
 
-        all.Items.Select(item => (item.File, item.Position!.Value.Line))
+        all.Items.Select(item => (item.File!.Text, item.Position!.Value.Line))
             .Should()
             .Equal(("Another.cs", 21), ("Consumer.cs", 3), ("Consumer.cs", 10));
-        page.Items.Should().ContainSingle().Which.File.Should().Be("Consumer.cs");
+        page.Items.Should().ContainSingle().Which.File!.Text.Should().Be("Consumer.cs");
         page.Items[0].Position!.Value.Line.Should().Be(3);
         page.NextOffset.Should().Be(2);
     }

@@ -19,30 +19,29 @@ internal sealed partial class RoslynConnection
     // Held for document state and its notifications, never across a Roslyn request or wait
     private readonly SemaphoreSlim _documentLock = new(1, 1);
 
-    private readonly Dictionary<string, OpenDocument> _documents = [with(StringComparer.Ordinal)];
-    private readonly LinkedList<string> _openedOrder = [];
-    private readonly ConcurrentDictionary<string, byte> _pendingFiles = new(StringComparer.Ordinal);
-    private readonly ConcurrentDictionary<string, byte> _createdFiles = new(StringComparer.Ordinal);
-    private Dictionary<string, FileStamp> _workspaceFiles = [with(StringComparer.Ordinal)];
+    private readonly Dictionary<WorkspaceFilePath, OpenDocument> _documents = [];
+    private readonly LinkedList<WorkspaceFilePath> _openedOrder = [];
+    private readonly ConcurrentDictionary<WorkspaceFilePath, byte> _pendingFiles = new();
+    private readonly ConcurrentDictionary<WorkspaceFilePath, byte> _createdFiles = new();
+    private Dictionary<WorkspaceFilePath, FileStamp> _workspaceFiles = [];
 
     private FileSystemWatcher? _watcher;
     private int _scanRequested;
 
-    public async Task<Dictionary<string, int>> CopyDocumentVersionsAsync(
+    public async Task<Dictionary<WorkspaceFilePath, int>> CopyDocumentVersionsAsync(
         CancellationToken cancellationToken
     )
     {
         using var held = await LockDocumentsAsync(cancellationToken);
         return _documents.ToDictionary(
             document => document.Key,
-            document => document.Value.Version,
-            StringComparer.Ordinal
+            document => document.Value.Version
         );
     }
 
     /// <returns>The document URI.</returns>
     public async Task<Result<string>> OpenDocumentAsync(
-        string file,
+        WorkspaceFilePath file,
         CancellationToken cancellationToken
     )
     {
@@ -54,7 +53,7 @@ internal sealed partial class RoslynConnection
     /// Opens the documents one at a time, so their versions stay in order.
     /// </summary>
     public async Task<Result<List<string>>> OpenDocumentsAsync(
-        IReadOnlyCollection<string> files,
+        IReadOnlyCollection<WorkspaceFilePath> files,
         CancellationToken cancellationToken
     )
     {
@@ -89,7 +88,7 @@ internal sealed partial class RoslynConnection
     /// Sends files the bridge changed without waiting for the file watcher.
     /// </summary>
     public Task<Result> SynchronizeFilesAsync(
-        IEnumerable<string> files,
+        IEnumerable<WorkspaceFilePath> files,
         CancellationToken cancellationToken
     )
     {
@@ -106,11 +105,11 @@ internal sealed partial class RoslynConnection
     /// Without the creation notice, Roslyn keeps a new file outside its project.
     /// </summary>
     public async Task<Result> SynchronizeNewFilesAsync(
-        IEnumerable<string> files,
+        IEnumerable<WorkspaceFilePath> files,
         CancellationToken cancellationToken
     )
     {
-        List<string> unknown;
+        List<WorkspaceFilePath> unknown;
         using (await LockDocumentsAsync(cancellationToken))
         {
             unknown = [.. files.Where(file => !_workspaceFiles.ContainsKey(file))];
@@ -122,7 +121,7 @@ internal sealed partial class RoslynConnection
     /// <summary>
     /// Sends every difference from what Roslyn last received. Returns the stamps Roslyn now has.
     /// </summary>
-    public async Task<Result<Dictionary<string, FileStamp>>> SynchronizeWorkspaceAsync(
+    public async Task<Result<Dictionary<WorkspaceFilePath, FileStamp>>> SynchronizeWorkspaceAsync(
         CancellationToken cancellationToken
     )
     {
@@ -131,10 +130,12 @@ internal sealed partial class RoslynConnection
             return error;
 
         using var held = await LockDocumentsAsync(cancellationToken);
-        return new Dictionary<string, FileStamp>(_workspaceFiles, StringComparer.Ordinal);
+        return new Dictionary<WorkspaceFilePath, FileStamp>(_workspaceFiles);
     }
 
-    public async Task<Result<string[]>> WorkspaceFilesAsync(CancellationToken cancellationToken)
+    public async Task<Result<WorkspaceFilePath[]>> WorkspaceFilesAsync(
+        CancellationToken cancellationToken
+    )
     {
         if (await SynchronizeAsync(cancellationToken) is ToolError error)
             return error;
@@ -144,24 +145,20 @@ internal sealed partial class RoslynConnection
     }
 
     private async Task<Result<string>> OpenDocumentCoreAsync(
-        string file,
+        WorkspaceFilePath path,
         CancellationToken cancellationToken
     )
     {
-        if (paths.Resolve(file).IsError(out var pathError, out var path))
-            return pathError;
+        if (paths.Recheck(path) is ToolError linkError)
+            return linkError;
 
         if (!WorkspacePaths.IsCSharpFile(path))
-        {
-            return ToolError.InvalidRequest(
-                $"Only C# files can be opened: {paths.RelativePath(path)}"
-            );
-        }
+            return ToolError.InvalidRequest($"Only C# files can be opened: {path.RelativePath}");
 
         if (FileStamp.Read(path) is not { } stamp)
-            return ToolError.InvalidRequest($"The file does not exist: {paths.RelativePath(path)}");
+            return ToolError.InvalidRequest($"The file does not exist: {path.RelativePath}");
 
-        var uri = new Uri(path).AbsoluteUri;
+        var uri = path.ToUri();
         if (_documents.TryGetValue(path, out var open))
         {
             // Least recently used documents close first, so callers can keep a batch open
@@ -226,14 +223,14 @@ internal sealed partial class RoslynConnection
     }
 
     private static async Task<Result<string>> ReadDocumentAsync(
-        string path,
+        WorkspaceFilePath path,
         CancellationToken cancellationToken
     )
     {
         try
         {
             await using var stream = new FileStream(
-                path,
+                path.FullPath,
                 new FileStreamOptions
                 {
                     Access = FileAccess.Read,
@@ -268,7 +265,7 @@ internal sealed partial class RoslynConnection
     }
 
     private async Task<Result> SynchronizeDocumentAsync(
-        string path,
+        WorkspaceFilePath path,
         CancellationToken cancellationToken
     )
     {
@@ -290,7 +287,7 @@ internal sealed partial class RoslynConnection
                 return readError;
 
             // Roslyn reads the file from disk once the document closes
-            LogOversizedDocument(logger, path);
+            LogOversizedDocument(logger, path.FullPath);
             return await CloseDocumentAsync(path, cancellationToken);
         }
 
@@ -305,11 +302,7 @@ internal sealed partial class RoslynConnection
             LspMethods.TextDocumentDidChange,
             new JsonObject
             {
-                ["textDocument"] = new JsonObject
-                {
-                    ["uri"] = new Uri(path).AbsoluteUri,
-                    ["version"] = version,
-                },
+                ["textDocument"] = new JsonObject { ["uri"] = path.ToUri(), ["version"] = version },
                 // A change without a range replaces the whole document
                 ["contentChanges"] = new JsonArray(new JsonObject { ["text"] = text }),
             },
@@ -321,9 +314,8 @@ internal sealed partial class RoslynConnection
         return changed;
     }
 
-    // The path comes from the workspace walk or the watcher. Opening it runs the symlink check
     private async Task<Result> SynchronizeClosedDocumentAsync(
-        string path,
+        WorkspaceFilePath path,
         CancellationToken cancellationToken
     )
     {
@@ -336,21 +328,21 @@ internal sealed partial class RoslynConnection
             if (!IsOversized(error))
                 return error;
 
-            LogOversizedDocument(logger, path);
+            LogOversizedDocument(logger, path.FullPath);
             return Result.Success;
         }
 
         return await CloseDocumentAsync(path, cancellationToken);
     }
 
-    private async Task<Result> CloseDocumentAsync(string path, CancellationToken cancellationToken)
+    private async Task<Result> CloseDocumentAsync(
+        WorkspaceFilePath path,
+        CancellationToken cancellationToken
+    )
     {
         var closed = await NotifyAsync(
             LspMethods.TextDocumentDidClose,
-            new JsonObject
-            {
-                ["textDocument"] = new JsonObject { ["uri"] = new Uri(path).AbsoluteUri },
-            },
+            new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = path.ToUri() } },
             cancellationToken
         );
         if (closed is not ToolError && _documents.Remove(path, out var document))
@@ -361,18 +353,16 @@ internal sealed partial class RoslynConnection
 
     private static bool IsOversized(ToolError error) => ReferenceEquals(error, _oversizedDocument);
 
-    private Result<Dictionary<string, FileStamp>> ScanWorkspace(
+    private Result<Dictionary<WorkspaceFilePath, FileStamp>> ScanWorkspace(
         CancellationToken cancellationToken
     ) =>
         paths
             .EnumerateWatchedFiles(cancellationToken)
-            .Map(found =>
-                found.ToDictionary(file => file.Path, file => file.Stamp, StringComparer.Ordinal)
-            );
+            .Map(found => found.ToDictionary(file => file.Path, file => file.Stamp));
 
     private Task<Result> NotifyFileChangesAsync(
-        Dictionary<string, FileStamp> current,
-        HashSet<string> changedPaths,
+        Dictionary<WorkspaceFilePath, FileStamp> current,
+        HashSet<WorkspaceFilePath> changedPaths,
         CancellationToken cancellationToken
     )
     {
@@ -406,7 +396,7 @@ internal sealed partial class RoslynConnection
     private sealed record OpenDocument(
         string Text,
         int Version,
-        LinkedListNode<string> Node,
+        LinkedListNode<WorkspaceFilePath> Node,
         FileStamp Stamp
     );
 

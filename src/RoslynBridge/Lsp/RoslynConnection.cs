@@ -309,28 +309,25 @@ internal sealed partial class RoslynConnection(
         {
             return await NotifyAsync(
                 LspMethods.SolutionOpen,
-                new JsonObject { ["solution"] = new Uri(solution).AbsoluteUri },
+                new JsonObject { ["solution"] = WorkspacePaths.FileUri(solution) },
                 cancellationToken
             );
         }
 
-        if (launched.Projects.Count > 0)
-        {
-            return await NotifyAsync(
+        return launched.Projects.Count > 0
+            ? await NotifyAsync(
                 LspMethods.ProjectOpen,
                 new JsonObject
                 {
                     ["projects"] = new JsonArray([
                         .. launched.Projects.Select(project =>
-                            (JsonNode)new Uri(project).AbsoluteUri
+                            (JsonNode)WorkspacePaths.FileUri(project)
                         ),
                     ]),
                 },
                 cancellationToken
-            );
-        }
-
-        return Result.Success;
+            )
+            : Result.Success;
     }
 
     private async Task DisposeProcessResourcesAsync()

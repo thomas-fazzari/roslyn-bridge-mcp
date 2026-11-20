@@ -45,13 +45,14 @@ internal sealed partial class WorkspaceEditService
         "Workspace files changed after Roslyn computed this edit. Request the action again."
     );
 
-    private static Dictionary<string, string> Fingerprints(List<EditedDocument> documents) =>
+    private static Dictionary<WorkspaceFilePath, string> Fingerprints(
+        List<EditedDocument> documents
+    ) =>
         documents
             .Where(document => document.Original is not null)
             .ToDictionary(
                 document => document.OriginalPath,
-                document => Convert.ToHexString(SHA256.HashData(document.Original!)),
-                StringComparer.Ordinal
+                document => Convert.ToHexString(SHA256.HashData(document.Original!))
             );
 
     /// <returns>A stale edit error when a touched file or a project file changed since the snapshot.</returns>
@@ -65,9 +66,9 @@ internal sealed partial class WorkspaceEditService
         var touched = documents.SelectMany(document =>
             document.CaseOnlyRename
                 ? [document.OriginalPath]
-                : (string[])[document.OriginalPath, document.Path]
+                : (WorkspaceFilePath[])[document.OriginalPath, document.Path]
         );
-        foreach (var path in touched.Distinct(StringComparer.Ordinal))
+        foreach (var path in touched.Distinct())
         {
             if (FileStamp.Read(path) != Expected(snapshot, path))
                 return _staleWorkspace;
@@ -86,18 +87,18 @@ internal sealed partial class WorkspaceEditService
         }
 
         var snapshotProjectFiles = snapshot
-            .Files.Keys.Where(path => IsProjectFile(path) && !paths.IsExcluded(path))
+            .Files.Keys.Where(file => IsProjectFile(file) && !paths.IsExcluded(file))
             .Take(projectFiles + 1)
             .Count();
         return projectFiles == snapshotProjectFiles ? Result.Success : _staleWorkspace;
     }
 
-    private static FileStamp? Expected(WorkspaceSnapshot snapshot, string path) =>
+    private static FileStamp? Expected(WorkspaceSnapshot snapshot, WorkspaceFilePath path) =>
         snapshot.Files.TryGetValue(path, out var stamp) ? stamp : null;
 
     /// <returns>Null content for a file that does not exist.</returns>
     private static async Task<Result<byte[]?>> ReadOriginalAsync(
-        string path,
+        WorkspaceFilePath path,
         WorkspaceSnapshot snapshot,
         CancellationToken cancellationToken
     )
@@ -108,7 +109,7 @@ internal sealed partial class WorkspaceEditService
             if (expected is null)
                 return (byte[]?)null;
 
-            return ToolError.StaleEdit($"The source file was deleted: {path}");
+            return ToolError.StaleEdit($"The source file was deleted: {path.FullPath}");
         }
 
         if (stamp != expected)
@@ -117,7 +118,7 @@ internal sealed partial class WorkspaceEditService
         if (stamp.Length > MaximumFileBytes)
         {
             return ToolError.InvalidRequest(
-                $"The source file exceeds {MaximumFileBytes / BytesPerMebibyte} MiB: {path}"
+                $"The source file exceeds {MaximumFileBytes / BytesPerMebibyte} MiB: {path.FullPath}"
             );
         }
 
@@ -126,7 +127,7 @@ internal sealed partial class WorkspaceEditService
         try
         {
             await using var stream = new FileStream(
-                path,
+                path.FullPath,
                 FileMode.Open,
                 FileAccess.Read,
                 FileShare.ReadWrite,
@@ -158,10 +159,10 @@ internal sealed partial class WorkspaceEditService
         return content;
     }
 
-    private static ToolError ChangedFile(string path) =>
-        ToolError.StaleEdit($"The source file changed after the request: {path}");
+    private static ToolError ChangedFile(WorkspaceFilePath path) =>
+        ToolError.StaleEdit($"The source file changed after the request: {path.FullPath}");
 
-    private Result<string> ResolveEditPath(string value)
+    private Result<WorkspaceFilePath> ResolveEditPath(string value)
     {
         if (
             !Uri.TryCreate(value, UriKind.Absolute, out var uri)
@@ -194,9 +195,9 @@ internal sealed partial class WorkspaceEditService
         return resolved;
     }
 
-    private static bool IsSourceFile(string path) =>
-        _sourceExtensions.Contains(Path.GetExtension(path));
+    private static bool IsSourceFile(WorkspaceFilePath file) =>
+        _sourceExtensions.Contains(Path.GetExtension(file.FullPath));
 
-    private static bool IsProjectFile(string path) =>
-        _projectExtensions.Contains(Path.GetExtension(path));
+    private static bool IsProjectFile(WorkspaceFilePath file) =>
+        _projectExtensions.Contains(Path.GetExtension(file.FullPath));
 }

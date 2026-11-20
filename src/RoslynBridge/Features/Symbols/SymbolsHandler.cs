@@ -30,7 +30,10 @@ internal sealed class SymbolsHandler(RoslynSession session, WorkspacePaths paths
                 .Map(found => SymbolList.From(found, paths, request.Page));
         }
 
-        var opened = await session.OpenDocumentAsync(request.File, cancellationToken);
+        if (paths.Resolve(request.File).IsError(out var pathError, out var file))
+            return pathError;
+
+        var opened = await session.OpenDocumentAsync(file, cancellationToken);
         return opened.IsError(out var openError, out var uri)
             ? openError
             : (await session.DocumentSymbolsAsync(uri, cancellationToken)).Map(symbols =>

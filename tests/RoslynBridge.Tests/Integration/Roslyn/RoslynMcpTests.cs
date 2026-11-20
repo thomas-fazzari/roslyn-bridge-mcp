@@ -94,8 +94,8 @@ public sealed partial class RoslynMcpTests
         var rawLocation = raw.AsArray().Should().ContainSingle().Which!;
         var rawUri = (rawLocation["uri"] ?? rawLocation["targetUri"])!.GetValue<string>();
         new WorkspacePaths(workspace.FilePath("."))
-            .TryGetWorkspaceFile(rawUri)
-            .Should()
+            .TryGetWorkspaceFile(rawUri)!
+            .FullPath.Should()
             .Be(Path.GetFullPath(workspace.FilePath(ContractTestFile)));
         var rawStart = (rawLocation["range"] ?? rawLocation["targetSelectionRange"])!["start"]!;
         rawStart["line"]!.GetValue<int>().Should().Be(target.Line - 1);

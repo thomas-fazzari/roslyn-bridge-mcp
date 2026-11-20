@@ -918,7 +918,7 @@ public sealed class LspToolTests : TempWorkspaceTests
         var constructor = WorkspaceSymbol(
             "Box",
             box,
-            LspSymbolKinds.Method,
+            (int)LspSymbolKind.Method,
             MethodLine,
             MethodCharacter
         );
@@ -1563,7 +1563,7 @@ public sealed class LspToolTests : TempWorkspaceTests
         ];
 
     private static JsonArray PreparedItem() =>
-        [new JsonObject { ["name"] = "A.Run()", ["kind"] = LspSymbolKinds.Method }];
+        [new JsonObject { ["name"] = "A.Run()", ["kind"] = (int)LspSymbolKind.Method }];
 
     private static JsonObject OutgoingCall(string name, string path, int line, int character) =>
         new()
@@ -1571,7 +1571,7 @@ public sealed class LspToolTests : TempWorkspaceTests
             ["to"] = new JsonObject
             {
                 ["name"] = name,
-                ["kind"] = LspSymbolKinds.Method,
+                ["kind"] = (int)LspSymbolKind.Method,
                 ["uri"] = new Uri(path).AbsoluteUri,
                 ["selectionRange"] = Range(line, character),
             },

@@ -32,7 +32,7 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
             ? staleError
             : documents
                 .Where(document => document.Changed)
-                .Select(document => document.Describe(paths))
+                .Select(document => document.Describe())
                 .All()
                 .Map(files => new EditPreview(
                     files,
@@ -83,7 +83,7 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
         if (planned.IsError(out var planError, out var documents))
             return planError;
 
-        var temporaryFiles = new Dictionary<string, string>(StringComparer.Ordinal);
+        var temporaryFiles = new Dictionary<WorkspaceFilePath, string>();
         var completedOperations = new List<FileOperation>();
         ApplyFailure? failure;
         (ToolError Error, string Path)? cleanupFailure;
@@ -138,7 +138,7 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
     private async Task<ApplyFailure?> ApplyMutationsAsync(
         List<EditedDocument> documents,
         WorkspaceSnapshot snapshot,
-        Dictionary<string, string> temporaryFiles,
+        Dictionary<WorkspaceFilePath, string> temporaryFiles,
         List<FileOperation> completedOperations,
         CancellationToken cancellationToken
     )
@@ -176,7 +176,7 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
 
     private Result ApplyDestinationWrites(
         List<EditedDocument> documents,
-        Dictionary<string, string> temporaryFiles,
+        Dictionary<WorkspaceFilePath, string> temporaryFiles,
         List<FileOperation> completedOperations,
         ref PendingMutation? pendingMutation
     )
@@ -189,16 +189,14 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
         {
             var destination = document.Path;
             var temporary = temporaryFiles[destination];
-            pendingMutation = new(paths.RelativePath(destination), DestinationOperation(document));
-            if (paths.Resolve(destination) is ToolError error)
+            pendingMutation = new(destination.RelativePath, DestinationOperation(document));
+            if (paths.Recheck(destination) is ToolError error)
                 return error;
 
-            File.Move(temporary, destination, overwrite: true);
+            File.Move(temporary, destination.FullPath, overwrite: true);
             completedOperations.Add(
                 new(
-                    paths.RelativePath(
-                        document.CaseOnlyRename ? document.OriginalPath : destination
-                    ),
+                    (document.CaseOnlyRename ? document.OriginalPath : destination).RelativePath,
                     DestinationOperation(document)
                 )
             );
@@ -207,7 +205,7 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
         return Result.Success;
     }
 
-    private void ApplyCaseOnlyRenames(
+    private static void ApplyCaseOnlyRenames(
         List<EditedDocument> documents,
         List<FileOperation> completedOperations,
         ref PendingMutation? pendingMutation
@@ -219,13 +217,13 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
             )
         )
         {
-            pendingMutation = new(paths.RelativePath(document.Path), FileChange.Rename);
-            File.Move(document.OriginalPath, document.Path, overwrite: true);
+            pendingMutation = new(document.Path.RelativePath, FileChange.Rename);
+            File.Move(document.OriginalPath.FullPath, document.Path.FullPath, overwrite: true);
             completedOperations.Add(
                 new(
-                    paths.RelativePath(document.Path),
+                    document.Path.RelativePath,
                     FileChange.Rename,
-                    paths.RelativePath(document.OriginalPath)
+                    document.OriginalPath.RelativePath
                 )
             );
         }
@@ -243,19 +241,19 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
             )
         )
         {
-            pendingMutation = new(paths.RelativePath(document.Path), FileChange.Delete);
-            if (paths.Resolve(document.Path) is ToolError error)
+            pendingMutation = new(document.Path.RelativePath, FileChange.Delete);
+            if (paths.Recheck(document.Path) is ToolError error)
                 return error;
 
-            File.Delete(document.Path);
-            completedOperations.Add(new(paths.RelativePath(document.Path), FileChange.Delete));
+            File.Delete(document.Path.FullPath);
+            completedOperations.Add(new(document.Path.RelativePath, FileChange.Delete));
         }
 
         return Result.Success;
     }
 
     private (ToolError Error, string Path)? CleanupTemporaryFiles(
-        Dictionary<string, string> temporaryFiles
+        Dictionary<WorkspaceFilePath, string> temporaryFiles
     )
     {
         (ToolError Error, string Path)? failure = null;
@@ -276,7 +274,7 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
 
     private async Task<Result> StageAsync(
         List<EditedDocument> documents,
-        Dictionary<string, string> temporaryFiles,
+        Dictionary<WorkspaceFilePath, string> temporaryFiles,
         CancellationToken cancellationToken
     )
     {
@@ -286,15 +284,15 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
             )
         )
         {
-            if (paths.Resolve(document.Path) is ToolError error)
+            if (paths.Recheck(document.Path) is ToolError error)
                 return error;
 
-            Directory.CreateDirectory(Path.GetDirectoryName(document.Path)!);
-            var temporary = $"{document.Path}.{Guid.NewGuid():N}.tmp";
+            Directory.CreateDirectory(Path.GetDirectoryName(document.Path.FullPath)!);
+            var temporary = $"{document.Path.FullPath}.{Guid.NewGuid():N}.tmp";
             temporaryFiles.Add(document.Path, temporary);
             await File.WriteAllBytesAsync(temporary, document.Content!, cancellationToken);
             if (!OperatingSystem.IsWindows() && document.ModeSource is { } modeSource)
-                File.SetUnixFileMode(temporary, File.GetUnixFileMode(modeSource));
+                File.SetUnixFileMode(temporary, File.GetUnixFileMode(modeSource.FullPath));
         }
 
         return Result.Success;
@@ -306,7 +304,7 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
         CancellationToken cancellationToken
     )
     {
-        var documents = new Dictionary<string, EditedDocument>(StringComparer.Ordinal);
+        var documents = new Dictionary<WorkspaceFilePath, EditedDocument>();
         foreach (var operation in edit.Operations)
         {
             if (
@@ -329,20 +327,18 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
             : documents.Values.ToList();
     }
 
-    private Result ValidateParents(Dictionary<string, EditedDocument> documents)
+    private Result ValidateParents(Dictionary<WorkspaceFilePath, EditedDocument> documents)
     {
+        var plannedFiles = documents
+            .Where(entry => entry.Value.Content is not null)
+            .Select(entry => entry.Key.FullPath)
+            .ToHashSet(StringComparer.Ordinal);
         foreach (var document in documents.Values.Where(document => document.Content is not null))
         {
-            var parent = Path.GetDirectoryName(document.Path);
+            var parent = Path.GetDirectoryName(document.Path.FullPath);
             while (parent is not null && !StringComparer.Ordinal.Equals(parent, paths.Root))
             {
-                if (
-                    File.Exists(parent)
-                    || (
-                        documents.TryGetValue(parent, out var planned)
-                        && planned.Content is not null
-                    )
-                )
+                if (File.Exists(parent) || plannedFiles.Contains(parent))
                 {
                     return ToolError.InvalidRequest(
                         $"A file blocks the target directory: {parent}"
@@ -358,7 +354,7 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
 
     private async Task<Result> PlanOperationAsync(
         DocumentOperation operation,
-        Dictionary<string, EditedDocument> documents,
+        Dictionary<WorkspaceFilePath, EditedDocument> documents,
         WorkspaceSnapshot snapshot,
         CancellationToken cancellationToken
     ) =>
@@ -392,7 +388,7 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
 
     private async Task<Result> PlanTextEditAsync(
         TextDocumentEdit operation,
-        Dictionary<string, EditedDocument> documents,
+        Dictionary<WorkspaceFilePath, EditedDocument> documents,
         WorkspaceSnapshot snapshot,
         CancellationToken cancellationToken
     )
@@ -407,13 +403,15 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
                 !snapshot.DocumentVersions.TryGetValue(document.OriginalPath, out var expected)
                 || version != expected
             )
-            ? ToolError.StaleEdit($"The document version is stale or unknown: {document.Path}")
+            ? ToolError.StaleEdit(
+                $"The document version is stale or unknown: {document.Path.FullPath}"
+            )
             : document.Apply(operation.Edits);
     }
 
     private async Task<Result> PlanCreateAsync(
         CreateFile operation,
-        Dictionary<string, EditedDocument> documents,
+        Dictionary<WorkspaceFilePath, EditedDocument> documents,
         WorkspaceSnapshot snapshot,
         CancellationToken cancellationToken
     )
@@ -426,7 +424,7 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
         {
             return operation.Options is { IgnoreIfExists: true }
                 ? Result.Success
-                : ToolError.InvalidRequest($"The file already exists: {document.Path}");
+                : ToolError.InvalidRequest($"The file already exists: {document.Path.FullPath}");
         }
 
         document.Content = [];
@@ -435,7 +433,7 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
 
     private async Task<Result> PlanRenameAsync(
         RenameFile operation,
-        Dictionary<string, EditedDocument> documents,
+        Dictionary<WorkspaceFilePath, EditedDocument> documents,
         WorkspaceSnapshot snapshot,
         CancellationToken cancellationToken
     )
@@ -450,7 +448,11 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
             return sourceError;
 
         if (source.Content is null)
-            return ToolError.InvalidRequest($"The file to rename does not exist: {source.Path}");
+        {
+            return ToolError.InvalidRequest(
+                $"The file to rename does not exist: {source.Path.FullPath}"
+            );
+        }
 
         if (ResolveEditPath(operation.NewUri).IsError(out var pathError, out var destinationPath))
             return pathError;
@@ -477,7 +479,9 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
         {
             return operation.Options is { IgnoreIfExists: true }
                 ? Result.Success
-                : ToolError.InvalidRequest($"The rename target already exists: {destination.Path}");
+                : ToolError.InvalidRequest(
+                    $"The rename target already exists: {destination.Path.FullPath}"
+                );
         }
 
         destination.Content = source.Content;
@@ -488,24 +492,21 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
 
     private static bool IsCaseOnlyAlias(
         EditedDocument source,
-        string destination,
+        WorkspaceFilePath destination,
         WorkspaceSnapshot snapshot
     ) =>
-        !StringComparer.Ordinal.Equals(source.Path, destination)
-        && StringComparer.OrdinalIgnoreCase.Equals(source.Path, destination)
+        source.Path != destination
+        && StringComparer.OrdinalIgnoreCase.Equals(source.Path.FullPath, destination.FullPath)
         && StringComparer.Ordinal.Equals(
-            Path.GetDirectoryName(source.Path),
-            Path.GetDirectoryName(destination)
+            Path.GetDirectoryName(source.Path.FullPath),
+            Path.GetDirectoryName(destination.FullPath)
         )
-        && File.Exists(destination)
-        && (
-            !snapshot.Files.ContainsKey(destination)
-            || StringComparer.Ordinal.Equals(source.OriginalPath, destination)
-        );
+        && File.Exists(destination.FullPath)
+        && (!snapshot.Files.ContainsKey(destination) || source.OriginalPath == destination);
 
     private async Task<Result> PlanDeleteAsync(
         DeleteFile operation,
-        Dictionary<string, EditedDocument> documents,
+        Dictionary<WorkspaceFilePath, EditedDocument> documents,
         WorkspaceSnapshot snapshot,
         CancellationToken cancellationToken
     )
@@ -515,7 +516,11 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
             return error;
 
         if (document.Content is null && operation.Options is not { IgnoreIfNotExists: true })
-            return ToolError.InvalidRequest($"The file to delete does not exist: {document.Path}");
+        {
+            return ToolError.InvalidRequest(
+                $"The file to delete does not exist: {document.Path.FullPath}"
+            );
+        }
 
         document.Content = null;
         return Result.Success;
@@ -523,7 +528,7 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
 
     private async Task<Result<EditedDocument>> GetDocumentAsync(
         string uri,
-        Dictionary<string, EditedDocument> documents,
+        Dictionary<WorkspaceFilePath, EditedDocument> documents,
         WorkspaceSnapshot snapshot,
         CancellationToken cancellationToken
     )
@@ -535,13 +540,15 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
             return document;
 
         document = documents.Values.FirstOrDefault(candidate =>
-            candidate.CaseOnlyRename && StringComparer.Ordinal.Equals(candidate.Path, path)
+            candidate.CaseOnlyRename && candidate.Path == path
         );
         if (document is not null)
             return document;
 
-        if (Directory.Exists(path))
-            return ToolError.InvalidRequest($"Workspace edits support files only: {path}");
+        if (Directory.Exists(path.FullPath))
+        {
+            return ToolError.InvalidRequest($"Workspace edits support files only: {path.FullPath}");
+        }
 
         var original = await ReadOriginalAsync(path, snapshot, cancellationToken);
         if (original.IsError(out var readError, out var content))
@@ -555,7 +562,9 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
     private static FileChange DestinationOperation(EditedDocument document) =>
         document.Original is null ? FileChange.Create : FileChange.Change;
 
-    private static Result CheckSize(Dictionary<string, EditedDocument>.ValueCollection documents)
+    private static Result CheckSize(
+        Dictionary<WorkspaceFilePath, EditedDocument>.ValueCollection documents
+    )
     {
         var total = documents.Sum(document =>
             (long)(document.Original?.Length ?? 0)
