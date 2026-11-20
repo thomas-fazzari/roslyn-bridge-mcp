@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Thomas Fazzari
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+using RoslynBridge.Workspace;
+
 namespace RoslynBridge.Features.Navigate;
 
 internal static class ByRefAccess
@@ -11,19 +13,12 @@ internal static class ByRefAccess
     /// <summary>
     /// Roslyn highlights every by-reference argument as a write. A <c>ref</c> argument reads and writes unless the call is a known reader or writer.
     /// </summary>
-    public static ByRefUse Of(string[]? lines, SourcePosition position)
+    public static ByRefUse Of(FileLines? lines, SourcePosition position)
     {
-        if (
-            lines is null
-            || position.Line < 1
-            || position.Line > lines.Length
-            || position.Character < 1
-        )
-        {
+        if (lines?.Contains(position.Line) is not true || position.Character < 1)
             return ByRefUse.None;
-        }
 
-        var line = lines[position.Line - 1];
+        var line = lines[position.Line];
         var before = WithoutQualifier(line[..Math.Min(position.Character - 1, line.Length)])
             .TrimEnd();
         if (EndsWithKeyword(before, "out"))

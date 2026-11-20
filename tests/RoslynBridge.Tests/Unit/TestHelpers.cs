@@ -44,9 +44,12 @@ internal static class TestHelpers
             new WorkspacePaths(root)
                 .EnumerateWatchedFiles(TestCt)
                 .Succeeded()
-                .ToDictionary(file => file.Path, file => file.Stamp, StringComparer.Ordinal),
-            new Dictionary<string, int>(StringComparer.Ordinal)
+                .ToDictionary(file => file.Path, file => file.Stamp),
+            new Dictionary<WorkspaceFilePath, int>()
         );
+
+    public static WorkspaceFilePath Resolved(string root, string file) =>
+        new WorkspacePaths(root).Resolve(file).Succeeded();
 
     // Null for a success, so an assertion on the code fails when no error came back
     public static string? ErrorCode<T>(this Result<T> result) =>

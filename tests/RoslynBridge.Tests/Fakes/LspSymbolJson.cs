@@ -7,7 +7,7 @@ namespace RoslynBridge.Tests.Fakes;
 
 internal static class LspSymbolJson
 {
-    public const int LspClassKind = 5;
+    public const int LspClassKind = (int)LspSymbolKind.Class;
     public const int MethodLine = 2;
     public const int MethodCharacter = 11;
 
@@ -46,7 +46,7 @@ internal static class LspSymbolJson
     public static JsonObject DocumentNamespace(string name, params JsonObject[] children)
     {
         var symbol = DocumentSymbol(name, children);
-        symbol["kind"] = LspSymbolKinds.Namespace;
+        symbol["kind"] = (int)LspSymbolKind.Namespace;
         return symbol;
     }
 
@@ -54,7 +54,7 @@ internal static class LspSymbolJson
         new()
         {
             ["name"] = name,
-            ["kind"] = LspSymbolKinds.Method,
+            ["kind"] = (int)LspSymbolKind.Method,
             ["range"] = new JsonObject
             {
                 ["start"] = new JsonObject { ["line"] = MethodLine, ["character"] = 4 },
@@ -72,7 +72,7 @@ internal static class LspSymbolJson
         };
 
     public static JsonObject MethodSymbol(string name, string path) =>
-        WorkspaceSymbol(name, path, LspSymbolKinds.Method, MethodLine, MethodCharacter);
+        WorkspaceSymbol(name, path, (int)LspSymbolKind.Method, MethodLine, MethodCharacter);
 
     public static JsonObject DocumentSymbol(
         string name,

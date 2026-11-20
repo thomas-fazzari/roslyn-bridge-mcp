@@ -33,12 +33,12 @@ internal sealed partial class NavigateHandler
             if (SourceLines.ReadLines(part.File).IsError(out var readError, out var lines))
                 return readError;
 
-            var last = Math.Min(part.LastLine, lines.Length);
+            var last = Math.Min(part.LastLine, lines.Count);
             var first = DocumentationStart(lines, part.FirstLine);
             var text = new StringBuilder();
             for (var line = first; line <= last; line++)
             {
-                text.Append(lines[line - 1]).Append('\n');
+                text.Append(lines[line]).Append('\n');
             }
 
             // A part shows whole or not at all, so the text never stops inside a member
@@ -49,7 +49,7 @@ internal sealed partial class NavigateHandler
             }
 
             remaining -= text.Length;
-            parts.Add(new SourcePart(part.ToItem(paths), first, last, text.ToString()));
+            parts.Add(new SourcePart(part.ToItem(), first, last, text.ToString()));
         }
 
         return new SourceParts(parts, omitted);
@@ -73,7 +73,7 @@ internal sealed partial class NavigateHandler
 
         List<SymbolItem> members =
         [
-            .. own.Select(member => member.ToItem(paths) with { Name = member.Signature }),
+            .. own.Select(member => member.ToItem() with { Name = member.Signature }),
         ];
         if (request.Inherited)
         {
@@ -85,7 +85,7 @@ internal sealed partial class NavigateHandler
         }
 
         return new TypeMembers(
-            found[0].ToItem(paths),
+            found[0].ToItem(),
             [.. request.Page.Slice(members)],
             members.Count,
             request.Page.NextOffset(members.Count)
@@ -124,7 +124,7 @@ internal sealed partial class NavigateHandler
             foreach (var member in found.Members.Where(member => redeclared.Add(MemberKey(member))))
             {
                 inherited.Add(
-                    member.ToItem(paths) with
+                    member.ToItem() with
                     {
                         Name = member.Signature,
                         Container = found.Name,
@@ -151,7 +151,7 @@ internal sealed partial class NavigateHandler
             return error;
 
         var baseClass = found.FirstOrDefault(supertype =>
-            supertype.Symbol.Kind == LspSymbolKinds.Class
+            supertype.Symbol.Kind == LspSymbolKind.Class
         );
         if (baseClass is null)
             return (BaseMembers?)null;
@@ -221,7 +221,7 @@ internal sealed partial class NavigateHandler
                 cancellationToken
             ),
             DeclarationLine line => await DeclarationAtAsync(line, cancellationToken),
-            SymbolAt => throw new UnreachableException(
+            SymbolAt or ResolvedAt => throw new UnreachableException(
                 "Source and members take a declaration line."
             ),
         };
@@ -253,12 +253,12 @@ internal sealed partial class NavigateHandler
         SymbolName.WithoutType(member.Signature);
 
     // Documentation comments are trivia, so the declaration range starts after them
-    private static int DocumentationStart(string[] lines, int firstLine)
+    private static int DocumentationStart(FileLines lines, int firstLine)
     {
         var line = firstLine;
         while (
             line > 1
-            && lines[line - 2].AsSpan().TrimStart().StartsWith("///", StringComparison.Ordinal)
+            && lines[line - 1].AsSpan().TrimStart().StartsWith("///", StringComparison.Ordinal)
         )
         {
             line--;

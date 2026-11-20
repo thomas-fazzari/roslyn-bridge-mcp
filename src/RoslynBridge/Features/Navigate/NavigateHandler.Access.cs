@@ -84,10 +84,10 @@ internal sealed partial class NavigateHandler
             Positions = [.. found.Locations.Positions.Where(accessed.Contains)],
         };
         var locations = matching.Page(request.Page) with { Access = request.Action };
-        return request.Context ? locations.WithSourceLines(paths) : locations;
+        return request.Context ? locations.WithSourceLines() : locations;
     }
 
-    private HashSet<SourceLocation> Accessed(
+    private static HashSet<SourceLocation> Accessed(
         IReadOnlyList<SourceLocation> references,
         HashSet<SourceLocation> written,
         bool writes
@@ -97,7 +97,7 @@ internal sealed partial class NavigateHandler
         return
         [
             .. references.Where(reference =>
-                paths.ResultFilePath(reference.File) is { } file
+                reference.File.WorkspaceFile is { } file
                 && Accesses(
                     writes,
                     written.Contains(reference)
@@ -115,8 +115,8 @@ internal sealed partial class NavigateHandler
     )
     {
         var firsts = references
-            .Where(reference => paths.ResultFilePath(reference.File) is not null)
-            .GroupBy(reference => reference.File, StringComparer.Ordinal)
+            .Where(reference => reference.File.WorkspaceFile is not null)
+            .GroupBy(reference => reference.File)
             .Select(group => group.First())
             .ToList();
         var results = await Concurrently.RunAsync(
@@ -141,7 +141,7 @@ internal sealed partial class NavigateHandler
         if (response.IsError(out var requestError, out var highlights))
             return requestError;
 
-        var lines = SourceLines.TryReadLines(paths.ResultFilePath(reference.File));
+        var lines = SourceLines.TryReadLines(reference.File.WorkspaceFile);
         var reads = StartsOf(highlights, ReadHighlight);
         var written = StartsOf(highlights, WriteHighlight);
         return reads

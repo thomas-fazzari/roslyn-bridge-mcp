@@ -54,10 +54,8 @@ public sealed class SessionLifecycleTests : TempWorkspaceTests
             Assert.Skip("Creating a symbolic link needs privileges on this platform.");
         }
 
-        // The watcher reports the link asynchronously, so send it directly
-        (await session.SynchronizeFilesAsync([link], TestCt)).ErrorCode().Should().BeNull();
-        (await session.SynchronizeAsync(TestCt)).ErrorCode().Should().BeNull();
+        var files = (await session.SynchronizeWorkspaceAsync(TestCt)).Succeeded();
 
-        (await session.CopyDocumentVersionsAsync(TestCt)).Should().NotContainKey(link);
+        files.Keys.Select(file => file.FullPath).Should().NotContain(link).And.Contain(target);
     }
 }

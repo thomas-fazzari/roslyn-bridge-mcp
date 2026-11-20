@@ -9,8 +9,11 @@ using RoslynBridge.Results;
 
 namespace RoslynBridge.Features.Server.Raw;
 
-internal sealed class RawRequestHandler(RoslynSession session, ChangeExecutor executor)
-    : IToolHandler<RawRequest, ToolResult>
+internal sealed class RawRequestHandler(
+    RoslynSession session,
+    WorkspacePaths paths,
+    ChangeExecutor executor
+) : IToolHandler<RawRequest, ToolResult>
 {
     public async Task<Result<ToolResult>> HandleAsync(
         RawRequest request,
@@ -49,7 +52,10 @@ internal sealed class RawRequestHandler(RoslynSession session, ChangeExecutor ex
             return Result.Success;
         }
 
-        var opened = await session.OpenDocumentAsync(documentUri, cancellationToken);
+        if (paths.Resolve(documentUri).IsError(out var pathError, out var file))
+            return pathError;
+
+        var opened = await session.OpenDocumentAsync(file, cancellationToken);
         return opened.IsError(out var error, out _) ? error : Result.Success;
     }
 }

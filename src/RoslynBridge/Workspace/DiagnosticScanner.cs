@@ -20,11 +20,11 @@ internal sealed record DiagnosticFilter(
         new(DiagnosticSeverity.Warning, Ids: null, Summary: false, Paging.Default);
 }
 
-internal sealed class DiagnosticScanner(RoslynSession session, WorkspacePaths paths)
+internal sealed class DiagnosticScanner(RoslynSession session)
 {
-    /// <param name="files">Full paths of C# files.</param>
+    /// <param name="files">C# files.</param>
     public async Task<Result<DiagnosticReport>> ScanAsync(
-        IReadOnlyCollection<string> files,
+        IReadOnlyCollection<WorkspaceFilePath> files,
         DiagnosticFilter filter,
         CancellationToken cancellationToken
     )
@@ -46,7 +46,7 @@ internal sealed class DiagnosticScanner(RoslynSession session, WorkspacePaths pa
     }
 
     private async Task<Result<List<ScannedFile>>> ScanBatchAsync(
-        string[] batch,
+        WorkspaceFilePath[] batch,
         CancellationToken cancellationToken
     )
     {
@@ -73,7 +73,7 @@ internal sealed class DiagnosticScanner(RoslynSession session, WorkspacePaths pa
             );
     }
 
-    private DiagnosticReport Report(List<ScannedFile> scanned, DiagnosticFilter filter)
+    private static DiagnosticReport Report(List<ScannedFile> scanned, DiagnosticFilter filter)
     {
         var page = filter.Page;
         var ids = filter.Ids is { Count: > 0 }
@@ -95,7 +95,7 @@ internal sealed class DiagnosticScanner(RoslynSession session, WorkspacePaths pa
             if (selected.Count == 0)
                 continue;
 
-            var relative = paths.RelativePath(file.Path);
+            var relative = file.Path.RelativePath;
             found.AddRange(
                 selected
                     .Select(diagnostic => diagnostic.ToDiagnostic())
@@ -123,11 +123,7 @@ internal sealed class DiagnosticScanner(RoslynSession session, WorkspacePaths pa
             found.Count,
             belowSeverity,
             page.NextOffset(filter.Summary ? codes.Count : found.Count),
-            [
-                .. scanned
-                    .Where(file => file.Miscellaneous)
-                    .Select(file => paths.RelativePath(file.Path)),
-            ],
+            [.. scanned.Where(file => file.Miscellaneous).Select(file => file.Path.RelativePath)],
             codes.Count,
             ids is not null
         );
@@ -146,7 +142,11 @@ internal sealed class DiagnosticScanner(RoslynSession session, WorkspacePaths pa
                 .ThenBy(summary => summary.Example.Code, StringComparer.Ordinal),
         ];
 
-    private sealed record ScannedFile(string Path, LspDiagnostic[] Reported, bool Miscellaneous);
+    private sealed record ScannedFile(
+        WorkspaceFilePath Path,
+        LspDiagnostic[] Reported,
+        bool Miscellaneous
+    );
 }
 
 internal static class LspDiagnosticExtensions

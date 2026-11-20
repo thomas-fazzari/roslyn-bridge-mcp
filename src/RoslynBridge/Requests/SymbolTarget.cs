@@ -27,7 +27,8 @@ internal closed record SymbolTarget
         {
             ({ } name, _, null, null) => new NamedSymbol(name, file),
             (null, { } path, int number and > 0, int column and > 0) => new SymbolAt(
-                new SourceLocation(path, new SourcePosition(number, column))
+                path,
+                new SourcePosition(number, column)
             ),
             (not null, _, _, _) => ToolError.InvalidRequest(
                 "Pass symbol with an optional file, or a file with a line and character."
@@ -60,15 +61,21 @@ internal closed record SymbolTarget
         this switch
         {
             NamedSymbol named => named with { File = resolve(named.File) },
-            SymbolAt at => new SymbolAt(at.Location with { File = resolve(at.Location.File) }),
+            SymbolAt at => at with { File = resolve(at.File) },
             DeclarationLine line => line with { File = resolve(line.File) },
+            ResolvedAt => this,
         };
 }
 
 /// <param name="File">Picks between declarations of the same name.</param>
 internal sealed record NamedSymbol(string Symbol, string? File) : SymbolTarget;
 
-internal sealed record SymbolAt(SourceLocation Location) : SymbolTarget;
+internal sealed record SymbolAt(string File, SourcePosition Position) : SymbolTarget;
+
+/// <summary>
+/// A location that the bridge already found, so it needs no lookup of its file.
+/// </summary>
+internal sealed record ResolvedAt(SourceLocation Location) : SymbolTarget;
 
 /// <summary>
 /// The declaration that contains <paramref name="Line"/>.

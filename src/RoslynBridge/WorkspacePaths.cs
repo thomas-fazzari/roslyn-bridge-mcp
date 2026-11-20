@@ -72,14 +72,19 @@ internal sealed class WorkspacePaths(string root)
         path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)
         || path.EndsWith(".csx", StringComparison.OrdinalIgnoreCase);
 
-    public static bool IsExistingCSharpFile(string path) => IsCSharpFile(path) && File.Exists(path);
+    public static bool IsCSharpFile(WorkspaceFilePath file) => IsCSharpFile(file.FullPath);
 
-    public string RootUri => new Uri(Root + Path.DirectorySeparatorChar).AbsoluteUri;
+    public static bool IsExistingCSharpFile(WorkspaceFilePath file) =>
+        IsCSharpFile(file) && File.Exists(file.FullPath);
+
+    public static string FileUri(string fullPath) => new Uri(fullPath).AbsoluteUri;
+
+    public string RootUri => FileUri(Root + Path.DirectorySeparatorChar);
 
     /// <summary>
-    /// Turns a workspace-relative path, a full path or a file URI from a client or from Roslyn into a full path.
+    /// Turns a workspace-relative path, a full path or a file URI from a client or from Roslyn into a workspace file.
     /// </summary>
-    public Result<string> Resolve(string file)
+    public Result<WorkspaceFilePath> Resolve(string file)
     {
         // Path APIs reject a null character with an ArgumentException, which would read as a bridge bug
         if (string.IsNullOrWhiteSpace(file) || file.Contains('\0', StringComparison.Ordinal))
@@ -109,16 +114,16 @@ internal sealed class WorkspacePaths(string root)
             }
         }
 
-        return fullPath;
+        return new WorkspaceFilePath(fullPath, RelativePath(fullPath));
     }
 
-    public Result<string> ToUri(string file) =>
-        Resolve(file).Map(path => new Uri(path).AbsoluteUri);
+    public Result<string> ToUri(string file) => Resolve(file).Map(path => path.ToUri());
 
     /// <summary>
-    /// For a path the bridge already resolved, such as one of an edit receipt.
+    /// Checks a file again before the bridge opens or writes it, as a symbolic link may have appeared since it was resolved.
     /// </summary>
-    public string FullPath(string relative) => Path.GetFullPath(relative, Root);
+    public Result Recheck(WorkspaceFilePath file) =>
+        Resolve(file.FullPath) is ToolError error ? error : Result.Success;
 
     /// <summary>
     /// Handles a Windows drive written as c%3A, which <see cref="Uri.LocalPath"/> leaves unusable.
@@ -138,20 +143,26 @@ internal sealed class WorkspacePaths(string root)
     /// <summary>
     /// Returns null for a location outside the workspace.
     /// </summary>
-    public string? TryGetWorkspaceFile(string uri)
+    public WorkspaceFilePath? TryGetWorkspaceFile(string uri)
     {
         if (!Uri.TryCreate(uri, UriKind.Absolute, out var location) || !location.IsFile)
             return null;
 
         var fullPath = Path.GetFullPath(LocalPath(location));
-        return IsOutside(Relative(fullPath)) ? null : fullPath;
+        return IsOutside(Relative(fullPath)) ? null : Known(fullPath);
     }
 
     /// <summary>
-    /// Returns null for an external or generated location, which keeps its URI.
+    /// Wraps a path without the checks of <see cref="Resolve"/>.
     /// </summary>
-    public string? ResultFilePath(string file) =>
-        file.Contains("://", StringComparison.Ordinal) ? null : Path.GetFullPath(file, Root);
+    /// <remarks>
+    /// For a path inside the workspace that the bridge or the file watcher produced, such as one of an edit receipt.
+    /// </remarks>
+    public WorkspaceFilePath Known(string path)
+    {
+        var fullPath = Path.GetFullPath(path, Root);
+        return new WorkspaceFilePath(fullPath, RelativePath(fullPath));
+    }
 
     public string RelativePath(string fullPath) =>
         Relative(fullPath).Replace(Path.DirectorySeparatorChar, '/');
@@ -159,7 +170,7 @@ internal sealed class WorkspacePaths(string root)
     /// <summary>
     /// Matches whole trailing path segments of <paramref name="name"/>, outside excluded directories.
     /// </summary>
-    public List<string> RelativePathsEndingWith(IEnumerable<string> files, string name)
+    public List<string> RelativePathsEndingWith(IEnumerable<WorkspaceFilePath> files, string name)
     {
         var suffix = name.Replace('\\', '/');
         var fileName = Path.GetFileName(suffix);
@@ -167,9 +178,9 @@ internal sealed class WorkspacePaths(string root)
         [
             .. files
                 .Where(file =>
-                    file.EndsWith(fileName, StringComparison.Ordinal) && !IsExcluded(file)
+                    file.FullPath.EndsWith(fileName, StringComparison.Ordinal) && !IsExcluded(file)
                 )
-                .Select(RelativePath)
+                .Select(file => file.RelativePath)
                 .Where(relative => EndsWithSegments(relative, suffix))
                 .Order(StringComparer.Ordinal),
         ];
@@ -198,9 +209,9 @@ internal sealed class WorkspacePaths(string root)
         string.Equals(name, IntermediateDirectoryName, StringComparison.Ordinal)
         || !IsExcludedDirectory(name);
 
-    public bool IsExcluded(string fullPath) => Components(fullPath).Any(IsExcludedDirectory);
+    public bool IsExcluded(WorkspaceFilePath file) => Components(file).Any(IsExcludedDirectory);
 
-    public bool IsWatched(string fullPath) => Components(fullPath).All(IsWatchedDirectory);
+    public bool IsWatched(WorkspaceFilePath file) => Components(file).All(IsWatchedDirectory);
 
     public Result<List<WorkspaceFile>> EnumerateFiles(CancellationToken cancellationToken) =>
         EnumerateFiles(name => !IsExcludedDirectory(name), cancellationToken);
@@ -210,7 +221,7 @@ internal sealed class WorkspacePaths(string root)
         try
         {
             return Files(name => !IsExcludedDirectory(name), ProjectSearchDepth)
-                .Any(file => _projectExtensions.Contains(Path.GetExtension(file.Path)));
+                .Any(file => _projectExtensions.Contains(Path.GetExtension(file.Path.FullPath)));
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
@@ -227,22 +238,24 @@ internal sealed class WorkspacePaths(string root)
 
     private string Relative(string fullPath) => Path.GetRelativePath(Root, fullPath);
 
-    private string[] Components(string fullPath) =>
-        Relative(fullPath).Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+    private static string[] Components(WorkspaceFilePath file) => file.RelativePath.Split('/');
 
-    // Symlinks and unreadable directories are skipped
+    // The walk skips symbolic links and unreadable directories, so its files need no link check
     private FileSystemEnumerable<WorkspaceFile> Files(
         Func<string, bool> includeDirectory,
         int maximumDepth = int.MaxValue
     ) =>
         new(
             Root,
-            static (ref entry) =>
-                new WorkspaceFile(
-                    entry.ToFullPath(),
+            (ref entry) =>
+            {
+                var fullPath = entry.ToFullPath();
+                return new WorkspaceFile(
+                    new WorkspaceFilePath(fullPath, RelativePath(fullPath)),
                     entry.Length,
                     entry.LastWriteTimeUtc.UtcDateTime
-                ),
+                );
+            },
             new EnumerationOptions
             {
                 RecurseSubdirectories = true,
@@ -286,7 +299,11 @@ internal sealed class WorkspacePaths(string root)
     }
 }
 
-internal readonly record struct WorkspaceFile(string Path, long Length, DateTime LastWriteTimeUtc)
+internal readonly record struct WorkspaceFile(
+    WorkspaceFilePath Path,
+    long Length,
+    DateTime LastWriteTimeUtc
+)
 {
     public FileStamp Stamp => new(Length, LastWriteTimeUtc);
 }
@@ -296,9 +313,9 @@ internal readonly record struct FileStamp(long Length, DateTime ModifiedUtc)
     /// <summary>
     /// Returns null for a missing file or a symlink, which the workspace scan skips.
     /// </summary>
-    public static FileStamp? Read(string path)
+    public static FileStamp? Read(WorkspaceFilePath path)
     {
-        var file = new FileInfo(path);
+        var file = new FileInfo(path.FullPath);
         return file.Exists && !file.Attributes.HasFlag(FileAttributes.ReparsePoint)
             ? new FileStamp(file.Length, file.LastWriteTimeUtc)
             : null;

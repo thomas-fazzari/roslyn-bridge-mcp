@@ -31,7 +31,7 @@ internal sealed class UnusedHandler(
         if (files.FirstOrDefault(file => !WorkspacePaths.IsExistingCSharpFile(file)) is { } missing)
         {
             return ToolError.InvalidRequest(
-                $"Not a C# file of the workspace: {paths.RelativePath(missing)}"
+                $"Not a C# file of the workspace: {missing.RelativePath}"
             );
         }
 

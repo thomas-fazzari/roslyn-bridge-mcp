@@ -9,19 +9,19 @@ namespace RoslynBridge;
 internal readonly record struct SourcePosition(int Line, int Character);
 
 /// <summary>
-/// A position in a file. The file is a full path, a workspace-relative path or a URI, as the producer says.
+/// A position in a workspace file or in an external or generated document.
 /// </summary>
-internal readonly record struct SourceLocation(string File, SourcePosition Position)
+internal readonly record struct SourceLocation(LocationFile File, SourcePosition Position)
 {
     /// <summary>
-    /// Orders by file with an ordinal comparison, then by line and character.
+    /// Orders by the file text with an ordinal comparison, then by line and character.
     /// </summary>
     public static IComparer<SourceLocation> Order { get; } =
         Comparer<SourceLocation>.Create(Compare);
 
     private static int Compare(SourceLocation first, SourceLocation second)
     {
-        var comparison = string.CompareOrdinal(first.File, second.File);
+        var comparison = string.CompareOrdinal(first.File.Text, second.File.Text);
         if (comparison != 0)
             return comparison;
 

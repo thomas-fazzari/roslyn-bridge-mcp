@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 using RoslynBridge.Editing;
+using static RoslynBridge.Tests.Unit.TestHelpers;
 
 namespace RoslynBridge.Tests.Unit.Editing;
 
@@ -19,12 +20,12 @@ public sealed class EditedDocumentTests
         var prefix = new string('a', EditedDocument.MaximumPreviewCharacters - 1);
         byte[] bytes = [.. encoding.GetPreamble(), .. encoding.GetBytes(prefix + "😀tail")];
         var replacement = new string('b', prefix.Length);
-        var document = new EditedDocument("Source.cs", bytes)
+        var document = new EditedDocument(Resolved(".", "Source.cs"), bytes)
         {
             Content = [.. encoding.GetPreamble(), .. encoding.GetBytes(replacement + "😀tail")],
         };
 
-        var result = document.Describe(new WorkspacePaths(".")).Succeeded();
+        var result = document.Describe().Succeeded();
 
         result.Changes[0].Before.Should().Be(prefix);
         result.Changes[0].After.Should().Be(replacement);
@@ -39,12 +40,8 @@ public sealed class EditedDocumentTests
             .. Encoding.UTF8.GetBytes(new string('a', EditedDocument.MaximumPreviewCharacters + 1)),
             0xFF,
         ];
-        var document = new EditedDocument("Source.cs", bytes);
+        var document = new EditedDocument(Resolved(".", "Source.cs"), bytes);
 
-        document
-            .Describe(new WorkspacePaths("."))
-            .ErrorCode()
-            .Should()
-            .Be(ErrorCodes.InvalidRequest);
+        document.Describe().ErrorCode().Should().Be(ErrorCodes.InvalidRequest);
     }
 }

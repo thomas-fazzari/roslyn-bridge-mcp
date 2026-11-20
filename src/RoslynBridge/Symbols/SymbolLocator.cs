@@ -46,11 +46,12 @@ internal sealed class SymbolLocator(
                     cancellationToken
                 )
             ).Map(found => found[0].Location),
-            SymbolAt at when lookup.ToDeclaration => await DeclarationOfAsync(
-                at.Location,
+            SymbolAt at => await LocateAtAsync(at, lookup, cancellationToken),
+            ResolvedAt resolved when lookup.ToDeclaration => await DeclarationOfAsync(
+                resolved.Location,
                 cancellationToken
             ),
-            SymbolAt at => at.Location,
+            ResolvedAt resolved => resolved.Location,
             DeclarationLine => throw new UnreachableException(
                 "Only source and members take a declaration line."
             ),
@@ -62,21 +63,21 @@ internal sealed class SymbolLocator(
     )
     {
         var (file, position) = location;
-        var opened = await session.OpenDocumentAsync(file, cancellationToken);
+        if (file.WorkspaceFile is not { } path)
+            return ToolError.InvalidRequest($"Only a workspace file has a position: {file.Text}");
+
+        var opened = await session.OpenDocumentAsync(path, cancellationToken);
         if (opened.IsError(out var openError, out var uri))
             return openError;
-
-        if (paths.Resolve(file).IsError(out var pathError, out var path))
-            return pathError;
 
         if (SourceLines.ReadLines(path).IsError(out var readError, out var lines))
             return readError;
 
-        return position.Line > lines.Length
+        return !lines.Contains(position.Line)
             ? ToolError.InvalidRequest(
                 string.Create(
                     CultureInfo.InvariantCulture,
-                    $"Line {position.Line} is past the end of {paths.RelativePath(path)}, which has {lines.Length} lines."
+                    $"Line {position.Line} is past the end of {path.RelativePath}, which has {lines.Count} lines."
                 )
             )
             : new DocumentPosition(uri, LspPosition.From(position));
@@ -104,7 +105,7 @@ internal sealed class SymbolLocator(
         var requested = position.OneBased;
         var message = string.Create(
             CultureInfo.InvariantCulture,
-            $"No symbol at {requested.Line}:{requested.Character} of {(file is null ? uri : paths.RelativePath(file))}."
+            $"No symbol at {requested.Line}:{requested.Character} of {(file is null ? uri : file.RelativePath)}."
         );
         var nearest = await NearestSymbolHintAsync(uri, file, position, cancellationToken);
         return nearest.IsError(out var hintError, out var hint)
@@ -112,10 +113,25 @@ internal sealed class SymbolLocator(
             : new ToolError(ErrorCodes.SymbolNotFound, message + hint);
     }
 
+    private async Task<Result<SourceLocation>> LocateAtAsync(
+        SymbolAt at,
+        SymbolLookup lookup,
+        CancellationToken cancellationToken
+    )
+    {
+        if (paths.Resolve(at.File).IsError(out var error, out var file))
+            return error;
+
+        var location = new SourceLocation(new LocationFile.Workspace(file), at.Position);
+        return lookup.ToDeclaration
+            ? await DeclarationOfAsync(location, cancellationToken)
+            : location;
+    }
+
     /// <summary>
     /// Roslyn prepares no call hierarchy at a member access such as <c>value.Method()</c>.
-    /// Returns the position itself without a single workspace declaration.
     /// </summary>
+    /// <returns>The single workspace declaration, or the position itself.</returns>
     private async Task<Result<SourceLocation>> DeclarationOfAsync(
         SourceLocation location,
         CancellationToken cancellationToken
@@ -133,13 +149,8 @@ internal sealed class SymbolLocator(
         if (found.IsError(out var invalid, out var locations))
             return invalid;
 
-        return
-            locations.Positions is [var declaration]
-            && paths.ResultFilePath(declaration.File) is { } declared
-            ? declaration with
-            {
-                File = declared,
-            }
+        return locations.Positions is [{ File: LocationFile.Workspace } declaration]
+            ? declaration
             : location;
     }
 
@@ -150,16 +161,17 @@ internal sealed class SymbolLocator(
 
     private async Task<Result<string>> NearestSymbolHintAsync(
         string uri,
-        string? file,
+        WorkspaceFilePath? file,
         LspPosition position,
         CancellationToken cancellationToken
     )
     {
         var lines = SourceLines.TryReadLines(file);
-        if (lines is null || position.Line >= lines.Length)
+        var oneBasedLine = position.OneBased.Line;
+        if (lines?.Contains(oneBasedLine) is not true)
             return NoNearestHint;
 
-        var line = lines[position.Line];
+        var line = lines[oneBasedLine];
         var candidates = Names(line)
             .OrderBy(name => Distance(name, position.Character))
             .Take(MaximumNearbyNames);

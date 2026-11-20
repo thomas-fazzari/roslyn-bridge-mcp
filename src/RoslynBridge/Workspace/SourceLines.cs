@@ -12,48 +12,50 @@ internal sealed class SourceLines
 {
     internal const int MaximumLineCharacters = 200;
 
-    private readonly Dictionary<string, string[]?> _files = [with(StringComparer.Ordinal)];
+    private readonly Dictionary<WorkspaceFilePath, FileLines?> _files = [];
 
     /// <summary>
     /// Returns null when the file is null or cannot be read.
     /// </summary>
-    public Dictionary<int, string>? At(string? file, IEnumerable<SourcePosition> positions) =>
+    public Dictionary<int, string>? At(
+        WorkspaceFilePath? file,
+        IEnumerable<SourcePosition> positions
+    ) =>
         Of(file) is not { } text
             ? null
             : positions
                 .Select(position => position.Line)
-                .Where(line => line >= 1 && line <= text.Length)
+                .Where(text.Contains)
                 .Distinct()
-                .ToDictionary(line => line, line => Trim(text[line - 1]));
+                .ToDictionary(line => line, line => Trim(text[line]));
 
     /// <summary>
     /// Returns null when the file cannot be read.
     /// </summary>
-    public static string[]? TryReadLines(string? file) =>
-        file is not null && ReadLines(file) is string[] lines ? lines : null;
+    public static FileLines? TryReadLines(WorkspaceFilePath? file) =>
+        file is not null && ReadLines(file) is FileLines lines ? lines : null;
 
-    public static Result<string[]> ReadLines(string file)
+    public static Result<FileLines> ReadLines(WorkspaceFilePath file)
     {
         string source;
         try
         {
-            source = File.ReadAllText(file);
+            source = File.ReadAllText(file.FullPath);
         }
         catch (Exception exception) when (ToolError.IsIo(exception))
         {
             return ToolError.Io(exception.Message);
         }
 
-        return TextEdits
-            .GetLines(source)
-            .Select(line => source.Substring(line.Start, line.Length))
-            .ToArray();
+        return new FileLines([
+            .. TextEdits.GetLines(source).Select(line => source.Substring(line.Start, line.Length)),
+        ]);
     }
 
     /// <summary>
     /// The untrimmed lines of the file, or null when the file is null or cannot be read.
     /// </summary>
-    public string[]? Of(string? file)
+    public FileLines? Of(WorkspaceFilePath? file)
     {
         if (file is null)
             return null;

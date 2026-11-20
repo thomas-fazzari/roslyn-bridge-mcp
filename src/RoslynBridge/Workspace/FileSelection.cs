@@ -13,7 +13,7 @@ internal sealed class FileSelection(WorkspacePaths paths)
     /// Selects the files of <paramref name="file"/>, or fails when they are more than <see cref="MaximumFiles"/>.
     /// </summary>
     /// <param name="tool">The tool named in the error, such as Diagnostics.</param>
-    public Result<string[]> SelectAtMost(
+    public Result<WorkspaceFilePath[]> SelectAtMost(
         string? file,
         string tool,
         CancellationToken cancellationToken
@@ -30,7 +30,10 @@ internal sealed class FileSelection(WorkspacePaths paths)
             : files;
     }
 
-    public Result<List<string>> SelectFiles(string? file, CancellationToken cancellationToken)
+    public Result<List<WorkspaceFilePath>> SelectFiles(
+        string? file,
+        CancellationToken cancellationToken
+    )
     {
         var patterns = file is null or "*" ? ["**/*.cs"] : ExpandBraces(file);
         if (patterns.TrueForAll(pattern => pattern.IndexOfAny(['*', '?']) < 0))
@@ -38,7 +41,7 @@ internal sealed class FileSelection(WorkspacePaths paths)
             return patterns
                 .Select(paths.Resolve)
                 .All()
-                .Map(resolved => resolved.Distinct(StringComparer.Ordinal).ToList());
+                .Map(resolved => resolved.Distinct().ToList());
         }
 
         var matcher = new Matcher(StringComparison.Ordinal);
@@ -46,13 +49,22 @@ internal sealed class FileSelection(WorkspacePaths paths)
         return paths
             .EnumerateFiles(cancellationToken)
             .Map(files =>
-                matcher
-                    .Match(paths.Root, files.Select(static file => file.Path))
-                    .Files.Select(match => Path.GetFullPath(match.Path, paths.Root))
+            {
+                var byFullPath = files.ToDictionary(
+                    file => file.Path.FullPath,
+                    file => file.Path,
+                    StringComparer.Ordinal
+                );
+                return matcher
+                    .Match(paths.Root, byFullPath.Keys)
+                    .Files.Select(match =>
+                        byFullPath.GetValueOrDefault(Path.GetFullPath(match.Path, paths.Root))
+                    )
+                    .OfType<WorkspaceFilePath>()
                     .Where(WorkspacePaths.IsCSharpFile)
-                    .Order(StringComparer.Ordinal)
-                    .ToList()
-            );
+                    .Order(WorkspaceFilePath.Order)
+                    .ToList();
+            });
     }
 
     // The matcher has no brace alternatives, so `src/{A,B}.cs` becomes one pattern per alternative

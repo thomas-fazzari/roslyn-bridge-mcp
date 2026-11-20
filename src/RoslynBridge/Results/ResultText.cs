@@ -200,7 +200,7 @@ internal static class ResultText
         if (position is not null && symbol.End is { } end)
             position += "-" + Position(end);
 
-        return (symbol.File, position) switch
+        return (symbol.File?.Text, position) switch
         {
             ({ } file, { } start) => $"{file}:{start}",
             ({ } file, null) => file,

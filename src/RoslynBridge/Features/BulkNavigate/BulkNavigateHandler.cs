@@ -66,7 +66,7 @@ internal sealed class BulkNavigateHandler(
 
         return locations[Key(request)].IsError(out var error, out var found)
             ? error
-            : (request with { Target = new SymbolAt(found) });
+            : (request with { Target = new ResolvedAt(found) });
     }
 
     private static (SymbolTarget Target, bool PrefersTypes) Key(NavigateRequest request) =>

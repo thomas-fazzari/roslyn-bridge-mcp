@@ -5,13 +5,13 @@ namespace RoslynBridge.Editing;
 
 [DebuggerDisplay("{Files.Count} files, {DocumentVersions.Count} open documents")]
 internal sealed record WorkspaceSnapshot(
-    IReadOnlyDictionary<string, FileStamp> Files,
-    IReadOnlyDictionary<string, int> DocumentVersions
+    IReadOnlyDictionary<WorkspaceFilePath, FileStamp> Files,
+    IReadOnlyDictionary<WorkspaceFilePath, int> DocumentVersions
 )
 {
     /// <summary>
     /// Content fingerprints of the files a preview read. Checked again on apply.
     /// </summary>
-    public IReadOnlyDictionary<string, string> Fingerprints { get; init; } =
-        FrozenDictionary<string, string>.Empty;
+    public IReadOnlyDictionary<WorkspaceFilePath, string> Fingerprints { get; init; } =
+        FrozenDictionary<WorkspaceFilePath, string>.Empty;
 }

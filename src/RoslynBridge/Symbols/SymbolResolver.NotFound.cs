@@ -201,7 +201,7 @@ internal sealed partial class SymbolResolver
         return nearest
             .Select(position => declarations.GetValueOrDefault(position))
             .OfType<SymbolDeclaration>()
-            .Select(declaration => declaration.ToItem(paths))
+            .Select(declaration => declaration.ToItem())
             .ToList();
     }
 
@@ -225,12 +225,20 @@ internal sealed partial class SymbolResolver
         SharedWords = 3,
     }
 
-    private readonly record struct WorkspaceMatch(string Name, SourceLocation Location, int? Kind)
+    private readonly record struct WorkspaceMatch(
+        string Name,
+        WorkspaceFilePath File,
+        SourcePosition Position,
+        LspSymbolKind Kind
+    )
     {
+        public SourceLocation Location => new(new LocationFile.Workspace(File), Position);
+
         public static WorkspaceMatch Of(SymbolDeclaration declaration) =>
             new(
                 SymbolName.BaseName(SymbolName.Parse(declaration.Name)!.Segments[^1]),
-                declaration.Location,
+                declaration.File,
+                declaration.Position,
                 declaration.Kind
             );
 
@@ -301,6 +309,10 @@ internal sealed partial class SymbolResolver
                 return comparison;
 
             comparison = string.CompareOrdinal(first.Match.Name, second.Match.Name);
+            if (comparison != 0)
+                return comparison;
+
+            comparison = WorkspaceFilePath.Order.Compare(first.Match.File, second.Match.File);
             return comparison != 0
                 ? comparison
                 : SourceLocation.Order.Compare(first.Match.Location, second.Match.Location);

@@ -81,7 +81,7 @@ internal closed record CodeActionScope
                 (_, null, _) or (_, _, null) => ToolError.InvalidRequest(
                     "Pass both endLine and endCharacter."
                 ),
-                (SymbolAt { Location.Position: var first } at, int last and > 0, int column and > 0)
+                (SymbolAt { Position: var first } at, int last and > 0, int column and > 0)
                     when (last, column).CompareTo((first.Line, first.Character)) >= 0 =>
                     new Selection(at, new SourcePosition(last, column)),
                 _ => ToolError.InvalidRequest("The selection end must follow its start."),

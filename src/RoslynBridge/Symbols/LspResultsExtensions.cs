@@ -53,7 +53,7 @@ internal static class LspResultsExtensions
                     continue;
                 }
 
-                found.Add(new SourceLocation(LocationFile(uri, paths), range.Start.OneBased));
+                found.Add(new SourceLocation(FileOf(uri, paths), range.Start.OneBased));
             }
 
             return new FoundLocations([.. found.Order(SourceLocation.Order)], generated);
@@ -94,7 +94,7 @@ internal static class LspResultsExtensions
             // Roslyn often repeats the name as the detail
             Detail = Distinct(symbol.Detail, symbol.Name),
             Container = ContainerName(Distinct(symbol.ContainerName, symbol.Name)),
-            File = uri is null ? null : LocationFile(uri, paths),
+            File = uri is null ? null : FileOf(uri, paths),
             Position = range?.Start.OneBased,
         };
     }
@@ -124,9 +124,10 @@ internal static class LspResultsExtensions
         return project < 0 ? container[3..] : container[3..project];
     }
 
-    // Workspace files use relative paths. External and generated locations keep their URI.
-    private static string LocationFile(string value, WorkspacePaths paths) =>
-        paths.TryGetWorkspaceFile(value) is { } file ? paths.RelativePath(file) : value;
+    private static LocationFile FileOf(string uri, WorkspacePaths paths) =>
+        paths.TryGetWorkspaceFile(uri) is { } file
+            ? new LocationFile.Workspace(file)
+            : new LocationFile.External(uri);
 }
 
 /// <param name="Positions">Distinct locations, in path and position order.</param>

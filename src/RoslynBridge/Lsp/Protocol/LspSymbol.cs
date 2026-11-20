@@ -6,7 +6,7 @@ namespace RoslynBridge.Lsp.Protocol;
 /// <param name="Glyph">A Roslyn extension that encodes the kind and accessibility of a document symbol.</param>
 internal sealed record LspSymbol(
     string Name,
-    int Kind,
+    LspSymbolKind Kind,
     string? Detail = null,
     string? ContainerName = null,
     string? Uri = null,

@@ -6,8 +6,10 @@ using RoslynBridge.Results;
 
 namespace RoslynBridge.Editing;
 
-[DebuggerDisplay("{Path}, {Content?.Length ?? 0} bytes, original {Original?.Length ?? 0} bytes")]
-internal sealed class EditedDocument(string path, byte[]? original)
+[DebuggerDisplay(
+    "{Path.RelativePath}, {Content?.Length ?? 0} bytes, original {Original?.Length ?? 0} bytes"
+)]
+internal sealed class EditedDocument(WorkspaceFilePath path, byte[]? original)
 {
     internal const int MaximumPreviewCharacters = 2_000;
 
@@ -36,18 +38,18 @@ internal sealed class EditedDocument(string path, byte[]? original)
         throwOnInvalidCharacters: true
     );
 
-    public string Path { get; set; } = path;
+    public WorkspaceFilePath Path { get; set; } = path;
 
-    public string OriginalPath { get; } = path;
+    public WorkspaceFilePath OriginalPath { get; } = path;
 
-    public bool CaseOnlyRename => !StringComparer.Ordinal.Equals(Path, OriginalPath);
+    public bool CaseOnlyRename => Path != OriginalPath;
 
     public byte[]? Original { get; } = original;
 
     /// <summary>
     /// The file whose Unix mode the written content keeps, or null for the default mode.
     /// </summary>
-    public string? ModeSource { get; set; } = original is null ? null : path;
+    public WorkspaceFilePath? ModeSource { get; set; } = original is null ? null : path;
 
     public byte[]? Content { get; set; } = original;
 
@@ -56,7 +58,7 @@ internal sealed class EditedDocument(string path, byte[]? original)
     public Result Apply(IReadOnlyList<TextEdit> edits)
     {
         if (Content is not { } content)
-            return ToolError.InvalidLspData($"The file does not exist: {Path}");
+            return ToolError.InvalidLspData($"The file does not exist: {Path.FullPath}");
 
         var (encoding, preamble) = GetEncoding(content);
         if (Decode(content).IsError(out var decodeError, out var source))
@@ -67,7 +69,11 @@ internal sealed class EditedDocument(string path, byte[]? original)
 
         var length = encoding.GetByteCount(edited);
         if (length + preamble > WorkspaceEditService.MaximumFileBytes)
-            return ToolError.InvalidRequest($"The edited file exceeds the size limit: {Path}");
+        {
+            return ToolError.InvalidRequest(
+                $"The edited file exceeds the size limit: {Path.FullPath}"
+            );
+        }
 
         var bytes = new byte[length + preamble];
         content.AsSpan(0, preamble).CopyTo(bytes);
@@ -76,7 +82,7 @@ internal sealed class EditedDocument(string path, byte[]? original)
         return Result.Success;
     }
 
-    public Result<FilePreview> Describe(WorkspacePaths paths)
+    public Result<FilePreview> Describe()
     {
         if (Decode(Original).IsError(out var beforeError, out var before))
             return beforeError;
@@ -94,9 +100,9 @@ internal sealed class EditedDocument(string path, byte[]? original)
         };
         return new FilePreview(
             new FileOperation(
-                paths.RelativePath(Path),
+                Path.RelativePath,
                 kind,
-                CaseOnlyRename ? paths.RelativePath(OriginalPath) : null
+                CaseOnlyRename ? OriginalPath.RelativePath : null
             ),
             preview.Changes,
             preview.Truncated
@@ -116,7 +122,7 @@ internal sealed class EditedDocument(string path, byte[]? original)
         catch (DecoderFallbackException)
         {
             return ToolError.InvalidRequest(
-                $"The file is not valid {encoding.WebName} text: {Path}"
+                $"The file is not valid {encoding.WebName} text: {Path.FullPath}"
             );
         }
     }

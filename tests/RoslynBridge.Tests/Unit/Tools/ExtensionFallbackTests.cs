@@ -110,7 +110,7 @@ public sealed class ExtensionFallbackTests : TempWorkspaceTests
                 }.ToJsonString(),
             },
             [LspMethods.TextDocumentPrepareCallHierarchy] = new JsonArray(
-                new JsonObject { ["name"] = CallerName, ["kind"] = LspSymbolKinds.Method }
+                new JsonObject { ["name"] = CallerName, ["kind"] = (int)LspSymbolKind.Method }
             ),
             [LspMethods.CallHierarchyIncomingCalls] = new JsonArray(IncomingCall(hierarchyCaller)),
         };
@@ -174,7 +174,7 @@ public sealed class ExtensionFallbackTests : TempWorkspaceTests
             ["from"] = new JsonObject
             {
                 ["name"] = CallerName,
-                ["kind"] = LspSymbolKinds.Method,
+                ["kind"] = (int)LspSymbolKind.Method,
                 ["uri"] = new Uri(path).AbsoluteUri,
                 ["selectionRange"] = Range(0, 6),
             },

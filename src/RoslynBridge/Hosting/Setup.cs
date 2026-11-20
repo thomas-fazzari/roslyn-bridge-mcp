@@ -244,11 +244,6 @@ internal static class Setup
     internal sealed record Agent(string Name, string Executable, string Template)
     {
         public string Registration(string bridgeCommand) =>
-            string.Format(
-                System.Globalization.CultureInfo.InvariantCulture,
-                Template,
-                McpServerName,
-                bridgeCommand
-            );
+            string.Format(CultureInfo.InvariantCulture, Template, McpServerName, bridgeCommand);
     }
 }

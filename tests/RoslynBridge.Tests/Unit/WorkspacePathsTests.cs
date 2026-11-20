@@ -27,7 +27,12 @@ public sealed class WorkspacePathsTests : TempWorkspaceTests
         );
         var paths = new WorkspacePaths(Root);
 
-        paths.EnumerateFiles(TestCt).Succeeded().Select(file => file.Path).Should().Equal(source);
+        paths
+            .EnumerateFiles(TestCt)
+            .Succeeded()
+            .Select(file => file.Path.FullPath)
+            .Should()
+            .Equal(source);
     }
 
     [Theory]
@@ -42,7 +47,12 @@ public sealed class WorkspacePathsTests : TempWorkspaceTests
         );
         var paths = new WorkspacePaths(Root);
 
-        paths.EnumerateFiles(TestCt).Succeeded().Select(file => file.Path).Should().Equal(source);
+        paths
+            .EnumerateFiles(TestCt)
+            .Succeeded()
+            .Select(file => file.Path.FullPath)
+            .Should()
+            .Equal(source);
         paths.IsWatchedDirectory(directory).Should().BeTrue();
     }
 
@@ -64,7 +74,7 @@ public sealed class WorkspacePathsTests : TempWorkspaceTests
             paths
                 .EnumerateFiles(TestCt)
                 .Succeeded()
-                .Select(file => file.Path)
+                .Select(file => file.Path.FullPath)
                 .Should()
                 .Equal(source);
         }
@@ -102,7 +112,7 @@ public sealed class WorkspacePathsTests : TempWorkspaceTests
         var file = Path.Combine(Root, "src", "Source.cs");
         var uri = $"file:///{char.ToLowerInvariant(file[0])}%3A{file[2..].Replace('\\', '/')}";
 
-        new WorkspacePaths(Root).TryGetWorkspaceFile(uri).Should().Be(file);
+        new WorkspacePaths(Root).TryGetWorkspaceFile(uri)!.FullPath.Should().Be(file);
     }
 
     [Fact]
@@ -163,13 +173,16 @@ public sealed class WorkspacePathsTests : TempWorkspaceTests
         var paths = new WorkspacePaths(Root);
 
         paths.Exclude([samples]);
-        var first = paths.EnumerateFiles(TestCt).Succeeded().ConvertAll(file => file.Path);
+        var first = paths.EnumerateFiles(TestCt).Succeeded().ConvertAll(file => file.Path.FullPath);
         paths.Exclude([vendor]);
-        var second = paths.EnumerateFiles(TestCt).Succeeded().ConvertAll(file => file.Path);
+        var second = paths
+            .EnumerateFiles(TestCt)
+            .Succeeded()
+            .ConvertAll(file => file.Path.FullPath);
 
         first.Should().BeEquivalentTo([kept, inVendor]);
         second.Should().BeEquivalentTo([kept, inSamples]);
-        paths.IsExcluded(inVendor).Should().BeTrue();
+        paths.IsExcluded(paths.Resolve(inVendor).Succeeded()).Should().BeTrue();
         paths.IsExcludedDirectory(WorkspacePaths.IntermediateDirectoryName).Should().BeTrue();
     }
 

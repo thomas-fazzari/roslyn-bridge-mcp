@@ -121,7 +121,10 @@ internal sealed class CodeActionsHandler(
         CancellationToken cancellationToken
     )
     {
-        var (code, file, line) = fixes;
+        var (code, name, line) = fixes;
+        if (paths.Resolve(name).IsError(out var pathError, out var file))
+            return pathError;
+
         var opened = await session.OpenDocumentAsync(file, cancellationToken);
         if (opened.IsError(out var openError, out var uri))
             return openError;
@@ -141,9 +144,9 @@ internal sealed class CodeActionsHandler(
             var place = line is { } wanted
                 ? string.Create(CultureInfo.InvariantCulture, $" on line {wanted}")
                 : string.Empty;
-            // The open accepted the file, so its URI is inside the workspace
-            var relative = paths.RelativePath(paths.TryGetWorkspaceFile(uri)!);
-            return ToolError.InvalidRequest($"{relative} has no {code} diagnostic{place}.");
+            return ToolError.InvalidRequest(
+                $"{file.RelativePath} has no {code} diagnostic{place}."
+            );
         }
 
         return new DocumentRange(uri, diagnostic.Range);

@@ -100,7 +100,7 @@ internal sealed partial class NavigateHandler(
             return await AccessAsync(request, found, cancellationToken);
 
         var references = found.Locations.Page(request.Page);
-        return request.Context ? references.WithSourceLines(paths) : references;
+        return request.Context ? references.WithSourceLines() : references;
     }
 
     private Result<ToolResult> DeclarationLocations(
@@ -119,7 +119,7 @@ internal sealed partial class NavigateHandler(
         ) switch
         {
             ToolError locationsError => locationsError,
-            Locations locations when request.Context => locations.WithSourceLines(paths),
+            Locations locations when request.Context => locations.WithSourceLines(),
             Locations locations => locations,
         };
     }
@@ -162,7 +162,7 @@ internal sealed partial class NavigateHandler(
         // Outgoing call sites are in the requested document, not in the callee's file
         var callSiteFile =
             request.Action is LspAction.Callees ? paths.TryGetWorkspaceFile(position.Uri) : null;
-        return result.WithSourceLines(paths, callSiteFile);
+        return result.WithSourceLines(callSiteFile);
     }
 
     private Task<Result<Hierarchy>> ExpandHierarchyAsync(
