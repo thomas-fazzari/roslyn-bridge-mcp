@@ -66,6 +66,44 @@ internal sealed record CallItem(
     [property: JsonPropertyName("selectionRange")] LspRange SelectionRange
 );
 
+/// <param name="Kind">An LSP SymbolKind.</param>
+/// <param name="Uri">Null, like the range, for a symbol without a declaration in a file, such as a metadata symbol.</param>
+/// <param name="SelectionRange">The name in its declaration.</param>
+internal sealed record ExpressionSymbol(
+    [property: JsonPropertyName("name")] string Name,
+    [property: JsonPropertyName("kind")] int Kind,
+    [property: JsonPropertyName("uri")] string? Uri,
+    [property: JsonPropertyName("selectionRange")] LspRange? SelectionRange
+);
+
+/// <param name="Found">False when the position has no expression and declares no name.</param>
+/// <param name="Text">The expression with its white space collapsed, or the declared name.</param>
+/// <param name="Kind">The syntax kind of the expression, or of the declaration.</param>
+/// <param name="Declaration">True when the position is on the name that a declaration introduces.</param>
+/// <param name="Type">The type of the expression, or the declared type. The return type for a method.</param>
+/// <param name="Nullability">The annotation and the flow state, such as NotAnnotated/NotNull.</param>
+/// <param name="Conversion">Null for an identity conversion.</param>
+/// <param name="Constant">Null when the expression is not a constant.</param>
+/// <param name="Symbol">The original definition of the bound symbol.</param>
+/// <param name="Instantiation">The constructed generic or reduced extension method that the code uses.</param>
+/// <param name="UnboundReason">The CandidateReason of an expression that binds to no symbol.</param>
+internal sealed record ExpressionResponse(
+    [property: JsonPropertyName("found")] bool Found,
+    [property: JsonPropertyName("text")] string Text,
+    [property: JsonPropertyName("kind")] string Kind,
+    [property: JsonPropertyName("declaration")] bool Declaration,
+    [property: JsonPropertyName("type")] string? Type = null,
+    [property: JsonPropertyName("convertedType")] string? ConvertedType = null,
+    [property: JsonPropertyName("nullability")] string? Nullability = null,
+    [property: JsonPropertyName("conversion")] string? Conversion = null,
+    [property: JsonPropertyName("constant")] string? Constant = null,
+    [property: JsonPropertyName("symbol")] ExpressionSymbol? Symbol = null,
+    [property: JsonPropertyName("instantiation")] string? Instantiation = null,
+    [property: JsonPropertyName("unboundReason")] string? UnboundReason = null,
+    [property: JsonPropertyName("candidates")] IReadOnlyList<ExpressionSymbol>? Candidates = null,
+    [property: JsonPropertyName("documentation")] string? Documentation = null
+);
+
 internal sealed record LspLocation(
     [property: JsonPropertyName("uri")] string Uri,
     [property: JsonPropertyName("range")] LspRange Range

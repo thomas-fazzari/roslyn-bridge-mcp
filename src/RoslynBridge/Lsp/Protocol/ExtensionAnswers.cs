@@ -67,6 +67,36 @@ internal sealed record ExtensionReferences(
     public static ExtensionReferences NotFound { get; } = new(false, [], [], 0);
 }
 
+/// <param name="Found">False when the position has no expression and declares no name. The caller has no fallback.</param>
+/// <param name="Text">The expression, or the declared name.</param>
+/// <param name="Kind">The syntax kind of the expression, or of the declaration.</param>
+/// <param name="Declaration">True when the position is on the name that a declaration introduces.</param>
+/// <param name="Nullability">The annotation and the flow state, such as NotAnnotated/NotNull.</param>
+/// <param name="Conversion">Absent for an identity conversion.</param>
+/// <param name="Constant">Absent when the expression is not a constant.</param>
+/// <param name="Symbol">The original definition of the bound symbol.</param>
+/// <param name="Instantiation">The constructed generic or reduced extension method that the code uses.</param>
+/// <param name="UnboundReason">The Roslyn CandidateReason of an expression that binds to no symbol.</param>
+internal sealed record ExtensionExpression(
+    [property: JsonRequired] bool Found,
+    [property: JsonRequired] string Text,
+    [property: JsonRequired] string Kind,
+    bool Declaration = false,
+    string? Type = null,
+    string? ConvertedType = null,
+    string? Nullability = null,
+    string? Conversion = null,
+    string? Constant = null,
+    LspSymbol? Symbol = null,
+    string? Instantiation = null,
+    string? UnboundReason = null,
+    LspSymbol[]? Candidates = null,
+    string? Documentation = null
+) : IExtensionAnswer<ExtensionExpression>
+{
+    public static ExtensionExpression NotFound { get; } = new(false, string.Empty, string.Empty);
+}
+
 /// <param name="Calls">LSP incoming calls, which may also name the member they go through.</param>
 internal sealed record ExtensionCallers(
     [property: JsonRequired] bool Found,

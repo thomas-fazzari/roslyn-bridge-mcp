@@ -88,6 +88,51 @@ public sealed class ExtensionFallbackTests : TempWorkspaceTests
         dispatches.Should().Be(expectedDispatches);
     }
 
+    [Fact]
+    public async Task ExpressionFailureReturnsAnErrorAndDisablesNoHandlerAsync()
+    {
+        await WriteFileAsync(Root, SourceFile, "class A {}\n");
+        var found = await WriteFileAsync(Root, FoundFile, "class B {}\n");
+        var expressionDispatches = 0;
+        await using var session = CreateSession(
+            Root,
+            FakeServer(server =>
+                server.Handle = (method, parameters) =>
+                {
+                    if (
+                        parameters?["messageName"]?.GetValue<string>()
+                        is RoslynConnection.ExpressionMessage
+                    )
+                    {
+                        Interlocked.Increment(ref expressionDispatches);
+                    }
+
+                    return method switch
+                    {
+                        LspMethods.ServerActivateExtension => Task.FromResult<JsonNode?>(
+                            ActivatedHandlers()
+                        ),
+                        LspMethods.TextDocumentDispatchExtensionMessage => DispatchAnswer(
+                            parameters,
+                            found
+                        ),
+                        _ => Task.FromResult<JsonNode?>(null),
+                    };
+                }
+            )
+        );
+        using var tool = CreateTool(Root, session);
+
+        var first = await tool.ExecuteAsync(Request(LspAction.Expression), TestCt);
+        var second = await tool.ExecuteAsync(Request(LspAction.Expression), TestCt);
+        var references = await tool.ExecuteAsync(Request(LspAction.References), TestCt);
+
+        first.Should().BeError(ErrorCodes.Lsp);
+        second.Should().BeError(ErrorCodes.Lsp);
+        expressionDispatches.Should().Be(2);
+        ResponseText(references).Should().Be($"{FoundFile} 1:1");
+    }
+
     [Theory]
     [InlineData(true, ExtensionCallerFile)]
     [InlineData(false, HierarchyCallerFile)]
@@ -181,12 +226,33 @@ public sealed class ExtensionFallbackTests : TempWorkspaceTests
             ["fromRanges"] = new JsonArray(),
         };
 
+    // The expression handler throws, and the references handler finds one location
+    private static Task<JsonNode?> DispatchAnswer(JsonNode? parameters, string foundPath) =>
+        parameters?["messageName"]?.GetValue<string>() is RoslynConnection.ExpressionMessage
+            ? throw new LocalRpcException("The extension failed.")
+            {
+                ErrorCode = HandlerFailureCode,
+            }
+            : Task.FromResult<JsonNode?>(
+                new JsonObject
+                {
+                    ["response"] = new JsonObject
+                    {
+                        ["found"] = true,
+                        ["locations"] = new JsonArray(Location(foundPath)),
+                        ["written"] = new JsonArray(),
+                        ["generated"] = 0,
+                    }.ToJsonString(),
+                }
+            );
+
     private static JsonObject ActivatedHandlers() =>
         new()
         {
             ["documentMessageHandlers"] = new JsonArray(
                 JsonValue.Create(RoslynConnection.ReferencesMessage),
-                JsonValue.Create(RoslynConnection.CallersMessage)
+                JsonValue.Create(RoslynConnection.CallersMessage),
+                JsonValue.Create(RoslynConnection.ExpressionMessage)
             ),
         };
 }

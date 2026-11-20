@@ -19,13 +19,12 @@ internal static class ToolResponse
             var heading = ResultText.ResolvedFiles(resolvedFiles ?? []);
             var text =
                 heading + result.Render(ResultText.MaximumResponseCharacters - heading.Length);
-            if (text.Length <= ResultText.MaximumResponseCharacters || result.MustDeliver)
-                return Text(text, isError: false);
-
-            return new ToolError(
-                ErrorCodes.ResultTooLarge,
-                $"The result exceeds {ResultText.MaximumResponseCharacters} characters. Narrow the query or lower limit."
-            ).ToResponse();
+            return text.Length <= ResultText.MaximumResponseCharacters || result.MustDeliver
+                ? Text(text, isError: false)
+                : new ToolError(
+                    ErrorCodes.ResultTooLarge,
+                    $"The result exceeds {ResultText.MaximumResponseCharacters} characters. Narrow the query or lower limit."
+                ).ToResponse();
         }
     }
 

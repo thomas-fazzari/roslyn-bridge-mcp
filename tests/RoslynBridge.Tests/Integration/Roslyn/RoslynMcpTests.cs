@@ -38,6 +38,50 @@ public sealed partial class RoslynMcpTests
     private const string LeftoversTestFile = "Application/Leftovers.cs";
     private const string LeftoverChecksTestFile = "Checks/LeftoverChecks.cs";
     private const string KeptTestFile = "Application/Kept.cs";
+    private const string ExpressionsTestFile = "Application/Expressions.cs";
+    private const string ExpressionsSource = """
+        namespace Sample.Application;
+
+        public static class Formatter
+        {
+            private const int Step = 40;
+
+            /// <summary>Formats an <see cref="int"/> value.</summary>
+            public static string Format(int value) => value.ToString();
+
+            public static string Format(string value) => value;
+
+            public static string Describe(string? text)
+            {
+                var length = Format(42).Length;
+                long wide = Step;
+                if (text is null)
+                    return string.Empty;
+
+                return Format(text) + length + wide;
+            }
+
+            public static string Broken() => Format(1.5);
+
+            public static T Echo<T>(T value) => value;
+
+            public static int Echoed() => Echo(7);
+        }
+        """;
+    private const string JsonContextTestFile = "Application/JsonContext.cs";
+    private const string JsonContextSource = """
+        using System.Text.Json.Serialization;
+
+        namespace Sample.Application;
+
+        [JsonSerializable(typeof(int))]
+        internal partial class Ctx : JsonSerializerContext { }
+
+        public static class JsonUse
+        {
+            internal static object Use() => Ctx.Default;
+        }
+        """;
 
     [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
     public async Task ReportsFreshDiagnosticsAndNavigatesAcrossProjectsAsync()
@@ -378,6 +422,158 @@ public sealed partial class RoslynMcpTests
                 {ConsumerTestFile}:7:26 method Sample.Application.Consumer.Run(IGreeter)
                   through IGreeter.Greet(string)
                   calls 7:59
+                """
+            );
+    }
+
+    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    public async Task ReportsTheCompilerFactsOfExpressionsAndDeclaredNamesAsync()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var workspace = await RoslynTestWorkspace.CreateAsync(cancellationToken);
+        await WriteExpressionsAsync(workspace);
+
+        var overload = await ExpressionAtAsync(workspace, "Format(42)");
+        var constant = await ExpressionAtAsync(workspace, "Step;");
+        var beforePunctuation = await ExpressionAtAsync(workspace, "Step;", "Step".Length);
+        var instantiated = await ExpressionAtAsync(workspace, "Echo(7)");
+        var beforeCheck = await ExpressionAtAsync(workspace, "text is");
+        var afterCheck = await ExpressionAtAsync(workspace, "text) +");
+        var inferred = await ExpressionAtAsync(workspace, "length =");
+        var metadata = await ExpressionAtAsync(workspace, "ToString()");
+        var declared = await workspace.CallAsync(
+            new LspRequest { Action = LspAction.Expression, Symbol = "Formatter.Step" }
+        );
+
+        overload
+            .Should()
+            .Be(
+                $"""
+                expression Format(42)
+                kind InvocationExpression
+                type string
+                nullability NotAnnotated/NotNull
+                {ExpressionsTestFile}:8:26 method Sample.Application.Formatter.Format(int)
+                  doc Formats an Int32 value.
+                """
+            );
+        constant
+            .Should()
+            .Be(
+                $"""
+                expression Step
+                kind IdentifierName
+                type int
+                converted long
+                nullability NotAnnotated/NotNull
+                conversion implicit numeric
+                constant 40
+                {ExpressionsTestFile}:5:23 constant Sample.Application.Formatter.Step
+                """
+            );
+        beforePunctuation.Should().Be(constant);
+        // The null check changes the flow state of the same parameter
+        beforeCheck
+            .Should()
+            .Be(
+                $"""
+                expression text
+                kind IdentifierName
+                type string?
+                nullability Annotated/MaybeNull
+                {ExpressionsTestFile}:12:43 variable text
+                """
+            );
+        afterCheck
+            .Should()
+            .Be(
+                $"""
+                expression text
+                kind IdentifierName
+                type string
+                nullability NotAnnotated/NotNull
+                {ExpressionsTestFile}:12:43 variable text
+                """
+            );
+        inferred
+            .Should()
+            .Be(
+                $"""
+                declaration length
+                kind VariableDeclarator
+                type int
+                nullability NotAnnotated/NotNull
+                {ExpressionsTestFile}:14:13 variable length
+                """
+            );
+        declared
+            .Should()
+            .Be(
+                $"""
+                declaration Step
+                kind VariableDeclarator
+                type int
+                nullability NotAnnotated/NotNull
+                constant 40
+                {ExpressionsTestFile}:5:23 constant Sample.Application.Formatter.Step
+                """
+            );
+        instantiated
+            .Should()
+            .Be(
+                $"""
+                expression Echo(7)
+                kind InvocationExpression
+                type int
+                nullability NotAnnotated/NotNull
+                {ExpressionsTestFile}:24:21 method Sample.Application.Formatter.Echo<T>(T)
+                  instantiation Sample.Application.Formatter.Echo<int>(int)
+                """
+            );
+        // A symbol from metadata has no declaration to show
+        Lines(metadata).Should().Contain("method int.ToString()");
+    }
+
+    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    public async Task GivesASourceGeneratedSymbolNoPositionAsync()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var workspace = await RoslynTestWorkspace.CreateAsync(cancellationToken);
+        await StartRoslynAsync(workspace);
+        await workspace.WriteFileAsync(JsonContextTestFile, JsonContextSource);
+        await workspace.CallAsync(
+            new LspRequest { Action = LspAction.Diagnostics, File = JsonContextTestFile }
+        );
+
+        var generated = await ExpressionAtAsync(workspace, "Default;", file: JsonContextTestFile);
+
+        // The generated declaration is in a path relative to its generator, so it has no position
+        Lines(generated)
+            .Should()
+            .Contain("property Ctx.Default")
+            .And.NotContain(line => line.Contains(".cs:", StringComparison.Ordinal));
+    }
+
+    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    public async Task ListsTheCandidatesOfAnUnresolvableOverloadAsync()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var workspace = await RoslynTestWorkspace.CreateAsync(cancellationToken);
+        await WriteExpressionsAsync(workspace);
+
+        var unbound = await ExpressionAtAsync(workspace, "Format(1.5)");
+
+        unbound
+            .Should()
+            .Be(
+                $"""
+                expression Format(1.5)
+                kind InvocationExpression
+                type string
+                nullability NotAnnotated/NotNull
+                no symbol: OverloadResolutionFailure
+                  {ExpressionsTestFile}:8:26 method Sample.Application.Formatter.Format(int)
+                  {ExpressionsTestFile}:10:26 method Sample.Application.Formatter.Format(string)
                 """
             );
     }

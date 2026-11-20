@@ -37,7 +37,7 @@ cannot start the Roslyn server.
 CONTENTS
 --------
 DIAGNOSTICS - File and glob scans, result fields, limits and verification.
-SYMBOL NAVIGATION - Definitions, references, call and type hierarchies, hover, symbols, unused code, bulk navigation.
+SYMBOL NAVIGATION - Definitions, references, call and type hierarchies, hover, expression facts, symbols, unused code, bulk navigation.
 SEMANTIC EDITS - Rename and code action preview/apply sequences, stale proposals.
 SESSION AND RAW REQUESTS - Status, capabilities, reload and raw requests.
 
@@ -188,6 +188,10 @@ callees - Find the methods this method calls, with the call sites in its file.
 supertypes - Find the base types and interfaces of a type.
 subtypes - Find the types that derive from or implement a type.
 hover - Read type information and documentation.
+expression - Read what the compiler knows about the expression or declared name
+  at a position: its type, conversion, constant and chosen overload. hover
+  describes the symbol, while expression describes this use of it. Name a
+  symbol to read its declaration.
 source - Read the declaration's saved text with its documentation comment.
 members - List the members a type declares, across its partial declarations.
   Add inherited: true to also list what its base classes in the workspace pass on.
@@ -305,6 +309,53 @@ declaration of its own, so its line names the type. An empty result reads
 "no callers", "no callees", "no supertypes" or "no subtypes". After
 "no callers", a line says that reflection or code outside the workspace may
 still call the member.
+
+expression returns one fact per line. A fact the compiler does not give has no
+line:
+expression Formatter.Format(42)
+kind InvocationExpression
+type string
+nullability NotAnnotated/NotNull
+src/Formatter.cs:12:19 method MyApp.Formatter.Format(int)
+  doc Formats an Int32 value.
+A widened and converted constant reads:
+expression Step
+kind IdentifierName
+type int
+converted long
+nullability NotAnnotated/NotNull
+conversion implicit numeric
+constant 40
+src/Formatter.cs:5:23 constant MyApp.Formatter.Step
+- expression: the text, with white space collapsed and cut at 200 characters.
+  A position on a member name gives the whole member access, on a callee the
+  call, and on a created type the creation.
+- kind: the Roslyn syntax kind.
+- type and converted: the type, and the type after the conversion when it
+  differs. A trailing ? marks a nullable annotation.
+- nullability: the annotation and the flow state, as in Annotated/MaybeNull.
+  The flow state is None on a declaration without an initializer. It is
+  absent when nullable analysis is off.
+- conversion: the words of the conversion, such as implicit numeric, implicit
+  reference or implicit user-defined op_Implicit. It is absent for identity.
+- constant: the value as a C# literal, or null.
+- The symbol line has the format of callers. Everything after the kind is a
+  symbol name, except for a variable (a local or parameter), which has its
+  bare name that navigate does not accept. A symbol from metadata or generated
+  code keeps Roslyn's name and has no position. instantiation names a
+  constructed generic or an extension method as the code calls it. doc is the
+  summary of the documentation comment, cut at 400 characters.
+When the expression binds to no symbol, a "no symbol: REASON" line follows, with
+the Roslyn candidate reason, such as OverloadResolutionFailure. One indented
+symbol line per candidate comes next, in file and position order.
+On the name that a declaration introduces, a declaration line replaces the
+expression line, and type is the declared type, or the return type of a
+method. A constant local or field has a constant line.
+A position that touches a symbol but has no expression and no declared name
+returns "no expression". Move the position onto the name. A position that
+touches no symbol returns symbol_not_found, as for other actions. context,
+limit and offset do not apply. Without the Roslyn extension, or when it
+fails, the call returns lsp_error. The other actions keep working.
 
 PAGING
 ------
