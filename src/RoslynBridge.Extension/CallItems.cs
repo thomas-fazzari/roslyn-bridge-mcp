@@ -16,12 +16,18 @@ internal static class CallItems
             : symbol;
 
     /// <summary>
-    /// Whether only source-generated documents declare the symbol, so that no item can name it.
+    /// Whether only source-generated documents declare the symbol, so that no item can locate it.
     /// </summary>
     public static bool IsOnlyGenerated(ISymbol declared, Solution solution) =>
         declared.DeclaringSyntaxReferences.All(reference =>
             solution.GetDocument(reference.SyntaxTree) is SourceGeneratedDocument
         );
+
+    /// <summary>
+    /// An item that names <paramref name="shown"/> and has no location.
+    /// </summary>
+    public static CallItem CreateUnlocated(ISymbol shown) =>
+        new(shown.MemberName, shown.LspKind, Uri: null, Range: null, SelectionRange: null);
 
     /// <param name="declared">See <see cref="DeclaringSymbol"/>.</param>
     /// <param name="near">A part of a partial symbol in this tree is preferred.</param>

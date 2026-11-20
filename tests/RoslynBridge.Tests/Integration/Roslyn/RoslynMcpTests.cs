@@ -167,6 +167,7 @@ public sealed partial class RoslynMcpTests
         """;
     private const string JsonContextTestFile = "Application/JsonContext.cs";
     private const string JsonContextSource = """
+        using System.Text.Json;
         using System.Text.Json.Serialization;
 
         namespace Sample.Application;
@@ -177,6 +178,16 @@ public sealed partial class RoslynMcpTests
         public static class JsonUse
         {
             internal static object Use() => Ctx.Default;
+
+            internal static object Create() => new Ctx(new JsonSerializerOptions());
+        }
+
+        public sealed class ObjectUse
+        {
+            public ObjectUse()
+            {
+                _ = new object();
+            }
         }
         """;
 
@@ -649,6 +660,51 @@ public sealed partial class RoslynMcpTests
             .Should()
             .Contain("property Ctx.Default")
             .And.NotContain(line => line.Contains(".cs:", StringComparison.Ordinal));
+    }
+
+    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    public async Task ListsASourceGeneratedCalleeWithoutAPositionAsync()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var workspace = await RoslynTestWorkspace.CreateAsync(cancellationToken);
+        await StartRoslynAsync(workspace);
+        await workspace.WriteFileAsync(JsonContextTestFile, JsonContextSource);
+        await workspace.CallAsync(
+            new LspRequest { Action = LspAction.Diagnostics, File = JsonContextTestFile }
+        );
+
+        var callees = await workspace.CallAsync(
+            new LspRequest { Action = LspAction.Callees, Symbol = "JsonUse.Create" }
+        );
+
+        callees
+            .Should()
+            .Be(
+                """
+                constructor Ctx.Ctx(JsonSerializerOptions)
+                  calls 13:40
+                1 callees outside the workspace omitted
+                """
+            );
+    }
+
+    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    public async Task DoesNotCountTheImplicitObjectConstructorCallAsync()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var workspace = await RoslynTestWorkspace.CreateAsync(cancellationToken);
+        await StartRoslynAsync(workspace);
+        await workspace.WriteFileAsync(JsonContextTestFile, JsonContextSource);
+        await workspace.CallAsync(
+            new LspRequest { Action = LspAction.Diagnostics, File = JsonContextTestFile }
+        );
+
+        var callees = await workspace.CallAsync(
+            new LspRequest { Action = LspAction.Callees, Symbol = "ObjectUse.ObjectUse()" }
+        );
+
+        // The explicit new object() counts, the implicit base() of the constructor does not
+        callees.Should().Be("no callees\n1 callees outside the workspace omitted");
     }
 
     [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]

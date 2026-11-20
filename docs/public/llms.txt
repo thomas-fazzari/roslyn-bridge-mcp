@@ -298,8 +298,15 @@ src/Consumer.cs:7:26 method MyApp.Consumer.Run(IGreeter)
 The line gives the declaration position, the kind and then the symbol name.
 Send everything after the kind back unchanged as the symbol argument. A result
 outside the workspace keeps Roslyn's name. The calls line is present only for
-callers and callees. callees lists calls only. A final line counts the
-property, field and constant accesses it leaves out.
+callers and callees. callees lists calls only. A line counts the
+property, field and constant accesses it leaves out. When methods declared
+outside the workspace are called, a line "N callees outside the workspace
+omitted" follows the accesses line, if any. It counts the distinct methods,
+without the implicit call to the constructor of object. Properties, fields and
+events outside the workspace are not counted.
+A callee that only a source generator declares keeps Roslyn's name and has no
+position. It cannot be sent back as the symbol argument, and it sorts before
+the callees that have a position.
 callers and callees include the calls that the compiler inserts without call
 syntax. Their call site is the first token of the construct: foreach, await
 (also for await foreach and await using), using, the operator, the type or
@@ -322,6 +329,14 @@ and s[1..] on a string. callers of a member that every await calls, such as
 TaskAwaiter.GetResult, binds every await in the workspace. callees lists the
 members declared in the workspace that the code calls, with its operators,
 conversions, foreach, await and using.
+When the Roslyn extension gives no answer, callers and callees use Roslyn's
+call hierarchy. It misses the calls that the compiler inserts, and callers also
+misses the calls through base or interface members. For a method,
+constructor, operator, property or event, the last line then reads
+"calls through base or interface members and compiler-inserted calls not
+included" for callers and "compiler-inserted calls not included" for callees.
+That line also follows "no callers" and "no callees", and it appears in the
+callers section of impact. A type or field has no such line.
 A caller that calls the member through a base or interface member gets a
 through line before its calls line, and a separate entry for its direct calls:
 src/Consumer.cs:7:26 method MyApp.Consumer.Run(IGreeter)

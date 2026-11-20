@@ -37,9 +37,11 @@ internal sealed record IncomingCall(
 
 /// <param name="Found">False when the caller must ask callHierarchy/outgoingCalls instead.</param>
 /// <param name="Calls">Callees declared in source, in the shape of LSP outgoing calls. Properties, fields and events are listed too.</param>
+/// <param name="External">The number of distinct methods declared outside the workspace that the member calls.</param>
 internal sealed record CalleesResponse(
     [property: JsonPropertyName("found")] bool Found,
-    [property: JsonPropertyName("calls")] IReadOnlyList<OutgoingCall> Calls
+    [property: JsonPropertyName("calls")] IReadOnlyList<OutgoingCall> Calls,
+    [property: JsonPropertyName("external")] int External
 );
 
 /// <param name="FromRanges">The call sites, in the requested declaration.</param>
@@ -71,12 +73,13 @@ internal sealed record UnusedSymbol(
 );
 
 /// <param name="Kind">An LSP SymbolKind.</param>
+/// <param name="Uri">Null, like the ranges, for a symbol that only source-generated documents declare.</param>
 internal sealed record CallItem(
     [property: JsonPropertyName("name")] string Name,
     [property: JsonPropertyName("kind")] int Kind,
-    [property: JsonPropertyName("uri")] string Uri,
-    [property: JsonPropertyName("range")] LspRange Range,
-    [property: JsonPropertyName("selectionRange")] LspRange SelectionRange
+    [property: JsonPropertyName("uri")] string? Uri,
+    [property: JsonPropertyName("range")] LspRange? Range,
+    [property: JsonPropertyName("selectionRange")] LspRange? SelectionRange
 );
 
 /// <param name="Kind">An LSP SymbolKind.</param>

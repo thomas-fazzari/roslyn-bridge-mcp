@@ -25,10 +25,9 @@ internal sealed class SymbolLocator(
     )
     {
         var located = await LocateAsync(target, lookup, cancellationToken);
-        if (located.IsError(out var error, out var location))
-            return error;
-
-        return await DocumentPositionAsync(location, cancellationToken);
+        return located.IsError(out var error, out var location)
+            ? error
+            : await DocumentPositionAsync(location, cancellationToken);
     }
 
     public async Task<Result<SourceLocation>> LocateAsync(
