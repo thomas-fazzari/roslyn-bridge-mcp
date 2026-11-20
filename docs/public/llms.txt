@@ -327,6 +327,9 @@ through line before its calls line, and a separate entry for its direct calls:
 src/Consumer.cs:7:26 method MyApp.Consumer.Run(IGreeter)
   through IGreeter.Greet(string)
   calls 7:59
+Such a call is left out when the static type of its receiver can never hold
+the type that declares the member, such as an IHandle receiver for a member
+of a sealed class that does not implement IHandle.
 In every result, a constructor has the kind constructor. An explicit
 constructor is named like MyApp.Box.Box(int). A primary constructor has no
 declaration of its own, so its line names the type. An empty result reads

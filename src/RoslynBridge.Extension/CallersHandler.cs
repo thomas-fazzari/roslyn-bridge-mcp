@@ -2,8 +2,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Extensions;
 using Microsoft.CodeAnalysis.FindSymbols;
+using Microsoft.CodeAnalysis.Operations;
 
 namespace RoslynBridge.Extension;
 
@@ -48,10 +50,18 @@ internal sealed class CallersHandler
         // Direct callers come first, so a call site listed under several members stays direct
         foreach (var caller in callers)
         {
+            var locations = caller.IsDirect
+                ? caller.Locations
+                : await ReachingAsync(
+                    caller.Locations,
+                    symbol.ContainingType,
+                    solution,
+                    cancellationToken
+                );
             found.Add(
                 caller.CallingSymbol,
                 caller.IsDirect ? null : caller.CalledSymbol.MemberName,
-                Unseen(caller.Locations, solution, seen, cancellationToken)
+                Unseen(locations, solution, seen, cancellationToken)
             );
         }
 
@@ -106,6 +116,92 @@ internal sealed class CallersHandler
                 && seen.Add(new SourceSite(path, location.SourceSpan))
             ),
         ];
+
+    // A call through a base or interface member reaches the member only on a receiver that can hold its type
+    private static async Task<List<Location>> ReachingAsync(
+        IEnumerable<Location> locations,
+        INamedTypeSymbol target,
+        Solution solution,
+        CancellationToken cancellationToken
+    )
+    {
+        var reaching = new List<Location>();
+        foreach (var location in locations)
+        {
+            if (await MayHoldAsync(location, target, solution, cancellationToken))
+                reaching.Add(location);
+        }
+
+        return reaching;
+    }
+
+    /// <returns>True unless the static type of the receiver at <paramref name="location"/> cannot hold a <paramref name="target"/>.</returns>
+    private static async Task<bool> MayHoldAsync(
+        Location location,
+        INamedTypeSymbol target,
+        Solution solution,
+        CancellationToken cancellationToken
+    )
+    {
+        if (
+            location.SourceTree is not { } tree
+            || solution.GetDocument(tree) is not { } document
+            || await document.GetSemanticModelAsync(cancellationToken) is not { } model
+        )
+        {
+            return true;
+        }
+
+        var root = await tree.GetRootAsync(cancellationToken);
+        var node = root.FindNode(location.SourceSpan, getInnermostNodeForTie: true);
+        if (
+            ReceiverType(model, node, cancellationToken)
+            is not {
+                TypeKind: not (TypeKind.TypeParameter or TypeKind.Dynamic or TypeKind.Error)
+            } receiver
+        )
+        {
+            return true;
+        }
+
+        // A project sees the target type through its own compilation
+        return SymbolFinder
+                .FindSimilarSymbols(target, model.Compilation, cancellationToken)
+                .FirstOrDefault()
+                is not { } held
+            || model.Compilation.ClassifyCommonConversion(held, receiver).Exists;
+    }
+
+    // Roslyn also reports a local declaration of a disposable type as a call of Dispose
+    private static ITypeSymbol? ReceiverType(
+        SemanticModel model,
+        SyntaxNode node,
+        CancellationToken cancellationToken
+    )
+    {
+        for (var current = node; current is not null; current = current.Parent)
+        {
+            switch (model.GetOperation(current, cancellationToken))
+            {
+                case IInvocationOperation invocation:
+                    return invocation.Instance?.Type;
+                case IMemberReferenceOperation reference:
+                    return reference.Instance?.Type;
+                case IVariableDeclarationOperation declaration:
+                    return declaration.GetDeclaredVariables().FirstOrDefault()?.Type;
+                case IVariableDeclarationGroupOperation group:
+                    return group
+                        .Declarations.SelectMany(declaration => declaration.GetDeclaredVariables())
+                        .FirstOrDefault()
+                        ?.Type;
+            }
+
+            if (current is StatementSyntax)
+                return null;
+        }
+
+        return null;
+    }
 
     private sealed record Caller(ISymbol Symbol, string? Through, List<Location> Sites);
 
