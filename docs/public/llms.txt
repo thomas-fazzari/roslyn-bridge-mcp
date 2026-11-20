@@ -580,6 +580,29 @@ progress, such as "progress: Loading Calculator.slnx 40%". It has no
 percentage when Roslyn reports none. The loading error repeats the progress in
 its message.
 
+When Roslyn reports a problem while it loads a project, lines follow the
+other status lines:
+project not loaded: src/Broken/Broken.csproj: The imported project was not found.
+project warning: src/App/App.csproj: Package Foo is deprecated.
+Results for a project that is not loaded may be wrong or incomplete. A warning
+rarely affects results, as with an out-of-support target framework or a package
+vulnerability.
+One line per project, with its path relative to the workspace, or its file URI
+outside it, and the first line of the Roslyn message, cut at 300 characters.
+A message that names the project path shows it the same way. A project that has
+both keeps its error. At most 10 lines show per kind, then this line gives the
+rest:
+truncated: 3 more project not loaded lines not shown
+A line comes from the last load that reported a problem for the project. Roslyn
+reloads a project by itself after a project file change and reports no success,
+so a fixed project keeps its line until lsp reload.
+
+When the bridge cannot watch the workspace files, such as when the operating
+system limit on file watches is reached, a line reads:
+watcher failed (full rescan before each call): MESSAGE
+Results stay current. The bridge scans the workspace before each call, which
+makes calls slower on a large workspace. lsp reload starts the watcher again.
+
 Server capabilities:
 lsp {"action":"capabilities"}
 

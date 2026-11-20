@@ -149,6 +149,16 @@ Workspace symbols are ordered by how well the name matches, then by file and pos
 While Roslyn loads the workspace and reports progress, a `progress:` line follows `loading:`, such as `progress: Loading Calculator.slnx 40%`.
 The line has no percentage when Roslyn reports none. The error `loading` repeats the progress in its message.
 
+When Roslyn reports a problem while it loads a project, or the bridge cannot watch the workspace files, `status` adds a line for each. A project that is not loaded may give wrong or incomplete results:
+
+```text
+project not loaded: src/Broken/Broken.csproj: The imported project was not found.
+project warning: src/App/App.csproj: Package Foo is deprecated.
+watcher failed (full rescan before each call): The inotify watch limit was reached.
+```
+
+With a failed watcher, results stay current and calls are slower. `reload` clears the project lines and tries the watcher again.
+
 For diagnostics, omit `file` to scan C# files or use a glob such as `src/**/*.cs`. Braces list alternatives, so `src/{Calculator,Program}.cs` checks two files in one call. Only `.cs` and `.csx` files are analyzed.
 `severity` defaults to `warning`, which reports errors and warnings. A [settings file](settings.mdx) can change that default for the project. Set it to `information` or `hint` to include analyzer suggestions.
 Each file with diagnostics is followed by one indented line per diagnostic, then a totals line:

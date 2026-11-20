@@ -129,6 +129,14 @@ internal sealed class WorkspacePaths(string root)
     }
 
     /// <summary>
+    /// The workspace file at <paramref name="uri"/>, otherwise the URI itself.
+    /// </summary>
+    public LocationFile LocationOf(string uri) =>
+        TryGetWorkspaceFile(uri) is { } file
+            ? new LocationFile.Workspace(file)
+            : new LocationFile.External(uri);
+
+    /// <summary>
     /// Wraps a path without the checks of <see cref="Resolve"/>.
     /// </summary>
     /// <remarks>
@@ -229,7 +237,7 @@ internal sealed class WorkspacePaths(string root)
 
         var current = Root;
         var parts = string.Equals(relative, ".", StringComparison.Ordinal)
-            ? Array.Empty<string>()
+            ? []
             : relative.Split(Path.DirectorySeparatorChar);
         for (var index = 0; index < parts.Length; index++)
         {

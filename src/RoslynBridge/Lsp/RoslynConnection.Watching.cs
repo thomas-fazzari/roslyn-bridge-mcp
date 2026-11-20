@@ -12,6 +12,11 @@ internal sealed partial class RoslynConnection
     // On Windows, the 8 KB default overflows on a branch switch or a restore, which forces a full rescan
     private const int WatcherBufferBytes = 64 * 1024;
 
+    /// <summary>
+    /// The first reason the watcher stopped, otherwise null. Every synchronization then scans the workspace.
+    /// </summary>
+    internal string? WatcherFailure => Volatile.Read(ref _watcherFailure);
+
     private void QueueFile(WorkspaceFilePath path)
     {
         if (!paths.IsWatched(path))
@@ -26,24 +31,35 @@ internal sealed partial class RoslynConnection
         _pendingFiles[path] = 0;
     }
 
+    // A failed start, such as the inotify instance limit, leaves the session running without a watcher
     private void StartWatching()
     {
-        _watcher = new FileSystemWatcher(paths.Root)
+        try
         {
-            IncludeSubdirectories = true,
-            InternalBufferSize = WatcherBufferBytes,
-            NotifyFilter =
-                NotifyFilters.FileName
-                | NotifyFilters.DirectoryName
-                | NotifyFilters.LastWrite
-                | NotifyFilters.Size,
-        };
-        _watcher.Created += OnFileChanged;
-        _watcher.Changed += OnFileChanged;
-        _watcher.Deleted += OnFileChanged;
-        _watcher.Renamed += OnFileRenamed;
-        _watcher.Error += OnWatcherError;
-        _watcher.EnableRaisingEvents = true;
+            _watcher = new FileSystemWatcher(paths.Root)
+            {
+                IncludeSubdirectories = true,
+                InternalBufferSize = WatcherBufferBytes,
+                NotifyFilter =
+                    NotifyFilters.FileName
+                    | NotifyFilters.DirectoryName
+                    | NotifyFilters.LastWrite
+                    | NotifyFilters.Size,
+            };
+            _watcher.Created += OnFileChanged;
+            _watcher.Changed += OnFileChanged;
+            _watcher.Deleted += OnFileChanged;
+            _watcher.Renamed += OnFileRenamed;
+            _watcher.Error += OnWatcherError;
+            _watcher.EnableRaisingEvents = true;
+        }
+        catch (Exception exception)
+            when (ToolError.IsIo(exception)
+                || exception is ArgumentException or PlatformNotSupportedException
+            )
+        {
+            FailWatching(exception);
+        }
     }
 
     private void OnFileChanged(object sender, FileSystemEventArgs args) =>
@@ -55,8 +71,34 @@ internal sealed partial class RoslynConnection
         QueueFile(paths.Known(args.FullPath));
     }
 
-    private void OnWatcherError(object sender, ErrorEventArgs args) =>
+    private void OnWatcherError(object sender, ErrorEventArgs args)
+    {
+        var exception = args.GetException();
+        if (StopsWatching(exception))
+        {
+            FailWatching(exception);
+            return;
+        }
+
         Interlocked.Exchange(ref _scanRequested, 1);
+    }
+
+    // Windows stops on any other error, Linux on a watch limit (IOException). macOS reports dropped events
+    // as an IOException, and an unreadable folder as UnauthorizedAccessException, with the watcher running
+    private bool StopsWatching(Exception exception) =>
+        exception is not InternalBufferOverflowException
+        && (
+            !Directory.Exists(paths.Root)
+            || OperatingSystem.IsWindows()
+            || (OperatingSystem.IsLinux() && exception is IOException)
+        );
+
+    private void FailWatching(Exception exception)
+    {
+        Interlocked.Exchange(ref _watcher, null)?.Dispose();
+        if (Interlocked.CompareExchange(ref _watcherFailure, exception.Message, null) is null)
+            LogWatcherFailed(logger, exception.Message);
+    }
 
     private async Task<Result> SynchronizeWatchedFilesAsync(CancellationToken cancellationToken)
     {
@@ -64,7 +106,8 @@ internal sealed partial class RoslynConnection
             .Keys.Where(path => _pendingFiles.TryRemove(path, out _))
             .ToList();
 
-        var scanRequested = Interlocked.Exchange(ref _scanRequested, 0) != 0;
+        var scanRequested =
+            Interlocked.Exchange(ref _scanRequested, 0) != 0 || WatcherFailure is not null;
         var rescan = scanRequested || RequiresRescan(changedPaths);
         // A failed or canceled synchronization sends the same changes again on the next call
         Result synchronized;

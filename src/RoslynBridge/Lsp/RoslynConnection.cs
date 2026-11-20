@@ -48,6 +48,8 @@ internal sealed partial class RoslynConnection(
 
     public LoadProgress? Progress => callbacks.Progress;
 
+    public ImmutableArray<ProjectIssue> ProjectIssues => callbacks.ProjectIssues;
+
     public void RequireRestart() => IsAlive = true;
 
     public Task<Result> StartAsync(CancellationToken cancellationToken)
@@ -436,6 +438,12 @@ internal sealed partial class RoslynConnection(
         Message = "Roslyn loaded the workspace, with {FileCount} watched files."
     )]
     private static partial void LogWorkspaceLoaded(ILogger logger, int fileCount);
+
+    [LoggerMessage(
+        Level = LogLevel.Warning,
+        Message = "The file watcher failed, so every call scans the workspace: {Reason}"
+    )]
+    private static partial void LogWatcherFailed(ILogger logger, string reason);
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "Roslyn stderr stream closed.")]
     private static partial void LogStderrClosed(ILogger logger);

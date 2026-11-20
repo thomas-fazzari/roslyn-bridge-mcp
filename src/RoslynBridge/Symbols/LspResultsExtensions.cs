@@ -57,7 +57,7 @@ internal static class LspResultsExtensions
 
                 if (!files.TryGetValue(uri, out var file))
                 {
-                    file = FileOf(uri, paths);
+                    file = paths.LocationOf(uri);
                     files.Add(uri, file);
                 }
 
@@ -102,7 +102,7 @@ internal static class LspResultsExtensions
             // Roslyn often repeats the name as the detail
             Detail = Distinct(symbol.Detail, symbol.Name),
             Container = ContainerName(Distinct(symbol.ContainerName, symbol.Name)),
-            File = uri is null ? null : FileOf(uri, paths),
+            File = uri is null ? null : paths.LocationOf(uri),
             Position = range?.Start.OneBased,
         };
     }
@@ -131,11 +131,6 @@ internal static class LspResultsExtensions
         var project = container.IndexOf(" (project ", StringComparison.Ordinal);
         return project < 0 ? container[3..] : container[3..project];
     }
-
-    private static LocationFile FileOf(string uri, WorkspacePaths paths) =>
-        paths.TryGetWorkspaceFile(uri) is { } file
-            ? new LocationFile.Workspace(file)
-            : new LocationFile.External(uri);
 }
 
 /// <param name="Positions">Distinct locations, in path and position order.</param>

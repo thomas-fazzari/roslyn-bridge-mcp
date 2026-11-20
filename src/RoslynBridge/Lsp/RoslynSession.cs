@@ -47,6 +47,16 @@ internal sealed partial class RoslynSession(
             Stopped or Launching or Ready or Failed or Disposed => null,
         };
 
+    /// <summary>
+    /// The load errors and warnings of the current Roslyn process, as of its last load attempt.
+    /// </summary>
+    public ImmutableArray<ProjectIssue> ProjectIssues => CurrentConnection?.ProjectIssues ?? [];
+
+    /// <summary>
+    /// Why the file watcher stopped, otherwise null. The bridge then scans the workspace before each call.
+    /// </summary>
+    public string? WatcherFailure => CurrentConnection?.WatcherFailure;
+
     private RoslynConnection Connection =>
         CurrentConnection
         ?? throw new InvalidOperationException("The Roslyn session is not started.");
