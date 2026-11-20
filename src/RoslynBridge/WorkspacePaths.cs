@@ -141,15 +141,14 @@ internal sealed class WorkspacePaths(string root)
     }
 
     /// <summary>
-    /// Returns null for a location outside the workspace.
+    /// Returns null for a location outside the workspace or behind a symbolic link.
     /// </summary>
     public WorkspaceFilePath? TryGetWorkspaceFile(string uri)
     {
         if (!Uri.TryCreate(uri, UriKind.Absolute, out var location) || !location.IsFile)
             return null;
 
-        var fullPath = Path.GetFullPath(LocalPath(location));
-        return IsOutside(Relative(fullPath)) ? null : Known(fullPath);
+        return Resolve(LocalPath(location)).IsError(out _, out var file) ? null : file;
     }
 
     /// <summary>

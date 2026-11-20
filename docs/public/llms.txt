@@ -268,7 +268,7 @@ RESULTS
 -------
 Results are text lines. Positions are line:character, both one-based, with
 UTF-16 characters. Files inside the workspace use relative paths. External and
-generated locations keep their absolute URI.
+generated locations, and files behind a symbolic link, keep their absolute URI.
 
 definition, type_definition, implementation and references return one line per file:
 src/Foo.cs 42:17 81:9

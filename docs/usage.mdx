@@ -94,7 +94,7 @@ Locations:
 src/Calculator.cs 12:9 40:17
 ```
 
-Workspace files use relative paths. External and generated locations keep their absolute URI.
+Workspace files use relative paths. External and generated locations, and files behind a symbolic link, keep their absolute URI.
 Location links use the target selection start. Use the `lsp` tool with `action=request` for full LSP ranges and metadata.
 
 Reads and writes:
