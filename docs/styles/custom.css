@@ -1,3 +1,20 @@
 html:root {
-  --sl-font: "Onest", ui-sans-serif, system-ui, sans-serif;
+  --sl-font: "IBM Plex Sans Variable", ui-sans-serif, system-ui, sans-serif;
+  --sl-font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --md-sys-shape-corner-extra-small: 0.125rem;
+  --md-sys-shape-corner-small: 0.25rem;
+  --md-sys-shape-corner-medium: 0.375rem;
+  --md-sys-shape-corner-large: 0.5rem;
+  --md-sys-shape-corner-extra-large: 0.5rem;
+  --md-sys-shape-corner-full: 0.5rem;
+}
+
+.site-title::before {
+  content: none;
+}
+
+@media (min-width: 50rem) {
+  .sidebar-pane {
+    border-start-end-radius: 0;
+  }
 }
