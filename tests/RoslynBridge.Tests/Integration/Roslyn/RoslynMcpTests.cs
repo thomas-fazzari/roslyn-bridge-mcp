@@ -535,6 +535,42 @@ public sealed partial class RoslynMcpTests
     }
 
     [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    public async Task KeepsOnlyTheCallsThroughABaseMemberWhoseReceiverCanHoldTheTypeAsync()
+    {
+        const string leasesFile = "Application/Leases.cs";
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var workspace = await RoslynTestWorkspace.CreateAsync(cancellationToken);
+        await StartRoslynAsync(workspace);
+        await workspace.WriteFileAsync(
+            leasesFile,
+            "namespace Sample.Application;\n\npublic interface IHandle : System.IDisposable { }\n\n"
+                + "public sealed class Lease : System.IDisposable\n{\n    public void Dispose() { }\n}\n\n"
+                + "public static class Leases\n{\n    public static IHandle Open() => null!;\n\n"
+                + "    public static void Release(System.IDisposable lease) => lease.Dispose();\n\n"
+                + "    public static void Hold(IHandle handle) => handle.Dispose();\n\n"
+                + "    public static void Keep()\n    {\n        var handle = Open();\n    }\n}\n"
+        );
+        await workspace.CallAsync(
+            new LspRequest { Action = LspAction.Diagnostics, File = leasesFile }
+        );
+
+        var callers = await workspace.CallAsync(
+            new LspRequest { Action = LspAction.Callers, Symbol = "Lease.Dispose" }
+        );
+
+        // A sealed Lease is never an IHandle, so Hold and the declaration in Keep cannot reach it
+        callers
+            .Should()
+            .Be(
+                $"""
+                {leasesFile}:14:24 method Sample.Application.Leases.Release(IDisposable)
+                  through IDisposable.Dispose()
+                  calls 14:67
+                """
+            );
+    }
+
+    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
     public async Task ReportsTheCompilerFactsOfExpressionsAndDeclaredNamesAsync()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
