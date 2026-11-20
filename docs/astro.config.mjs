@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { satteri } from "@astrojs/markdown-satteri";
 import starlight from "@astrojs/starlight";
 import { defineConfig } from "astro/config";
-import starlightThemeBlack from "starlight-theme-black";
+import md3Theme from "starlight-theme-md3";
 
 const base = "/roslyn-bridge-mcp/";
 const docsDir = dirname(fileURLToPath(import.meta.url));
@@ -48,13 +48,13 @@ export default defineConfig({
   markdown: { processor: satteri({ mdastPlugins: [relativePageLinks] }) },
   integrations: [
     starlight({
-      title: "Roslyn Bridge MCP",
+      title: "Roslyn Bridge",
       description: "C# diagnostics, navigation and refactoring for coding agents.",
-      plugins: [starlightThemeBlack({ docs: { showMarkdownActions: false } })],
+      plugins: [md3Theme({ seed: "#0f62fe" })],
       customCss: [
-        "@fontsource/onest/400.css",
-        "@fontsource/onest/500.css",
-        "@fontsource/onest/600.css",
+        "@fontsource-variable/ibm-plex-sans",
+        "@fontsource/ibm-plex-mono/400.css",
+        "@fontsource/ibm-plex-mono/600.css",
         "./styles/custom.css",
       ],
       social: [
