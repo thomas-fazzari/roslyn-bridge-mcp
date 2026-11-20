@@ -497,12 +497,14 @@ internal sealed partial class SymbolResolver(RoslynSession session, WorkspacePat
             return error;
 
         var matches = new List<WorkspaceMatch>();
+        // Resolving a file checks each folder on disk, and a file declares many symbols
+        var files = new Dictionary<string, WorkspaceFilePath?>(StringComparer.Ordinal);
         foreach (var result in results)
         {
             if (
                 SymbolName.Parse(result.Name) is { } found
                 && result.Location is { Uri: { } uri, Range: { } range }
-                && paths.TryGetWorkspaceFile(uri) is { } file
+                && WorkspaceFile(uri) is { } file
             )
             {
                 matches.Add(
@@ -517,6 +519,17 @@ internal sealed partial class SymbolResolver(RoslynSession session, WorkspacePat
         }
 
         return matches;
+
+        WorkspaceFilePath? WorkspaceFile(string uri)
+        {
+            if (!files.TryGetValue(uri, out var file))
+            {
+                file = paths.TryGetWorkspaceFile(uri);
+                files.Add(uri, file);
+            }
+
+            return file;
+        }
     }
 
     private static bool IsNamed(WorkspaceMatch match, string name) =>

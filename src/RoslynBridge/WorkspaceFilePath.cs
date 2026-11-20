@@ -8,7 +8,7 @@ namespace RoslynBridge;
 /// </summary>
 /// <remarks>
 /// <para>Only <see cref="WorkspacePaths"/> creates one: from caller input through <see cref="WorkspacePaths.Resolve"/>, from a Roslyn location, from a path the bridge or the file watcher produced, or from its own file walk.</para>
-/// <para>Only <see cref="WorkspacePaths.Resolve"/> rejects a path behind a symbolic link. The file may not exist.</para>
+/// <para>Caller input and Roslyn locations never lead through a symbolic link. The file may not exist.</para>
 /// </remarks>
 [DebuggerDisplay("{RelativePath}")]
 internal sealed record WorkspaceFilePath

@@ -32,6 +32,8 @@ internal static class LspResultsExtensions
         public Result<FoundLocations> FindLocations(WorkspacePaths paths, bool skipGenerated)
         {
             var found = new HashSet<SourceLocation>();
+            // Resolving a file checks each folder on disk, and a reference list repeats files
+            var files = new Dictionary<string, LocationFile>(StringComparer.Ordinal);
             var generated = 0;
             foreach (var location in locations)
             {
@@ -53,7 +55,13 @@ internal static class LspResultsExtensions
                     continue;
                 }
 
-                found.Add(new SourceLocation(FileOf(uri, paths), range.Start.OneBased));
+                if (!files.TryGetValue(uri, out var file))
+                {
+                    file = FileOf(uri, paths);
+                    files.Add(uri, file);
+                }
+
+                found.Add(new SourceLocation(file, range.Start.OneBased));
             }
 
             return new FoundLocations([.. found.Order(SourceLocation.Order)], generated);

@@ -126,7 +126,9 @@ public sealed class WorkspacePathsTests : TempWorkspaceTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task ResolveRejectsAPathThroughASymbolicLinkAsync(bool linkDirectory)
+    public async Task ResolveAndRoslynLocationsRejectAPathThroughASymbolicLinkAsync(
+        bool linkDirectory
+    )
     {
         var target = await WriteFileAsync(
             Root,
@@ -150,11 +152,14 @@ public sealed class WorkspacePathsTests : TempWorkspaceTests
             Assert.Skip("Creating a symbolic link needs privileges on this platform.");
         }
 
-        new WorkspacePaths(Root)
-            .Resolve(linkDirectory ? Path.Combine("Linked", "Source.cs") : "Linked.cs")
-            .ErrorCode()
+        var paths = new WorkspacePaths(Root);
+        var linked = linkDirectory ? Path.Combine("Linked", "Source.cs") : "Linked.cs";
+
+        paths.Resolve(linked).ErrorCode().Should().Be(ErrorCodes.InvalidRequest);
+        paths
+            .TryGetWorkspaceFile(new Uri(Path.Combine(Root, linked)).AbsoluteUri)
             .Should()
-            .Be(ErrorCodes.InvalidRequest);
+            .BeNull();
     }
 
     [Fact]
