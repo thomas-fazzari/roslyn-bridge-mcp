@@ -124,7 +124,7 @@ internal static partial class SymbolExtensions
                     IsImplicitlyDeclared: false,
                     IsOverride: false,
                     ImplementsInterfaceMember: false,
-                    IsNamedByDebuggerDisplay: false
+                    IsNamedByDebuggerDisplay: false,
                 }
             && symbol switch
             {
@@ -218,7 +218,7 @@ internal static partial class SymbolExtensions
                     {
                         TypeKind: TypeKind.Class,
                         IsAbstract: false,
-                        IsStatic: false
+                        IsStatic: false,
                     } type
                 && type.Supertypes.Any(supertype => supertype.IsFromFramework)
             );

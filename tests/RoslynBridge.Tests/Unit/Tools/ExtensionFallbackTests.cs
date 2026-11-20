@@ -171,6 +171,38 @@ public sealed class ExtensionFallbackTests : TempWorkspaceTests
     }
 
     [Fact]
+    public async Task CalleesFallBackToTheOutgoingCallsRequestWhenTheExtensionFailsAsync()
+    {
+        await WriteFileAsync(Root, SourceFile, "class A {}\n");
+        var callee = await WriteFileAsync(Root, HierarchyCallerFile, "class C {}\n");
+        var answers = new Dictionary<string, JsonNode>(StringComparer.Ordinal)
+        {
+            [LspMethods.ServerActivateExtension] = ActivatedHandlers(),
+            [LspMethods.TextDocumentPrepareCallHierarchy] = new JsonArray(
+                new JsonObject { ["name"] = CallerName, ["kind"] = (int)LspSymbolKind.Method }
+            ),
+            [LspMethods.CallHierarchyOutgoingCalls] = new JsonArray(OutgoingCall(callee)),
+        };
+        await using var session = CreateSession(
+            Root,
+            FakeServer(server =>
+                server.Handle = (method, _) =>
+                    method is LspMethods.TextDocumentDispatchExtensionMessage
+                        ? throw new LocalRpcException("The extension failed.")
+                        {
+                            ErrorCode = HandlerFailureCode,
+                        }
+                        : Task.FromResult(answers.GetValueOrDefault(method))
+            )
+        );
+        using var tool = CreateTool(Root, session);
+
+        var response = await tool.ExecuteAsync(Request(LspAction.Callees), TestCt);
+
+        ResultLines.Locations(ResponseText(response)).Should().Equal(HierarchyCallerFile);
+    }
+
+    [Fact]
     public async Task UnusedSymbolsFailWithoutTheWorkspaceHandlerAsync()
     {
         await WriteFileAsync(Root, SourceFile, "class A {}\n");
@@ -226,6 +258,19 @@ public sealed class ExtensionFallbackTests : TempWorkspaceTests
             ["fromRanges"] = new JsonArray(),
         };
 
+    private static JsonObject OutgoingCall(string path) =>
+        new()
+        {
+            ["to"] = new JsonObject
+            {
+                ["name"] = CallerName,
+                ["kind"] = (int)LspSymbolKind.Method,
+                ["uri"] = new Uri(path).AbsoluteUri,
+                ["selectionRange"] = Range(0, 6),
+            },
+            ["fromRanges"] = new JsonArray(),
+        };
+
     // The expression handler throws, and the references handler finds one location
     private static Task<JsonNode?> DispatchAnswer(JsonNode? parameters, string foundPath) =>
         parameters?["messageName"]?.GetValue<string>() is RoslynConnection.ExpressionMessage
@@ -252,6 +297,7 @@ public sealed class ExtensionFallbackTests : TempWorkspaceTests
             ["documentMessageHandlers"] = new JsonArray(
                 JsonValue.Create(RoslynConnection.ReferencesMessage),
                 JsonValue.Create(RoslynConnection.CallersMessage),
+                JsonValue.Create(RoslynConnection.CalleesMessage),
                 JsonValue.Create(RoslynConnection.ExpressionMessage)
             ),
         };

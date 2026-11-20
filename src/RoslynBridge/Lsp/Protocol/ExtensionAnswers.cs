@@ -64,7 +64,7 @@ internal sealed record ExtensionReferences(
     [property: JsonRequired] int Generated
 ) : IExtensionAnswer<ExtensionReferences>
 {
-    public static ExtensionReferences NotFound { get; } = new(false, [], [], 0);
+    public static ExtensionReferences NotFound { get; } = new(Found: false, [], [], 0);
 }
 
 /// <param name="Found">False when the position has no expression and declares no name. The caller has no fallback.</param>
@@ -94,14 +94,17 @@ internal sealed record ExtensionExpression(
     string? Documentation = null
 ) : IExtensionAnswer<ExtensionExpression>
 {
-    public static ExtensionExpression NotFound { get; } = new(false, string.Empty, string.Empty);
+    public static ExtensionExpression NotFound { get; } =
+        new(Found: false, string.Empty, string.Empty);
 }
 
-/// <param name="Calls">LSP incoming calls, which may also name the member they go through.</param>
-internal sealed record ExtensionCallers(
+/// <param name="Calls">
+/// LSP incoming calls for callers, which may also name the member they go through, and outgoing calls for callees.
+/// </param>
+internal sealed record ExtensionCalls(
     [property: JsonRequired] bool Found,
     [property: JsonRequired] LspCall[] Calls
-) : IExtensionAnswer<ExtensionCallers>
+) : IExtensionAnswer<ExtensionCalls>
 {
-    public static ExtensionCallers NotFound { get; } = new(false, []);
+    public static ExtensionCalls NotFound { get; } = new(Found: false, []);
 }

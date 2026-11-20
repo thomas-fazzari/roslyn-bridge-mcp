@@ -35,6 +35,19 @@ internal sealed record IncomingCall(
     [property: JsonPropertyName("through")] string? Through
 );
 
+/// <param name="Found">False when the caller must ask callHierarchy/outgoingCalls instead.</param>
+/// <param name="Calls">Callees declared in source, in the shape of LSP outgoing calls. Properties, fields and events are listed too.</param>
+internal sealed record CalleesResponse(
+    [property: JsonPropertyName("found")] bool Found,
+    [property: JsonPropertyName("calls")] IReadOnlyList<OutgoingCall> Calls
+);
+
+/// <param name="FromRanges">The call sites, in the requested declaration.</param>
+internal sealed record OutgoingCall(
+    [property: JsonPropertyName("to")] CallItem To,
+    [property: JsonPropertyName("fromRanges")] IReadOnlyList<LspRange> FromRanges
+);
+
 /// <param name="Files">Full paths of the C# files whose declarations to check.</param>
 internal sealed record UnusedRequest(
     [property: JsonPropertyName("files")] IReadOnlyList<string> Files

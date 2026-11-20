@@ -70,6 +70,101 @@ public sealed partial class RoslynMcpTests
             public static int Echoed() => Echo(7);
         }
         """;
+    private const string ImplicitCallsTestFile = "Application/ImplicitCalls.cs";
+    private const string ImplicitCallsSource = """
+        using System;
+        using System.Runtime.CompilerServices;
+        using System.Threading.Tasks;
+
+        namespace Sample.Application;
+
+        public sealed class Numbers
+        {
+            public Enumerator GetEnumerator() => new();
+
+            public sealed class Enumerator : IDisposable
+            {
+                public int Current => 0;
+
+                public bool MoveNext() => false;
+
+                public void Dispose() { }
+            }
+        }
+
+        public readonly struct Later
+        {
+            public Awaiter GetAwaiter() => new();
+
+            public readonly struct Awaiter : INotifyCompletion
+            {
+                public bool IsCompleted => true;
+
+                public int GetResult() => 1;
+
+                public void OnCompleted(Action continuation) { }
+            }
+        }
+
+        public sealed class Pair
+        {
+            public void Deconstruct(out int left, out int right)
+            {
+                left = 0;
+                right = 0;
+            }
+        }
+
+        public sealed class Items
+        {
+            public Items Select(Func<int, int> selector) => this;
+
+            public Items Where(Func<int, bool> predicate) => this;
+        }
+
+        public sealed class Resource : IDisposable
+        {
+            public void Dispose() { }
+        }
+
+        public readonly struct Amount
+        {
+            public static Amount operator +(Amount left, Amount right) => left;
+        }
+
+        public static class Uses
+        {
+            public static void Loop(Numbers numbers)
+            {
+                foreach (var number in numbers) { }
+            }
+
+            public static async Task WaitAsync(Later later)
+            {
+                await later;
+            }
+
+            public static bool Match(object value) => value is Pair(var left, _);
+
+            public static Items Query(Items items) =>
+                from item in items where item > 1 select item + 1;
+
+            public static async Task<Amount> EverythingAsync(
+                Numbers numbers,
+                Later later,
+                Amount amount
+            )
+            {
+                foreach (var number in numbers) { }
+
+                await later;
+                using var resource = new Resource();
+                return amount + Identity(amount);
+            }
+
+            private static Amount Identity(Amount amount) => amount;
+        }
+        """;
     private const string JsonContextTestFile = "Application/JsonContext.cs";
     private const string JsonContextSource = """
         using System.Text.Json.Serialization;
@@ -594,6 +689,126 @@ public sealed partial class RoslynMcpTests
         );
 
         callers.Should().HaveSingleLocation(ConsumerTestFile);
+    }
+
+    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    public async Task ListsTheCompilerInsertedCallersOfAnEnumeratorAndAnAwaiterAsync()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var workspace = await RoslynTestWorkspace.CreateAsync(cancellationToken);
+        await WriteImplicitCallsAsync(workspace);
+
+        var dispose = await workspace.CallAsync(
+            new LspRequest { Action = LspAction.Callers, Symbol = "Numbers.Enumerator.Dispose" }
+        );
+        var result = await workspace.CallAsync(
+            new LspRequest { Action = LspAction.Callers, Symbol = "Later.Awaiter.GetResult" }
+        );
+
+        // The call site is the foreach or await keyword, as for a using
+        dispose
+            .Should()
+            .Be(
+                $"""
+                {ImplicitCallsTestFile}:63:24 method Sample.Application.Uses.Loop(Numbers)
+                  calls 65:9
+                {ImplicitCallsTestFile}:78:38 method Sample.Application.Uses.EverythingAsync(Numbers, Later, Amount)
+                  calls 84:9
+                """
+            );
+        result
+            .Should()
+            .Be(
+                $"""
+                {ImplicitCallsTestFile}:68:30 method Sample.Application.Uses.WaitAsync(Later)
+                  calls 70:9
+                {ImplicitCallsTestFile}:78:38 method Sample.Application.Uses.EverythingAsync(Numbers, Later, Amount)
+                  calls 86:9
+                """
+            );
+    }
+
+    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    public async Task ListsTheCompilerInsertedCallersOfAPatternAndAQueryAsync()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var workspace = await RoslynTestWorkspace.CreateAsync(cancellationToken);
+        await WriteImplicitCallsAsync(workspace);
+
+        var deconstruct = await workspace.CallAsync(
+            new LspRequest { Action = LspAction.Callers, Symbol = "Pair.Deconstruct" }
+        );
+        var where = await workspace.CallAsync(
+            new LspRequest { Action = LspAction.Callers, Symbol = "Items.Where" }
+        );
+        var select = await workspace.CallAsync(
+            new LspRequest { Action = LspAction.Callers, Symbol = "Items.Select" }
+        );
+
+        // The call site is the type of the pattern and the keyword of the query clause
+        deconstruct
+            .Should()
+            .Be(
+                $"""
+                {ImplicitCallsTestFile}:73:24 method Sample.Application.Uses.Match(object)
+                  calls 73:56
+                """
+            );
+        where
+            .Should()
+            .Be(
+                $"""
+                {ImplicitCallsTestFile}:75:25 method Sample.Application.Uses.Query(Items)
+                  calls 76:28
+                """
+            );
+        select
+            .Should()
+            .Be(
+                $"""
+                {ImplicitCallsTestFile}:75:25 method Sample.Application.Uses.Query(Items)
+                  calls 76:43
+                """
+            );
+    }
+
+    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    public async Task ListsTheCompilerInsertedCalleesOfAMethodAsync()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var workspace = await RoslynTestWorkspace.CreateAsync(cancellationToken);
+        await WriteImplicitCallsAsync(workspace);
+
+        var callees = await workspace.CallAsync(
+            new LspRequest { Action = LspAction.Callees, Symbol = "Uses.EverythingAsync" }
+        );
+
+        // Only members declared in the workspace are listed. Current and IsCompleted are accesses
+        callees
+            .Should()
+            .Be(
+                $"""
+                {ImplicitCallsTestFile}:9:23 method Sample.Application.Numbers.GetEnumerator()
+                  calls 84:9
+                {ImplicitCallsTestFile}:15:21 method Sample.Application.Numbers.Enumerator.MoveNext()
+                  calls 84:9
+                {ImplicitCallsTestFile}:17:21 method Sample.Application.Numbers.Enumerator.Dispose()
+                  calls 84:9
+                {ImplicitCallsTestFile}:23:20 method Sample.Application.Later.GetAwaiter()
+                  calls 86:9
+                {ImplicitCallsTestFile}:29:20 method Sample.Application.Later.Awaiter.GetResult()
+                  calls 86:9
+                {ImplicitCallsTestFile}:51:21 constructor Sample.Application.Resource
+                  calls 87:30
+                {ImplicitCallsTestFile}:53:17 method Sample.Application.Resource.Dispose()
+                  calls 87:9
+                {ImplicitCallsTestFile}:58:35 operator Sample.Application.Amount.operator +(Amount, Amount)
+                  calls 88:23
+                {ImplicitCallsTestFile}:91:27 method Sample.Application.Uses.Identity(Amount)
+                  calls 88:25
+                2 property, field or constant accesses omitted
+                """
+            );
     }
 
     [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]

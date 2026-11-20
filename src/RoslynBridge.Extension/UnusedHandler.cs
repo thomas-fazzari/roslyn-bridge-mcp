@@ -232,7 +232,7 @@ internal sealed class UnusedHandler
         CancellationToken cancellationToken
     )
     {
-        var dead = Enumerable.Repeat(true, uses.Length).ToArray();
+        var dead = Enumerable.Repeat(element: true, uses.Length).ToArray();
         var changed = true;
         while (changed)
         {
