@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Thomas Fazzari
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+using RoslynBridge.Lsp.Protocol;
+
 namespace RoslynBridge.Lsp;
 
 internal sealed partial class RoslynConnection
@@ -9,26 +11,17 @@ internal sealed partial class RoslynConnection
     private static readonly TimeSpan _projectAttachPollInterval = TimeSpan.FromMilliseconds(200);
 
     /// <summary>
-    /// Returns no contexts when the server lacks the extension.
+    /// Returns no contexts when the server cannot answer or cancels the request.
     /// </summary>
     public async Task<Result<ProjectContext[]>> ProjectContextsAsync(
         string uri,
         CancellationToken cancellationToken
-    )
-    {
-        var response = await RequestAsync(
-            LspMethods.TextDocumentGetProjectContexts,
-            new JsonObject { ["_vs_textDocument"] = new JsonObject { ["uri"] = uri } },
-            cancellationToken
-        );
-        if (response.IsError(out var error, out var result))
-            return error is { RpcCode: not null } ? Array.Empty<ProjectContext>() : error;
-
-        if (result is null)
-            return Array.Empty<ProjectContext>();
-
-        return result.Read<ProjectContexts>().Map(found => found.Contexts ?? []);
-    }
+    ) =>
+        await RequestProjectContextsAsync(uri, cancellationToken) switch
+        {
+            ToolError { RpcCode: not null } => Array.Empty<ProjectContext>(),
+            var contexts => contexts,
+        };
 
     /// <summary>
     /// Returns the files outside every project. Waits for Roslyn to attach files created since the load.
@@ -38,15 +31,9 @@ internal sealed partial class RoslynConnection
         CancellationToken cancellationToken
     )
     {
-        if (
-            (await OpenDocumentsAsync(files, cancellationToken)).IsError(
-                out var openError,
-                out var uris
-            )
-        )
-        {
+        var opened = await OpenDocumentsAsync(files, cancellationToken);
+        if (opened.IsError(out var openError, out var uris))
             return openError;
-        }
 
         var pending = files.Zip(uris).ToList();
         var outside = new HashSet<string>(StringComparer.Ordinal);
@@ -54,33 +41,33 @@ internal sealed partial class RoslynConnection
         while (true)
         {
             var states = await Task.WhenAll(
-                pending.Select(file => IsMiscellaneousAsync(file.Second, cancellationToken))
+                pending.Select(file => MembershipAsync(file.Second, cancellationToken))
             );
-            if (states.All().IsError(out var error, out var flags))
+            if (states.All().IsError(out var error, out var memberships))
                 return error;
 
-            var stillOutside = pending.Where((_, index) => flags[index]).ToList();
-            pending = [];
-            foreach (var file in stillOutside)
+            List<(string First, string Second)> waiting = [];
+            foreach (var (file, membership) in pending.Zip(memberships))
             {
+                if (membership is Membership.InProject)
+                    continue;
+
                 // A file that existed at load and is still outside a project stays there
-                if (_createdFiles.ContainsKey(file.First))
-                {
-                    pending.Add(file);
-                }
+                if (membership is Membership.Unknown || _createdFiles.ContainsKey(file.First))
+                    waiting.Add(file);
                 else
-                {
                     outside.Add(file.First);
-                }
             }
+
+            pending = waiting;
 
             if (pending.Count == 0 || Stopwatch.GetElapsedTime(started) >= ProjectAttachTimeout)
             {
                 // A created file that no project picks up is waited for only once
                 foreach (var (path, _) in pending)
                 {
-                    _createdFiles.TryRemove(path, out _);
-                    outside.Add(path);
+                    if (_createdFiles.TryRemove(path, out _))
+                        outside.Add(path);
                 }
 
                 return outside;
@@ -90,12 +77,43 @@ internal sealed partial class RoslynConnection
         }
     }
 
-    // Servers without the extension cannot report the state, so the file is not held back
-    private async Task<Result<bool>> IsMiscellaneousAsync(
+    // Roslyn cancels the request during a workspace change, so the next poll asks again
+    private async Task<Result<Membership>> MembershipAsync(
         string uri,
         CancellationToken cancellationToken
     ) =>
-        (await ProjectContextsAsync(uri, cancellationToken)).Map(contexts =>
-            contexts.Length > 0 && contexts.All(context => context.IsMiscellaneous)
+        await RequestProjectContextsAsync(uri, cancellationToken) switch
+        {
+            ToolError error when IsCancelled(error) => Membership.Unknown,
+            ToolError { RpcCode: not null } => Membership.InProject,
+            ToolError error => error,
+            ProjectContext[] contexts
+                when contexts.Length > 0 && contexts.All(context => context.IsMiscellaneous) =>
+                Membership.Outside,
+            ProjectContext[] => Membership.InProject,
+        };
+
+    private async Task<Result<ProjectContext[]>> RequestProjectContextsAsync(
+        string uri,
+        CancellationToken cancellationToken
+    )
+    {
+        var response = await RequestAsync(
+            LspMethods.TextDocumentGetProjectContexts,
+            new JsonObject { ["_vs_textDocument"] = new JsonObject { ["uri"] = uri } },
+            cancellationToken
         );
+        return response.Bind(result =>
+            result is null
+                ? Array.Empty<ProjectContext>()
+                : result.Read<ProjectContexts>().Map(found => found.Contexts ?? [])
+        );
+    }
+
+    private enum Membership
+    {
+        InProject = 0,
+        Outside = 1,
+        Unknown = 2,
+    }
 }

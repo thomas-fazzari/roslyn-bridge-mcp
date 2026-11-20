@@ -3,7 +3,6 @@
 
 using ModelContextProtocol.Protocol;
 using RoslynBridge.Lsp;
-using RoslynBridge.Requests;
 using RoslynBridge.Tests.Assertions;
 using RoslynBridge.Tests.Fakes;
 using static RoslynBridge.Tests.Fakes.LspSymbolJson;

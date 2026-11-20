@@ -2,9 +2,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 using RoslynBridge.Editing;
-using RoslynBridge.Output;
+using RoslynBridge.Lsp.Protocol;
 using RoslynBridge.Results;
-using RoslynBridge.Tools;
 using static RoslynBridge.Tests.Unit.TestHelpers;
 
 namespace RoslynBridge.Tests.Unit.Editing;
@@ -96,12 +95,12 @@ public sealed class WorkspaceEditServiceTests : TempWorkspaceTests
 
             failure.Phase.Should().Be(EditApplicationPhase.Write);
             failure.FailedPath.Should().Be(Path.Combine("Nested", "Delete.cs"));
-            failure.FailedOperation.Should().Be(FileOperation.Delete);
+            failure.FailedOperation.Should().Be(FileChange.Delete);
             failure.Code.Should().Be(ErrorCodes.Io);
             failure.Receipt.Applied.Should().BeFalse();
             failure
                 .Receipt.Operations.Should()
-                .Equal(new FileOperation("First.cs", FileOperation.Change));
+                .Equal(new FileOperation("First.cs", FileChange.Change));
             await AssertFileTextAsync(first, "class Changed {}");
             File.Exists(deleted).Should().BeTrue();
         }
@@ -157,7 +156,7 @@ public sealed class WorkspaceEditServiceTests : TempWorkspaceTests
 
         var (preview, _) = (await service.PreviewAsync(Parse(edit), snapshot, TestCt)).Succeeded();
         var rendered = ResponseText(
-            LspTool.Response(new ProposalPreview("proposal", preview, Command: null))
+            new ProposalPreview("proposal", preview, Command: null).ToResponse()
         );
 
         preview.Should().HaveCount(fileCount);
@@ -372,17 +371,15 @@ public sealed class WorkspaceEditServiceTests : TempWorkspaceTests
     }
 
     [Theory]
-    [InlineData(FileOperation.Create)]
-    [InlineData(FileOperation.Rename)]
-    public async Task EditTargetMustBeInsideTheWorkspaceAsync(string kind)
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task EditTargetMustBeInsideTheWorkspaceAsync(bool createsFile)
     {
         var source = await WriteFileAsync(Root, SourceFile, "class Source {}");
         var target = Path.Combine(_outside, "Target.cs");
         var service = CreateService();
         var snapshot = Snapshot(Root);
-        var operation = string.Equals(kind, FileOperation.Create, StringComparison.Ordinal)
-            ? CreateFile(target)
-            : RenameFile(source, target);
+        var operation = createsFile ? CreateFile(target) : RenameFile(source, target);
 
         await AssertErrorAsync(Apply, ErrorCodes.InvalidRequest);
         File.Exists(target).Should().BeFalse();
@@ -421,17 +418,15 @@ public sealed class WorkspaceEditServiceTests : TempWorkspaceTests
     }
 
     [Theory]
-    [InlineData(FileOperation.Create)]
-    [InlineData(FileOperation.Rename)]
-    public async Task ReplacingAnExistingFileRequiresOverwriteAsync(string kind)
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ReplacingAnExistingFileRequiresOverwriteAsync(bool createsFile)
     {
         var source = await WriteFileAsync(Root, SourceFile, "class Source {}");
         var target = await WriteFileAsync(Root, "Target.cs", "class Target {}");
         var service = CreateService();
         var snapshot = Snapshot(Root);
-        var operation = string.Equals(kind, FileOperation.Create, StringComparison.Ordinal)
-            ? CreateFile(target)
-            : RenameFile(source, target);
+        var operation = createsFile ? CreateFile(target) : RenameFile(source, target);
 
         await AssertErrorAsync(Apply, ErrorCodes.InvalidRequest);
         await AssertFileTextAsync(source, "class Source {}");

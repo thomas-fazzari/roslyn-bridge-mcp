@@ -3,6 +3,8 @@
 
 using RoslynBridge.Changes;
 using RoslynBridge.Editing;
+using RoslynBridge.Lsp.Protocol;
+using RoslynBridge.Results;
 using static RoslynBridge.Tests.Unit.TestHelpers;
 
 namespace RoslynBridge.Tests.Unit.Changes;
@@ -30,7 +32,7 @@ public sealed class CommandEditsTests : TempWorkspaceTests
         );
 
         var acknowledgement = await commandEdits.ApplyAsync(
-            WorkspaceChanges(path, TextEdit(0, 6, 0, 7, "B")),
+            Edit(path, TextEdit(0, 6, 0, 7, "B")),
             TestCt
         );
 
@@ -45,10 +47,7 @@ public sealed class CommandEditsTests : TempWorkspaceTests
         commandEdits.Result.Operations[0].Path.Should().Be(SourceFile);
         await AssertFileTextAsync(path, "class B {}");
 
-        var rejected = await commandEdits.ApplyAsync(
-            WorkspaceChanges(path, TextEdit(0, 6, 0, 7, "C")),
-            TestCt
-        );
+        var rejected = await commandEdits.ApplyAsync(Edit(path, TextEdit(0, 6, 0, 7, "C")), TestCt);
 
         rejected.Applied.Should().BeFalse();
         await AssertFileTextAsync(path, "class B {}");
@@ -68,15 +67,9 @@ public sealed class CommandEditsTests : TempWorkspaceTests
             TestCt
         );
 
-        var first = await commandEdits.ApplyAsync(
-            WorkspaceChanges(path, TextEdit(0, 6, 0, 7, "B")),
-            TestCt
-        );
+        var first = await commandEdits.ApplyAsync(Edit(path, TextEdit(0, 6, 0, 7, "B")), TestCt);
         var second = await commandEdits.ApplyAsync(
-            WorkspaceChanges(
-                Path.Combine(Root, "Missing.cs"),
-                TextEdit(0, 0, 0, 0, "class Missing {}")
-            ),
+            Edit(Path.Combine(Root, "Missing.cs"), TextEdit(0, 0, 0, 0, "class Missing {}")),
             TestCt
         );
 
@@ -124,12 +117,12 @@ public sealed class CommandEditsTests : TempWorkspaceTests
             cancellationToken
         );
         var first = commandEdits.ApplyAsync(
-            WorkspaceChanges(firstPath, TextEdit(0, 6, 0, 7, "Changed")),
+            Edit(firstPath, TextEdit(0, 6, 0, 7, "Changed")),
             cancellationToken
         );
         await firstCaptureStarted.Task.WaitAsync(cancellationToken);
         var second = commandEdits.ApplyAsync(
-            WorkspaceChanges(secondPath, TextEdit(0, 6, 0, 7, "Changed")),
+            Edit(secondPath, TextEdit(0, 6, 0, 7, "Changed")),
             cancellationToken
         );
 
@@ -169,7 +162,7 @@ public sealed class CommandEditsTests : TempWorkspaceTests
             cancellationToken
         );
         var pending = commandEdits.ApplyAsync(
-            WorkspaceChanges(path, TextEdit(0, 6, 0, 7, "B")),
+            Edit(path, TextEdit(0, 6, 0, 7, "B")),
             cancellationToken
         );
         await captureStarted.Task.WaitAsync(cancellationToken);
@@ -186,7 +179,7 @@ public sealed class CommandEditsTests : TempWorkspaceTests
         commandEdits.Result.FileCount.Should().Be(1);
         (await pending).Applied.Should().BeTrue();
         var rejected = await commandEdits.ApplyAsync(
-            WorkspaceChanges(path, TextEdit(0, 6, 0, 7, "C")),
+            Edit(path, TextEdit(0, 6, 0, 7, "C")),
             cancellationToken
         );
         rejected.Applied.Should().BeFalse();
@@ -194,4 +187,7 @@ public sealed class CommandEditsTests : TempWorkspaceTests
     }
 
     private WorkspaceEditService CreateService() => new(new WorkspacePaths(Root));
+
+    private static Result<WorkspaceEdit> Edit(string path, params JsonObject[] edits) =>
+        WorkspaceEdit.Parse(WorkspaceChanges(path, edits));
 }

@@ -3,6 +3,7 @@
 
 using RoslynBridge.Changes;
 using RoslynBridge.Lsp;
+using RoslynBridge.Lsp.Protocol;
 using RoslynBridge.Requests;
 using RoslynBridge.Tests.Assertions;
 using RoslynBridge.Tests.Fakes;
@@ -52,7 +53,7 @@ public sealed class RenameToolTests : TempWorkspaceTests
         await using var session = CreateSession(Root, RenamingServer());
         using var tool = CreateTool(Root, session);
         var proposals = new List<string>();
-        for (var index = 0; index < 2 * LspChanges.MaximumPendingProposals; index++)
+        for (var index = 0; index < 2 * ProposalStore.MaximumPendingProposals; index++)
         {
             var preview = await tool.ExecuteAsync(RenameRequest(), TestCt);
             proposals.Add(ResultLines.ProposalId(ResponseText(preview)));
@@ -62,7 +63,7 @@ public sealed class RenameToolTests : TempWorkspaceTests
         oldest.Should().BeError(ErrorCodes.InvalidRequest);
 
         // Each use remembers a new preview, which evicts the oldest remaining proposal
-        foreach (var proposal in proposals[^LspChanges.MaximumPendingProposals..])
+        foreach (var proposal in proposals[^ProposalStore.MaximumPendingProposals..])
         {
             var response = await tool.ExecuteAsync(ProposalRequest(proposal), TestCt);
             response.Should().BeSuccessful();
@@ -179,6 +180,35 @@ public sealed class RenameToolTests : TempWorkspaceTests
             .And.Contain($"delete {SourceFile}");
         File.Exists(source).Should().BeFalse();
         await AssertFileTextAsync(Path.Combine(Root, RenamedFile), SourceText);
+    }
+
+    [Fact]
+    public async Task RoslynCrashDiscardsThePendingProposalsAsync()
+    {
+        var source = await WriteFileAsync(Root, SourceFile, SourceText);
+        var renaming = RenamingServer();
+        var servers = new List<FakeRoslynServer>();
+        await using var session = CreateSession(Root, (options, paths) =>
+        {
+            var server = (FakeRoslynServer)renaming(options, paths);
+            servers.Add(server);
+            return server;
+        });
+        using var tool = CreateTool(Root, session);
+        var preview = await tool.ExecuteAsync(RenameRequest(), TestCt);
+
+        servers[0].Crash();
+        var applied = await tool.ExecuteAsync(
+            ProposalRequest(ResultLines.ProposalId(ResponseText(preview))) with
+            {
+                Apply = true,
+            },
+            TestCt
+        );
+
+        applied.Should().BeError(ErrorCodes.InvalidRequest);
+        servers.Should().HaveCount(2);
+        await AssertFileTextAsync(source, SourceText);
     }
 
     private RoslynLauncher RenamingServer() =>

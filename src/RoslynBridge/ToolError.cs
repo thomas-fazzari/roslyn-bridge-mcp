@@ -1,8 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Thomas Fazzari
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-using RoslynBridge.Results;
-
 namespace RoslynBridge;
 
 /// <param name="Candidates">Values the client can send instead, such as the symbols an ambiguous name may mean.</param>
@@ -84,6 +82,14 @@ internal union Result<T>(T, ToolError)
             T value => map(value),
             null => map(default!),
         };
+
+    public Result<TResult> Bind<TResult>(Func<T, Result<TResult>> next) =>
+        this switch
+        {
+            ToolError error => error,
+            T value => next(value),
+            null => next(default!),
+        };
 }
 
 internal static class ResultExtensions
@@ -106,12 +112,18 @@ internal static class ResultExtensions
 
             return values;
         }
-    }
 
-    extension<T>(Result<T> result)
-        where T : ToolResult
-    {
-        public Result<ToolResult> AsToolResult() => result.Map<ToolResult>(value => value);
+        /// <summary>
+        /// Skips the errors.
+        /// </summary>
+        public IEnumerable<T> Values()
+        {
+            foreach (var result in results)
+            {
+                if (!result.IsError(out _, out var value))
+                    yield return value;
+            }
+        }
     }
 
     extension<T>(Task<Result<T>> task)

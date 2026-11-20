@@ -2,11 +2,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 using ModelContextProtocol.Protocol;
+using RoslynBridge.Features.Navigate;
 using RoslynBridge.Lsp;
+using RoslynBridge.Lsp.Protocol;
 using RoslynBridge.Telemetry;
 using RoslynBridge.Tests.Assertions;
 using RoslynBridge.Tests.Unit.Tools;
-using RoslynBridge.Tools;
 using StreamJsonRpc;
 using static RoslynBridge.Tests.Unit.TestHelpers;
 
@@ -19,14 +20,13 @@ public sealed class ToolTelemetryTests : IAsyncDisposable
 
     private const string SourceFile = "Source.cs";
     private const string References = "references";
-    private const string ToolSpan = $"execute_tool {NavigateTool.Name}";
+    private static readonly string _toolSpan = $"execute_tool {NavigateTool.Name}";
 
     private readonly string _root = Directory
         .CreateTempSubdirectory("roslyn-tool-telemetry-")
         .FullName;
     private readonly TelemetryRecorder _recorder = new();
     private RoslynSession? _session;
-    private ToolClient? _tool;
 
     [Fact(Timeout = TimeoutMilliseconds)]
     public async Task RecordsASuccessfulCallAndNestsItsRoslynRequestsAsync()
@@ -47,7 +47,7 @@ public sealed class ToolTelemetryTests : IAsyncDisposable
             .Contain(ToolTelemetry.ToolName, NavigateTool.Name)
             .And.Contain(ToolTelemetry.Action, References)
             .And.NotContainKey(BridgeTelemetry.ErrorType);
-        var call = _recorder.Span(ToolSpan);
+        var call = _recorder.Span(_toolSpan);
         var request = _recorder.Span(LspMethods.TextDocumentReferences);
         request.TraceId.Should().Be(call.TraceId);
         request.ParentSpanId.Should().Be(call.SpanId);
@@ -102,7 +102,6 @@ public sealed class ToolTelemetryTests : IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         _recorder.Dispose();
-        _tool?.Dispose();
         if (_session is not null)
             await _session.DisposeAsync();
 
@@ -144,7 +143,6 @@ public sealed class ToolTelemetryTests : IAsyncDisposable
                 }
             })
         );
-        _tool = CreateTool(_root, _session);
-        return ToolServer.StartAsync(_tool.Lsp, cancellationToken);
+        return ToolServer.StartAsync(_root, _session, cancellationToken);
     }
 }

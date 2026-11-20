@@ -1,8 +1,13 @@
 // SPDX-FileCopyrightText: 2026 Thomas Fazzari
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+using RoslynBridge.Features.BulkNavigate;
+using RoslynBridge.Features.Diagnostics;
+using RoslynBridge.Features.Edit;
+using RoslynBridge.Features.Navigate;
+using RoslynBridge.Features.Server;
+using RoslynBridge.Features.Symbols;
 using RoslynBridge.Requests;
-using RoslynBridge.Tools;
 
 namespace RoslynBridge.Tests;
 
@@ -67,4 +72,105 @@ internal sealed record LspRequest
     public bool IsNavigation => Enum.TryParse<NavigationAction>(Action.ToString(), out _);
 
     public bool IsEdit => Enum.TryParse<EditAction>(Action.ToString(), out _);
+
+    // The tool that owns the action, with flat arguments, as an agent would call it
+    public (string Tool, Dictionary<string, object?> Arguments) ToolCall()
+    {
+        var (tool, parameters) = Action switch
+        {
+            LspAction.Diagnostics => (
+                DiagnosticsTool.Name,
+                ["file", "severity", "ids", "summary", "limit", "offset"]
+            ),
+            LspAction.Symbols => (SymbolsTool.Name, ["file", "query", "unused", "limit", "offset"]),
+            _ when IsNavigation => (
+                NavigateTool.Name,
+                new[]
+                {
+                    "action",
+                    "symbol",
+                    "file",
+                    "line",
+                    "character",
+                    "context",
+                    "inherited",
+                    "limit",
+                    "offset",
+                }
+            ),
+            LspAction.Bulk => (BulkNavigateTool.Name, ["queries", "context", "limit", "offset"]),
+            _ when IsEdit => (
+                EditTool.Name,
+                [
+                    "action",
+                    "symbol",
+                    "file",
+                    "line",
+                    "character",
+                    "endLine",
+                    "endCharacter",
+                    "newName",
+                    "diagnostic",
+                    "actionIndex",
+                    "proposalId",
+                    "apply",
+                    "all",
+                    "limit",
+                ]
+            ),
+            _ => (ServerTool.Name, ["action", "method", "parameters", "apply"]),
+        };
+
+        return (tool, Arguments(parameters));
+    }
+
+    private Dictionary<string, object?> Arguments(string[] names)
+    {
+        var values = new Dictionary<string, object?>(StringComparer.Ordinal)
+        {
+            ["action"] = JsonNamingPolicy.SnakeCaseLower.ConvertName(Action.ToString()),
+            ["file"] = File,
+            ["symbol"] = Symbol,
+            ["severity"] = Severity?.ToString().ToLowerInvariant(),
+            ["ids"] = Ids,
+            ["summary"] = Summary ? true : null,
+            ["line"] = Line,
+            ["character"] = Character,
+            ["endLine"] = EndLine,
+            ["endCharacter"] = EndCharacter,
+            ["query"] = Query,
+            ["newName"] = NewName,
+            ["diagnostic"] = Diagnostic,
+            ["actionIndex"] = ActionIndex,
+            ["proposalId"] = ProposalId,
+            ["method"] = Method,
+            ["parameters"] = Parameters,
+            ["apply"] = Apply ? true : null,
+            ["all"] = All ? true : null,
+            ["context"] = Context ? true : null,
+            ["inherited"] = Inherited ? true : null,
+            ["unused"] = Unused ? true : null,
+            ["limit"] = Limit,
+            ["offset"] = Offset,
+            ["queries"] =
+                Queries.Count > 0
+                    ? Queries
+                        .Select(query =>
+                            query.Arguments([
+                                "action",
+                                "symbol",
+                                "file",
+                                "line",
+                                "character",
+                                "inherited",
+                            ])
+                        )
+                        .ToList()
+                    : null,
+        };
+
+        return names
+            .Where(name => values[name] is not null)
+            .ToDictionary(name => name, name => values[name], StringComparer.Ordinal);
+    }
 }

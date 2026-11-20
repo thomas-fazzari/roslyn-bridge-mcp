@@ -6,7 +6,9 @@ using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 using Nerdbank.Streams;
-using RoslynBridge.Tools;
+using RoslynBridge.Lsp;
+using RoslynBridge.Settings;
+using static RoslynBridge.Tests.Unit.TestHelpers;
 
 namespace RoslynBridge.Tests.Unit.Tools;
 
@@ -32,14 +34,18 @@ internal sealed class ToolServer : IAsyncDisposable
     public McpClient Client { get; }
 
     public static async Task<ToolServer> StartAsync(
-        LspTool tool,
+        string root,
+        RoslynSession session,
         CancellationToken cancellationToken
     )
     {
         var (clientSide, serverSide) = FullDuplexStream.CreatePair();
 
-        var collection = new ServiceCollection();
-        collection.AddSingleton(tool);
+        var collection = ToolClient.Services(
+            root,
+            session,
+            Monitor(new BridgeOptions { WorkspaceRoot = root })
+        );
         collection
             .AddMcpServer()
             .WithStreamServerTransport(serverSide, serverSide)

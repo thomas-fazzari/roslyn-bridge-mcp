@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Thomas Fazzari
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+using RoslynBridge.Lsp.Protocol;
 using RoslynBridge.Telemetry;
 
 namespace RoslynBridge.Lsp;
@@ -11,10 +12,6 @@ internal sealed partial class RoslynConnection
     private const int MaximumDocumentCharacters = 1024 * 1024;
     private const int DocumentReadBufferCharacters = 4096;
     private const int InitialDocumentVersion = 1;
-    private const int FileCreated = 1;
-    private const int FileChanged = 2;
-    private const int FileDeleted = 3;
-
     private static readonly ToolError _oversizedDocument = ToolError.InvalidRequest(
         "The file exceeds the one million UTF-16 code unit limit."
     );
@@ -161,7 +158,7 @@ internal sealed partial class RoslynConnection
             );
         }
 
-        if (ReadDocumentStamp(path) is not { } stamp)
+        if (FileStamp.Read(path) is not { } stamp)
             return ToolError.InvalidRequest($"The file does not exist: {paths.RelativePath(path)}");
 
         var uri = new Uri(path).AbsoluteUri;
@@ -228,12 +225,6 @@ internal sealed partial class RoslynConnection
         return await SynchronizeWatchedFilesAsync(cancellationToken);
     }
 
-    private static FileStamp? ReadDocumentStamp(string path)
-    {
-        var file = new FileInfo(path);
-        return file.Exists ? new FileStamp(file.Length, file.LastWriteTimeUtc) : null;
-    }
-
     private static async Task<Result<string>> ReadDocumentAsync(
         string path,
         CancellationToken cancellationToken
@@ -281,7 +272,7 @@ internal sealed partial class RoslynConnection
         CancellationToken cancellationToken
     )
     {
-        if (ReadDocumentStamp(path) is not { } stamp)
+        if (FileStamp.Read(path) is not { } stamp)
             return await CloseDocumentAsync(path, cancellationToken);
 
         var document = _documents[path];
@@ -385,22 +376,22 @@ internal sealed partial class RoslynConnection
         CancellationToken cancellationToken
     )
     {
-        var changes = new List<FileChange>();
+        var changes = new List<FileEvent>();
         foreach (var (path, stamp) in current)
         {
             if (!_workspaceFiles.TryGetValue(path, out var previous))
             {
-                changes.Add(new FileChange(path, FileCreated));
+                changes.Add(new FileEvent(path, FileEventType.Created));
             }
             else if (changedPaths.Contains(path) || stamp != previous)
             {
-                changes.Add(new FileChange(path, FileChanged));
+                changes.Add(new FileEvent(path, FileEventType.Changed));
             }
         }
 
         foreach (var path in _workspaceFiles.Keys.Where(path => !current.ContainsKey(path)))
         {
-            changes.Add(new FileChange(path, FileDeleted));
+            changes.Add(new FileEvent(path, FileEventType.Deleted));
         }
 
         return SendFileChangesAsync(changes, cancellationToken);

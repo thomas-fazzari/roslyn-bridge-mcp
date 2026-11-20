@@ -82,7 +82,7 @@ Raw requests and `capabilities` return JSON.
 | `hover`                                                         | Plain text.                                                                                                                                                                                                                          |
 | `symbols`                                                       | The symbol lines of the related actions. For a file, they give the declaration end after a dash, as in `5:18-9:2`, and are indented under their container.                                                                           |
 | `source`                                                        | The saved text of each declaration, documentation comment included, after a `file:first-last kind name` header. A partial type returns every part.                                                                                   |
-| `members`                                                       | The type, then the members it declares grouped by file, with names relative to the type. With `inherited`, the members of its base classes follow.                                                                                   |
+| `members`                                                       | The type, then the members it declares grouped by file, with names relative to the type.                                                                                                                                             |
 | `impact`                                                        | Sections headed by `## action`. A member gets its references, callers and implementations. A type gets its references and subtypes.                                                                                                  |
 | `bulk_navigate`                                                 | One section per query in request order, headed `## number action target`.                                                                                                                                                            |
 
@@ -122,15 +122,15 @@ After `no callers`, a line says that reflection or code outside the workspace ma
 
 Options of the results:
 
-| Option or case                 | Behavior                                                                                                                                                                                              |
-| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `context`                      | Shows each position on its own line with its trimmed source line. For `callers`, call sites are in the caller's file. For `callees`, they are in the file of the requested method.                    |
-| `callees`                      | Lists calls only, and counts the property, field and constant accesses it leaves out.                                                                                                                 |
-| Position on a usage            | `callers`, `callees`, `supertypes`, `subtypes` and `impact` start from the declaration the usage refers to.                                                                                           |
-| `file` and `line` alone        | `source` and `members` use the innermost declaration around that line.                                                                                                                                |
-| `impact` not fitting           | The largest sections are named with their sizes on a final `omitted to fit:` line. Request those alone.                                                                                               |
-| `bulk_navigate`                | Runs up to 16 independent `navigate` queries concurrently. Each takes the `action`, `symbol`, `file`, `line` and `character` of `navigate`, and `context`, `limit` and `offset` apply to every query. |
-| A failed `bulk_navigate` query | Shows its error line in its own section, and the others still run. If the call times out, finished sections stay and the rest report `timeout`.                                                       |
+| Option or case                 | Behavior                                                                                                                                                                                                           |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `context`                      | Shows each position on its own line with its trimmed source line. For `callers`, call sites are in the caller's file. For `callees`, they are in the file of the requested method.                                 |
+| `callees`                      | Lists calls only, and counts the property, field and constant accesses it leaves out.                                                                                                                              |
+| Position on a usage            | `callers`, `callees`, `supertypes`, `subtypes` and `impact` start from the declaration the usage refers to.                                                                                                        |
+| `file` and `line` alone        | `source` and `members` use the innermost declaration around that line.                                                                                                                                             |
+| `impact` not fitting           | The largest sections are named with their sizes on a final `omitted to fit:` line. Request those alone.                                                                                                            |
+| `bulk_navigate`                | Runs up to 16 independent `navigate` queries concurrently. Each takes the `action`, `symbol`, `file`, `line`, `character` and `inherited` of `navigate`, and `context`, `limit` and `offset` apply to every query. |
+| A failed `bulk_navigate` query | Shows its error line in its own section, and the others still run. If the call times out, finished sections stay and the rest report `timeout`.                                                                    |
 
 A final `truncated:` line gives the total and the next offset when `limit` omitted results:
 
@@ -228,14 +228,14 @@ It counts as framework code, and leaves out:
 - declarations with an attribute outside a short list that no framework reads, such as `Obsolete` or `DebuggerDisplay`
 - concrete classes that derive from or implement a type of a library outside the .NET base class library, as hosted services, controllers and message handlers do, and the public members of these classes and of attributed types
 - public properties with a public setter, which serializers and object mappers write
-- the types that hold an attributed member or an entry point
+- the types that contain an attributed member or an entry point
 
 A selection of more than 1000 files returns `invalid_request`. The check searches the references of every declaration, so narrow `file` on a large workspace if the call times out.
 It needs the Roslyn extension of the bridge. Without it, or when it fails, the call returns the error `lsp_error`.
 
 ## Preview and apply
 
-The `edit` tool returns an edit preview whose first line holds its proposal ID. Apply that preview with the same action:
+The `edit` tool returns an edit preview whose first line is its proposal ID. Apply that preview with the same action:
 
 ```json
 { "action": "rename", "proposalId": "id-from-preview", "apply": true }
@@ -246,7 +246,7 @@ Apply the preview with its new proposal ID. Set `endLine` and `endCharacter` whe
 Some Roslyn commands reveal their edits only when executed.
 
 To fix a diagnostic without its position, pass its code as `diagnostic` with `file`, and optionally `line`.
-The listing then holds only the fixes for its first occurrence.
+The listing then shows only the fixes for its first occurrence.
 Nested actions appear as one entry per choice, titled with their menu path, such as `Introduce parameter for 'x' > into new overload`.
 A fix-all action appears once per scope, such as `Fix All: Remove unnecessary usings (Document)`, and fixes every occurrence in that scope.
 Entries under `Suppress or configure issues` are hidden, and a final line counts them. Set `all` to list them. Indexes count hidden entries, so they stay the same with `all` and can skip numbers without it.
@@ -267,7 +267,7 @@ Excerpts keep some unchanged context. A `preview truncated:` line means some cha
 The preview response is limited to 32 000 characters. A `truncated:` line marks omitted files.
 These limits leave the proposed edit unchanged.
 
-Proposals expire after five minutes. A proposal becomes stale when a file it edits changes, or when a project, props, solution or editorconfig file changes.
+Proposals expire after five minutes. A reload or a Roslyn restart discards them. A proposal becomes stale when a file it edits changes, or when a project, props, solution or editorconfig file changes.
 On `stale_edit`, request a new preview. Changes to other source files keep the proposal valid.
 Reloading also discards proposals. After an applied file creation or rename, the bridge waits for Roslyn to attach the new file to its project, and reloads Roslyn only if that takes too long.
 

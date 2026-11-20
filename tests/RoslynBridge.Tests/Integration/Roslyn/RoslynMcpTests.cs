@@ -1,8 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Thomas Fazzari
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-using RoslynBridge.Changes;
+using RoslynBridge.Features.Edit.CodeActions;
 using RoslynBridge.Lsp;
+using RoslynBridge.Lsp.Protocol;
 using RoslynBridge.Requests;
 using RoslynBridge.Tests.Assertions;
 using static RoslynBridge.Tests.Assertions.ResultLines;
@@ -1479,7 +1480,7 @@ public sealed partial class RoslynMcpTests
         var all = Lines(await workspace.CallAsync(request with { All = true }));
 
         var suppressions = all.Where(line =>
-                line.Contains(LspChanges.SuppressionGroup, StringComparison.Ordinal)
+                line.Contains(CodeActionsHandler.SuppressionGroup, StringComparison.Ordinal)
             )
             .ToArray();
         suppressions.Should().NotBeEmpty();

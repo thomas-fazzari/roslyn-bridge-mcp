@@ -3,7 +3,7 @@
 
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
-using RoslynBridge.Output;
+using RoslynBridge.Results;
 
 namespace RoslynBridge.Telemetry;
 

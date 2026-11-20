@@ -1,25 +1,17 @@
 // SPDX-FileCopyrightText: 2026 Thomas Fazzari
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-using Fastenshtein;
 using RoslynBridge.Lsp;
-using RoslynBridge.Results;
+using RoslynBridge.Lsp.Protocol;
 
 namespace RoslynBridge.Symbols;
 
 /// <summary>
 /// Workspace symbol search matches loosely, so it only selects candidate files. Their document symbols give the exact names.
 /// </summary>
-internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths)
+internal sealed partial class SymbolResolver(RoslynSession session, WorkspacePaths paths)
 {
     internal const int MaximumCandidates = 20;
-    private const int MaximumSuggestions = 10;
-    private const int MaximumTypoDistance = 3;
-
-    // One shared word, such as Get, matches too many members
-    private const int MinimumSharedWords = 2;
-
-    private static readonly Result<ContainerLookup?> _noContainer = (ContainerLookup?)null;
 
     /// <summary>
     /// A partial type has one declaration per part, and the first is where navigation starts.
@@ -131,20 +123,32 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
     }
 
     /// <summary>
-    /// Returns names in the format <see cref="ResolveAsync"/> accepts. Positions without a declaration are omitted.
+    /// Gives each item the name that <see cref="ResolveAsync"/> accepts. Items without a declaration in a workspace file keep Roslyn's name.
     /// </summary>
-    public async Task<
-        Result<Dictionary<(string File, SourcePosition Position), string>>
-    > NamesAsync(
-        IEnumerable<(string File, SourcePosition Position)> positions,
+    public async Task<Result<List<SymbolItem>>> NameAsync(
+        IReadOnlyList<SymbolItem> items,
         CancellationToken cancellationToken
-    ) =>
-        (await DeclarationsAtAsync(positions, cancellationToken)).Map(declarations =>
-            declarations.ToDictionary(
-                declaration => declaration.Key,
-                declaration => declaration.Value.Name
-            )
+    )
+    {
+        var locations = items.Select(DeclarationLocation).ToList();
+        var declared = await DeclarationsAtAsync(
+            locations.OfType<SourceLocation>(),
+            cancellationToken
         );
+        return declared.Map(declarations =>
+            items
+                .Zip(locations, (item, location) =>
+                    location is { } found && declarations.TryGetValue(found, out var declaration)
+                        ? item with
+                        {
+                            Name = declaration.Name,
+                            Detail = null,
+                        }
+                        : item
+                )
+                .ToList()
+        );
+    }
 
     /// <summary>
     /// Returns the innermost declaration that contains the line, or null.
@@ -277,15 +281,9 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
                 .Distinct(StringComparer.Ordinal)
         )
         {
-            if (
-                (await session.OpenDocumentAsync(file, cancellationToken)).IsError(
-                    out var openError,
-                    out var uri
-                )
-            )
-            {
+            var opened = await session.OpenDocumentAsync(file, cancellationToken);
+            if (opened.IsError(out var openError, out var uri))
                 return openError;
-            }
 
             var contextLookup = await session.ProjectContextsAsync(uri, cancellationToken);
             if (contextLookup.IsError(out var contextsError, out var contexts))
@@ -354,15 +352,9 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
             }
 
             var responses = await Task.WhenAll(
-                uris.Select(uri =>
-                    session.RequestAsync(
-                        LspMethods.TextDocumentDocumentSymbol,
-                        LspParameters.Document(uri),
-                        cancellationToken
-                    )
-                )
+                uris.Select(uri => session.DocumentSymbolsAsync(uri, cancellationToken))
             );
-            if (responses.Select(ReadSymbols).All().IsError(out var error, out var symbols))
+            if (responses.All().IsError(out var error, out var symbols))
                 return error;
 
             documents.AddRange(batch.Zip(symbols));
@@ -444,15 +436,18 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
         }
     }
 
+    private SourceLocation? DeclarationLocation(SymbolItem item) =>
+        item is { File: { } file, Position: { } position } && paths.ResultFilePath(file) is { } path
+            ? new SourceLocation(path, position)
+            : null;
+
     private static bool IsExtensionBlock(SymbolName member, int? kind) =>
         member is { Segments: [var block], Parameters: not null }
         && SymbolName.BaseName(block) is "extension"
         && kind is not LspSymbolKinds.Method;
 
-    private async Task<
-        Result<Dictionary<(string File, SourcePosition Position), SymbolDeclaration>>
-    > DeclarationsAtAsync(
-        IEnumerable<(string File, SourcePosition Position)> positions,
+    private async Task<Result<Dictionary<SourceLocation, SymbolDeclaration>>> DeclarationsAtAsync(
+        IEnumerable<SourceLocation> positions,
         CancellationToken cancellationToken
     )
     {
@@ -464,7 +459,7 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
         if (symbolFiles.IsError(out var error, out var documents))
             return error;
 
-        var found = new Dictionary<(string File, SourcePosition Position), SymbolDeclaration>();
+        var found = new Dictionary<SourceLocation, SymbolDeclaration>();
 
         foreach (var (file, symbols) in documents)
         {
@@ -473,9 +468,8 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
             )
             {
                 var declaration = declared.Declaration;
-                var position = (file, new SourcePosition(declaration.Line, declaration.Character));
-                if (wanted.Contains(position))
-                    found.TryAdd(position, declaration);
+                if (wanted.Contains(declaration.Location))
+                    found.TryAdd(declaration.Location, declaration);
             }
         }
 
@@ -506,15 +500,8 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
         CancellationToken cancellationToken
     )
     {
-        var response = await session.RequestAsync(
-            LspMethods.WorkspaceSymbol,
-            new JsonObject { ["query"] = query },
-            cancellationToken
-        );
-        if (response.IsError(out var requestError, out var symbols))
-            return requestError;
-
-        if (symbols.ReadArray<LspSymbol>().IsError(out var error, out var results))
+        var response = await session.WorkspaceSymbolsAsync(query, cancellationToken);
+        if (response.IsError(out var error, out var results))
             return error;
 
         var matches = new List<WorkspaceMatch>();
@@ -529,8 +516,7 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
                 matches.Add(
                     new WorkspaceMatch(
                         SymbolName.BaseName(found.Segments[^1]),
-                        file,
-                        range.Start.OneBased,
+                        new SourceLocation(file, range.Start.OneBased),
                         result.Kind
                     )
                 );
@@ -549,209 +535,9 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
     ) =>
         matches
             .Where(match => IsNamed(match, name))
-            .Select(match => match.File)
+            .Select(match => match.Location.File)
             .Distinct(StringComparer.Ordinal)
             .Order(StringComparer.Ordinal);
-
-    // An unreadable candidate file must not hide the error that the suggestions explain
-    // A failed Roslyn request has an RPC code, so it reaches the caller
-    private static bool IsUnreadable(ToolError error) =>
-        error
-            is { Code: ErrorCodes.Io or ErrorCodes.InvalidRequest }
-                or { Code: ErrorCodes.Lsp, RpcCode: null };
-
-    /// <summary>
-    /// Returns the error of a failed Roslyn request in place of the missing symbol.
-    /// </summary>
-    private async Task<ToolError> NotFoundAsync(
-        string text,
-        SymbolName requested,
-        string name,
-        List<WorkspaceMatch>? matches,
-        CancellationToken cancellationToken
-    )
-    {
-        if (matches is null)
-        {
-            var workspaceMatches = await WorkspaceMatchesAsync(name, cancellationToken);
-            if (workspaceMatches.IsError(out var matchError, out matches))
-                return matchError;
-        }
-
-        var containerLookup = await ContainerAsync(requested, name, matches, cancellationToken);
-        if (containerLookup.IsError(out var containerError, out var container))
-            return containerError;
-
-        var typeExists = container is { SimilarTypes: null };
-        // From other types, only a member with the exact name suggests the caller named the wrong type
-        var suggested = await SuggestionsAsync(
-            name,
-            container?.Members ?? [],
-            typeExists ? [.. matches.Where(match => IsNamed(match, name))] : matches,
-            cancellationToken
-        );
-        if (suggested.IsError(out var suggestionsError, out var suggestions))
-            return suggestionsError;
-
-        if (container is not null)
-        {
-            var display = string.Join('.', container.Name.Segments.Select(SymbolName.BaseName));
-            // When only the parameters differ, the type has the member
-            if (typeExists && !container.Members.Exists(member => IsNamed(member, name)))
-            {
-                return new ToolError(
-                    ErrorCodes.SymbolNotFound,
-                    suggestions.Count == 0
-                        ? $"No declaration matches '{text}' because '{display}' has no member '{name}'. Use members to list its members."
-                        : $"No declaration matches '{text}' because '{display}' has no member '{name}'. Send one candidate symbol instead.",
-                    suggestions
-                );
-            }
-
-            if (
-                container.SimilarTypes is { } similar
-                && suggestions.Count > 0
-                && !suggestions.Exists(suggestion => IsInside(suggestion, container.Name))
-            )
-            {
-                var types =
-                    similar.Count == 0
-                        ? string.Empty
-                        : $" Similar types: {string.Join(", ", similar.Select(type => type.Name).Distinct(StringComparer.Ordinal))}.";
-                return new ToolError(
-                    ErrorCodes.SymbolNotFound,
-                    $"No declaration matches '{text}' because no type matches '{display}'.{types} Use symbols to search by name."
-                );
-            }
-        }
-
-        return new ToolError(
-            ErrorCodes.SymbolNotFound,
-            suggestions.Count == 0
-                ? $"No declaration matches '{text}'. Use symbols to search by name."
-                : $"No declaration matches '{text}'. Send one candidate symbol instead.",
-            suggestions
-        );
-    }
-
-    private async Task<Result<ContainerLookup?>> ContainerAsync(
-        SymbolName requested,
-        string name,
-        List<WorkspaceMatch> matches,
-        CancellationToken cancellationToken
-    )
-    {
-        if (requested.Segments.Length == 1)
-            return _noContainer;
-
-        var container = new SymbolName([.. requested.Segments[..^1]], Parameters: null);
-        var containerName = SymbolName.BaseName(container.Segments[^1]);
-        var candidateLookup = await WorkspaceMatchesAsync(containerName, cancellationToken);
-        if (candidateLookup.IsError(out var error, out var candidates))
-            return error;
-
-        var symbolFiles = await DocumentSymbolsAsync(
-            FilesNamed(candidates, containerName),
-            cancellationToken
-        );
-        if (symbolFiles.IsError(out var documentsError, out var documents))
-            return IsUnreadable(documentsError) ? _noContainer : documentsError;
-
-        var types = FindDeclarations(documents, container).ToList();
-        if (types.Count > 0)
-        {
-            var memberLookup = await MemberMatchesAsync(types, cancellationToken);
-            if (memberLookup.IsError(out var membersError, out var members))
-                return IsUnreadable(membersError) ? _noContainer : membersError;
-
-            return new ContainerLookup(container, members, SimilarTypes: null);
-        }
-
-        // The container may be a namespace, which declares no members of its own
-        if (matches.Exists(match => IsNamed(match, name)))
-            return _noContainer;
-
-        return (
-            await SuggestionsAsync(
-                containerName,
-                [],
-                [.. candidates.Where(match => LspSymbolKinds.IsType(match.Kind))],
-                cancellationToken
-            )
-        ).Map<ContainerLookup?>(similar => new ContainerLookup(container, [], similar));
-    }
-
-    private static bool IsInside(SymbolItem suggestion, SymbolName container) =>
-        SymbolName.Parse(suggestion.Name) is { } name
-        && Enumerable
-            .Range(1, name.Segments.Length - 1)
-            .Any(length =>
-                container.Selects(
-                    new SymbolName([.. name.Segments[..length]], Parameters: null),
-                    exact: false
-                )
-            );
-
-    private async Task<Result<List<WorkspaceMatch>>> MemberMatchesAsync(
-        List<SymbolDeclaration> types,
-        CancellationToken cancellationToken
-    )
-    {
-        var members = new List<WorkspaceMatch>();
-        foreach (var type in types.GroupBy(type => type.Name, StringComparer.Ordinal))
-        {
-            if (
-                (await MembersAsync([.. type], cancellationToken)).IsError(
-                    out var error,
-                    out var declared
-                )
-            )
-            {
-                return error;
-            }
-
-            members.AddRange(declared.Select(WorkspaceMatch.Of));
-        }
-
-        return members;
-    }
-
-    private async Task<Result<List<SymbolItem>>> SuggestionsAsync(
-        string name,
-        IEnumerable<WorkspaceMatch> preferred,
-        List<WorkspaceMatch> matches,
-        CancellationToken cancellationToken
-    )
-    {
-        var close = Nearest(preferred, name, byWords: false).ToList();
-        // Shared words help only when no member is close in spelling
-        var nearest = (close.Count > 0 ? close : Nearest(preferred, name, byWords: true))
-            .Concat(Nearest(matches, name, byWords: false))
-            .Distinct()
-            .Take(MaximumSuggestions)
-            .ToList();
-        var lookup = await DeclarationsAtAsync(nearest, cancellationToken);
-        if (lookup.IsError(out var error, out var declarations))
-            return IsUnreadable(error) ? new List<SymbolItem>() : error;
-
-        return nearest
-            .Select(position => declarations.GetValueOrDefault(position))
-            .OfType<SymbolDeclaration>()
-            .Select(declaration => declaration.ToItem(paths))
-            .ToList();
-    }
-
-    private static IEnumerable<(string File, SourcePosition Position)> Nearest(
-        IEnumerable<WorkspaceMatch> matches,
-        string name,
-        bool byWords
-    ) =>
-        matches
-            .DistinctBy(match => match.Location)
-            .Select(match => match.Resembling(name, byWords))
-            .OfType<Suggestion>()
-            .Order(Suggestion.Nearest)
-            .Select(suggestion => suggestion.Match.Location);
 
     private List<SymbolItem> Candidates(IEnumerable<SymbolDeclaration> declarations) =>
         [
@@ -761,126 +547,6 @@ internal sealed class SymbolResolver(RoslynSession session, WorkspacePaths paths
                 .Take(MaximumCandidates)
                 .Select(declaration => declaration.ToItem(paths)),
         ];
-
-    private static Result<LspSymbol[]> ReadSymbols(Result<JsonNode?> response) =>
-        response switch
-        {
-            ToolError error => error,
-            JsonNode result => result.ReadArray<LspSymbol>(),
-            null => Array.Empty<LspSymbol>(),
-        };
-
-    private enum NameResemblance
-    {
-        SameName = 0,
-        ContainsName = 1,
-        Typo = 2,
-        SharedWords = 3,
-    }
-
-    private readonly record struct WorkspaceMatch(
-        string Name,
-        string File,
-        SourcePosition Position,
-        int? Kind
-    )
-    {
-        public (string File, SourcePosition Position) Location => (File, Position);
-
-        public static WorkspaceMatch Of(SymbolDeclaration declaration) =>
-            new(
-                SymbolName.BaseName(SymbolName.Parse(declaration.Name)!.Segments[^1]),
-                declaration.File,
-                new SourcePosition(declaration.Line, declaration.Character),
-                declaration.Kind
-            );
-
-        /// <param name="byWords">
-        /// Also accepts a name that shares most words, such as OnPlaybackStart for ReportPlaybackStart.
-        /// </param>
-        public Suggestion? Resembling(string requested, bool byWords)
-        {
-            var distance = Levenshtein.Distance(
-                requested.ToLowerInvariant(),
-                Name.ToLowerInvariant()
-            );
-            if (string.Equals(Name, requested, StringComparison.OrdinalIgnoreCase))
-                return new Suggestion(this, NameResemblance.SameName, distance);
-
-            if (Name.Contains(requested, StringComparison.OrdinalIgnoreCase))
-                return new Suggestion(this, NameResemblance.ContainsName, distance);
-
-            if (distance <= Math.Min(MaximumTypoDistance, requested.Length / 3))
-                return new Suggestion(this, NameResemblance.Typo, distance);
-
-            return byWords && SharesMostWords(requested, Name)
-                ? new Suggestion(this, NameResemblance.SharedWords, distance)
-                : null;
-        }
-
-        private static bool SharesMostWords(string requested, string name)
-        {
-            var words = Words(requested);
-            var shared = words.Count(Words(name).Contains);
-            return shared >= MinimumSharedWords && shared * 2 >= words.Count;
-        }
-
-        // PascalCase words
-        private static HashSet<string> Words(string name)
-        {
-            var words = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            var start = 0;
-            for (var index = 1; index <= name.Length; index++)
-            {
-                if (index == name.Length || char.IsUpper(name[index]))
-                {
-                    words.Add(name[start..index]);
-                    start = index;
-                }
-            }
-
-            return words;
-        }
-    }
-
-    private readonly record struct Suggestion(
-        WorkspaceMatch Match,
-        NameResemblance Kind,
-        int Distance
-    )
-    {
-        public static IComparer<Suggestion> Nearest { get; } = Comparer<Suggestion>.Create(Compare);
-
-        private static int Compare(Suggestion first, Suggestion second)
-        {
-            var comparison = first.Kind.CompareTo(second.Kind);
-            if (comparison != 0)
-                return comparison;
-
-            comparison = first.Distance.CompareTo(second.Distance);
-            if (comparison != 0)
-                return comparison;
-
-            comparison = string.CompareOrdinal(first.Match.Name, second.Match.Name);
-            if (comparison != 0)
-                return comparison;
-
-            comparison = string.CompareOrdinal(first.Match.File, second.Match.File);
-            if (comparison != 0)
-                return comparison;
-
-            comparison = first.Match.Position.Line.CompareTo(second.Match.Position.Line);
-            return comparison != 0
-                ? comparison
-                : first.Match.Position.Character.CompareTo(second.Match.Position.Character);
-        }
-    }
-
-    private sealed record ContainerLookup(
-        SymbolName Name,
-        List<WorkspaceMatch> Members,
-        List<SymbolItem>? SimilarTypes
-    );
 
     private readonly record struct DeclaredSymbol(
         SymbolName Name,

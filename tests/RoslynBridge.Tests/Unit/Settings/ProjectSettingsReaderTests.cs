@@ -1,7 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Thomas Fazzari
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-using RoslynBridge.Requests;
 using RoslynBridge.Settings;
 using static RoslynBridge.Tests.Unit.TestHelpers;
 

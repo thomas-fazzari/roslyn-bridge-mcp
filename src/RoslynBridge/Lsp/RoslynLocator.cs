@@ -107,12 +107,11 @@ internal sealed class RoslynLocator(
     private string? FindOnPath(string name)
     {
         var path = environment("PATH");
-        if (string.IsNullOrEmpty(path))
-            return null;
-
-        return path.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries)
-            .Select(directory => ExistingFile(Path.Combine(directory, Executable(name))))
-            .FirstOrDefault(static file => file is not null);
+        return string.IsNullOrEmpty(path)
+            ? null
+            : path.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries)
+                .Select(directory => ExistingFile(Path.Combine(directory, Executable(name))))
+                .FirstOrDefault(static file => file is not null);
     }
 
     private static string? ExistingFile(string path) => File.Exists(path) ? path : null;

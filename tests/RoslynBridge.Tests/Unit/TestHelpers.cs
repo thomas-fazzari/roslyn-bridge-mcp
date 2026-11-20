@@ -5,7 +5,6 @@ using Microsoft.Extensions.Logging.Abstractions;
 using ModelContextProtocol.Protocol;
 using RoslynBridge.Editing;
 using RoslynBridge.Lsp;
-using RoslynBridge.Results;
 using RoslynBridge.Settings;
 using RoslynBridge.Tests.Fakes;
 
@@ -124,18 +123,18 @@ internal static class TestHelpers
         };
 
     public static JsonObject CreateFile(string path) =>
-        new() { ["kind"] = FileOperation.Create, ["uri"] = new Uri(path).AbsoluteUri };
+        new() { ["kind"] = "create", ["uri"] = new Uri(path).AbsoluteUri };
 
     public static JsonObject RenameFile(string source, string destination) =>
         new()
         {
-            ["kind"] = FileOperation.Rename,
+            ["kind"] = "rename",
             ["oldUri"] = new Uri(source).AbsoluteUri,
             ["newUri"] = new Uri(destination).AbsoluteUri,
         };
 
     public static JsonObject DeleteFile(string path) =>
-        new() { ["kind"] = FileOperation.Delete, ["uri"] = new Uri(path).AbsoluteUri };
+        new() { ["kind"] = "delete", ["uri"] = new Uri(path).AbsoluteUri };
 
     public static JsonObject TextEdit(
         int startLine,

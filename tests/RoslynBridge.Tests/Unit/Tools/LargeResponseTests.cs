@@ -1,9 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Thomas Fazzari
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-using RoslynBridge.Lsp;
-using RoslynBridge.Output;
+using RoslynBridge.Lsp.Protocol;
 using RoslynBridge.Requests;
+using RoslynBridge.Results;
 using RoslynBridge.Tests.Assertions;
 using static RoslynBridge.Tests.Fakes.LspLocationJson;
 using static RoslynBridge.Tests.Unit.TestHelpers;
@@ -20,7 +20,7 @@ public sealed class LargeResponseTests : TempWorkspaceTests
     {
         const int fileCount = 100;
         const int lineCount = 50;
-        // Short lines cost more as text than as JSON, so the budget must hold for rendered text
+        // Short lines cost more as text than as JSON, so the budget applies to the rendered text
         var changes = new JsonObject();
         for (var index = 0; index < fileCount; index++)
         {

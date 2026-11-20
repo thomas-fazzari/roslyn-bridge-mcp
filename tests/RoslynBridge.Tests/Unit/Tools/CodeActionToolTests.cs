@@ -1,9 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Thomas Fazzari
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-using RoslynBridge.Lsp;
-using RoslynBridge.Requests;
-using RoslynBridge.Results;
+using RoslynBridge.Lsp.Protocol;
 using RoslynBridge.Tests.Assertions;
 using StreamJsonRpc;
 using static RoslynBridge.Tests.Unit.TestHelpers;
@@ -208,7 +206,7 @@ public sealed class CodeActionToolTests : TempWorkspaceTests
             },
             RenameWithoutNewUri => DocumentChanges(
                 DocumentEdit(path, version: null, valid),
-                new JsonObject { ["kind"] = FileOperation.Rename, ["oldUri"] = uri }
+                new JsonObject { ["kind"] = "rename", ["oldUri"] = uri }
             ),
             NullTextEdit => new JsonObject
             {

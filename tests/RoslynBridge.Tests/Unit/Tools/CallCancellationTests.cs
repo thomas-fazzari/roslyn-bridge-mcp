@@ -3,7 +3,7 @@
 
 using ModelContextProtocol.Protocol;
 using RoslynBridge.Lsp;
-using RoslynBridge.Requests;
+using RoslynBridge.Lsp.Protocol;
 using RoslynBridge.Settings;
 using RoslynBridge.Tests.Assertions;
 using RoslynBridge.Tests.Fakes;

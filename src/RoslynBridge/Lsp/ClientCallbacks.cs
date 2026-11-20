@@ -2,18 +2,23 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 using Microsoft.Extensions.Logging;
+using RoslynBridge.Lsp.Protocol;
 using StreamJsonRpc;
 
 namespace RoslynBridge.Lsp;
 
 /// <summary>
+/// Applies a workspace edit that Roslyn sends while a command runs.
+/// </summary>
+internal delegate Task<ApplyWorkspaceEditResult> WorkspaceEditHandler(
+    Result<WorkspaceEdit> edit,
+    CancellationToken cancellationToken
+);
+
+/// <summary>
 /// Answers the requests of one Roslyn process and keeps the state they report.
 /// </summary>
-internal sealed partial class ClientCallbacks(
-    RoslynSession session,
-    WorkspacePaths paths,
-    ILogger logger
-)
+internal sealed partial class ClientCallbacks(WorkspacePaths paths, ILogger logger)
 {
     private const int MaximumLogMessageCharacters = 2048;
     private const string ProgressBegin = "begin";
@@ -31,6 +36,8 @@ internal sealed partial class ClientCallbacks(
     // Replaced as a whole, so readers never wait for a notification
     private ImmutableList<TrackedProgress> _progress = [];
 
+    private WorkspaceEditHandler? _applyEdit;
+
     internal Task Initialized => _initialized.Task;
 
     internal bool WatchesFiles => !_watchRegistrations.IsEmpty;
@@ -39,6 +46,23 @@ internal sealed partial class ClientCallbacks(
     /// The latest unfinished progress, otherwise null.
     /// </summary>
     internal LoadProgress? Progress => Volatile.Read(ref _progress).LastOrDefault()?.Progress;
+
+    /// <summary>
+    /// Routes workspace/applyEdit requests to <paramref name="handler"/> while <paramref name="run"/> runs.
+    /// Without a handler, the bridge refuses them.
+    /// </summary>
+    internal async Task<T> RoutingEditsAsync<T>(WorkspaceEditHandler handler, Func<Task<T>> run)
+    {
+        _applyEdit = handler;
+        try
+        {
+            return await run();
+        }
+        finally
+        {
+            _applyEdit = null;
+        }
+    }
 
     [JsonRpcMethod(
         LspMethods.WorkspaceConfiguration,
@@ -54,18 +78,15 @@ internal sealed partial class ClientCallbacks(
     public Task<ApplyWorkspaceEditResult> ApplyEditAsync(
         ApplyWorkspaceEditParams parameters,
         CancellationToken cancellationToken
-    )
-    {
-        if (session.ApplyWorkspaceEditAsync is { } apply)
-            return apply(parameters.Edit, cancellationToken);
-
-        return Task.FromResult(
-            new ApplyWorkspaceEditResult(
-                Applied: false,
-                "No workspace edit is being applied by the current tool call."
-            )
-        );
-    }
+    ) =>
+        _applyEdit is { } apply
+            ? apply(WorkspaceEdit.Parse(parameters.Edit), cancellationToken)
+            : Task.FromResult(
+                new ApplyWorkspaceEditResult(
+                    Applied: false,
+                    "No workspace edit is being applied by the current tool call."
+                )
+            );
 
     [JsonRpcMethod(
         LspMethods.ClientRegisterCapability,

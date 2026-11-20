@@ -3,6 +3,7 @@
 
 using Nerdbank.Streams;
 using RoslynBridge.Lsp;
+using RoslynBridge.Lsp.Protocol;
 using StreamJsonRpc;
 
 namespace RoslynBridge.Tests.Fakes;
@@ -50,6 +51,11 @@ internal sealed class FakeRoslynServer : IRoslynServer
     /// The capabilities of the initialize answer. Defaults to none.
     /// </summary>
     public JsonObject Capabilities { get; set; } = [];
+
+    /// <summary>
+    /// The hover contents at every position. Defaults to a plain string, so every position has a symbol.
+    /// </summary>
+    public JsonNode HoverContents { get; set; } = "symbol";
 
     /// <summary>
     /// Runs before the fake answers the shutdown request. Defaults to nothing.
@@ -244,10 +250,10 @@ internal sealed class FakeRoslynServer : IRoslynServer
             LspMethods.TextDocumentHover,
             UseSingleObjectParameterDeserialization = true
         )]
-        public static JsonObject Hover(JsonNode? parameters)
+        public JsonObject Hover(JsonNode? parameters)
         {
             _ = parameters;
-            return new JsonObject { ["contents"] = "symbol" };
+            return new JsonObject { ["contents"] = server.HoverContents.DeepClone() };
         }
 
         [JsonRpcMethod(

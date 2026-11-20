@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 using Microsoft.Extensions.Logging;
+using RoslynBridge.Lsp.Protocol;
 
 namespace RoslynBridge.Lsp;
 
@@ -28,36 +29,30 @@ internal sealed partial class RoslynConnection
     /// <summary>
     /// Finds references inside Roslyn, without the batching delay of textDocument/references.
     /// </summary>
-    /// <param name="parameters">The textDocument and zero-based position of the request.</param>
     public Task<Result<ExtensionReferences>> FindReferencesAsync(
-        JsonObject parameters,
+        DocumentPosition position,
         CancellationToken cancellationToken
     ) =>
         DispatchDocumentMessageAsync<ExtensionReferences>(
             ReferencesMessage,
-            parameters,
+            position,
             cancellationToken
         );
 
     /// <summary>
     /// Finds callers inside Roslyn, with the calls through base and interface members.
     /// </summary>
-    /// <param name="parameters">The textDocument and zero-based position of the request.</param>
     public Task<Result<ExtensionCallers>> FindCallersAsync(
-        JsonObject parameters,
+        DocumentPosition position,
         CancellationToken cancellationToken
     ) =>
-        DispatchDocumentMessageAsync<ExtensionCallers>(
-            CallersMessage,
-            parameters,
-            cancellationToken
-        );
+        DispatchDocumentMessageAsync<ExtensionCallers>(CallersMessage, position, cancellationToken);
 
     /// <summary>
     /// Finds the declarations of some files that no live code uses.
     /// </summary>
     /// <param name="files">Full paths of C# files.</param>
-    public async Task<Result<JsonNode>> FindUnusedAsync(
+    public async Task<Result<UnusedReport>> FindUnusedAsync(
         IReadOnlyCollection<string> files,
         CancellationToken cancellationToken
     )
@@ -86,18 +81,27 @@ internal sealed partial class RoslynConnection
         {
             return error switch
             {
-                { RpcCode: RequestCancelledCode or ServerCancelledCode } =>
-                    ToolError.InvalidLspData(
-                        "Roslyn cancelled the search for unused symbols. Retry the call."
-                    ),
+                _ when IsCancelled(error) => ToolError.InvalidLspData(
+                    "Roslyn cancelled the search for unused symbols. Retry the call."
+                ),
                 { Code: ErrorCodes.Lsp } => UnusedFailure(error.Message),
                 _ => error,
             };
         }
 
-        return ExtensionResponse(result) is { } response
-            ? LspJson.Parse<JsonNode>(response)
-            : UnusedFailure(ExtensionError(result));
+        if (ReadDispatch(result).IsError(out var invalidDispatch, out var dispatch))
+            return UnusedFailure(invalidDispatch.Message);
+
+        if (dispatch.Answer is not { } response)
+            return UnusedFailure(dispatch.Error);
+
+        if (LspJson.Parse<UnusedReport>(response).IsError(out var invalid, out var report))
+            return invalid;
+
+        var count = report.Symbols.Length;
+        return report.Symbols.SelectMany(entry => entry.Via).Any(user => user < 0 || user >= count)
+            ? ToolError.InvalidLspData("Roslyn returned an unused symbol index out of range.")
+            : report;
     }
 
     // Roslyn cancels a request when the workspace changes, which says nothing about the extension
@@ -106,7 +110,7 @@ internal sealed partial class RoslynConnection
 
     private async Task<Result<T>> DispatchDocumentMessageAsync<T>(
         string messageName,
-        JsonObject parameters,
+        DocumentPosition position,
         CancellationToken cancellationToken
     )
         where T : IExtensionAnswer<T>
@@ -114,6 +118,7 @@ internal sealed partial class RoslynConnection
         if (!_documentHandlersActive)
             return T.NotFound;
 
+        var parameters = LspParameters.At(position);
         var dispatched = await RequestAsync(
             LspMethods.TextDocumentDispatchExtensionMessage,
             new JsonObject
@@ -138,9 +143,15 @@ internal sealed partial class RoslynConnection
             return error;
         }
 
-        if (ExtensionResponse(result) is not { } response)
+        if (ReadDispatch(result).IsError(out var invalidDispatch, out var dispatch))
         {
-            DisableDocumentHandlers(ExtensionError(result));
+            DisableDocumentHandlers(invalidDispatch.Message);
+            return T.NotFound;
+        }
+
+        if (dispatch.Answer is not { } response)
+        {
+            DisableDocumentHandlers(dispatch.Error);
             return T.NotFound;
         }
 
@@ -176,15 +187,22 @@ internal sealed partial class RoslynConnection
             return Result.Success;
         }
 
-        var unregistered = Unregistered(result?["documentMessageHandlers"], _documentMessages);
+        var read = result is null ? ExtensionActivation.None : result.Read<ExtensionActivation>();
+        if (read.IsError(out var invalid, out var activation))
+        {
+            LogExtensionUnavailable(logger, invalid.Message);
+            return Result.Success;
+        }
+
+        var unregistered = Unregistered(activation.DocumentMessageHandlers, _documentMessages);
         _documentHandlersActive = unregistered.Count == 0;
         if (!_documentHandlersActive)
-            LogExtensionUnavailable(logger, ActivationError(result, unregistered));
+            LogExtensionUnavailable(logger, ActivationError(activation, unregistered));
 
-        unregistered = Unregistered(result?["workspaceMessageHandlers"], _workspaceMessages);
+        unregistered = Unregistered(activation.WorkspaceMessageHandlers, _workspaceMessages);
         _workspaceHandlersActive = unregistered.Count == 0;
         if (_documentHandlersActive && !_workspaceHandlersActive)
-            LogUnusedUnavailable(logger, ActivationError(result, unregistered));
+            LogUnusedUnavailable(logger, ActivationError(activation, unregistered));
 
         return Result.Success;
     }
@@ -199,34 +217,22 @@ internal sealed partial class RoslynConnection
     private static ToolError UnusedFailure(string reason) =>
         ToolError.InvalidLspData($"The Roslyn extension failed to list unused symbols: {reason}");
 
-    private static List<string> Unregistered(JsonNode? handlers, string[] messages) =>
+    private static List<string> Unregistered(string[]? handlers, string[] messages) =>
         [
             .. messages.Where(message =>
-                handlers is not JsonArray registered
-                || !registered.Any(handler =>
-                    string.Equals(handler?.GetValue<string>(), message, StringComparison.Ordinal)
-                )
+                handlers?.Contains(message, StringComparer.Ordinal) is not true
             ),
         ];
 
-    private static string ActivationError(JsonNode? result, List<string> unregistered) =>
-        result?["extensionException"]?["Message"]?.GetValue<string>()
+    private static string ActivationError(
+        ExtensionActivation activation,
+        List<string> unregistered
+    ) =>
+        activation.ExtensionException?.Message
         ?? $"Roslyn registered no handler for {string.Join(", ", unregistered)}.";
 
-    // A handler that throws leaves an empty response
-    private static string? ExtensionResponse(JsonNode? result) =>
-        result?["response"]?.GetValue<string>() is { } response
-        && !string.IsNullOrWhiteSpace(response)
-            ? response
-            : null;
-
-    private static string ExtensionError(JsonNode? result) =>
-        result?["extensionException"]?["Message"]?.GetValue<string>()
-        ?? (
-            result?["extensionWasUnloaded"]?.GetValue<bool>() is true
-                ? "Roslyn unloaded the extension."
-                : "Roslyn returned no result."
-        );
+    private static Result<ExtensionDispatch> ReadDispatch(JsonNode? result) =>
+        result is null ? ExtensionDispatch.None : result.Read<ExtensionDispatch>();
 
     [LoggerMessage(
         Level = LogLevel.Warning,

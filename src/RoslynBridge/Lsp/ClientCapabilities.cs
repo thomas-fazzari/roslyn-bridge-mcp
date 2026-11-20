@@ -24,7 +24,7 @@ internal static class ClientCapabilities
             ["clientInfo"] = new JsonObject
             {
                 ["name"] = "roslyn-bridge-mcp",
-                ["version"] = Program.Version,
+                ["version"] = BridgeVersion.Current,
             },
             ["capabilities"] = capabilities,
         };

@@ -72,6 +72,8 @@ internal sealed class WorkspacePaths(string root)
         path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)
         || path.EndsWith(".csx", StringComparison.OrdinalIgnoreCase);
 
+    public static bool IsExistingCSharpFile(string path) => IsCSharpFile(path) && File.Exists(path);
+
     public string RootUri => new Uri(Root + Path.DirectorySeparatorChar).AbsoluteUri;
 
     /// <summary>

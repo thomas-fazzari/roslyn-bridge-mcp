@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Thomas Fazzari
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+using RoslynBridge.Lsp.Protocol;
+
 namespace RoslynBridge.Lsp;
 
 internal sealed partial class RoslynConnection
@@ -158,7 +160,7 @@ internal sealed partial class RoslynConnection
             return Result.Success;
 
         var updates = new Dictionary<string, FileStamp?>(StringComparer.Ordinal);
-        var changes = new List<FileChange>();
+        var changes = new List<FileEvent>();
         foreach (var path in changedPaths)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -167,12 +169,14 @@ internal sealed partial class RoslynConnection
             if (current is null)
             {
                 if (exists)
-                    changes.Add(new FileChange(path, FileDeleted));
+                    changes.Add(new FileEvent(path, FileEventType.Deleted));
             }
             else
             {
                 // A change signal remains valid when size and timestamp are preserved
-                changes.Add(new FileChange(path, exists ? FileChanged : FileCreated));
+                changes.Add(
+                    new FileEvent(path, exists ? FileEventType.Changed : FileEventType.Created)
+                );
             }
 
             updates.Add(path, current);
@@ -197,7 +201,7 @@ internal sealed partial class RoslynConnection
     }
 
     private async Task<Result> SendFileChangesAsync(
-        List<FileChange> changes,
+        List<FileEvent> changes,
         CancellationToken cancellationToken
     )
     {
@@ -221,13 +225,13 @@ internal sealed partial class RoslynConnection
 
             foreach (var change in batch)
             {
-                if (change.Type is FileDeleted)
+                if (change.Type is FileEventType.Deleted)
                 {
                     _createdFiles.TryRemove(change.Path, out _);
                     continue;
                 }
 
-                if (change.Type is FileCreated)
+                if (change.Type is FileEventType.Created)
                     _createdFiles[change.Path] = 0;
 
                 if (
@@ -245,7 +249,7 @@ internal sealed partial class RoslynConnection
 
     // On Windows, Roslyn checks a created or deleted file against the project globs with a lowercase drive
     // letter and a case-sensitive match, so the project never reloads. A project file change always does.
-    private IEnumerable<FileChange> WithProjectReloads(FileChange[] batch)
+    private IEnumerable<FileEvent> WithProjectReloads(FileEvent[] batch)
     {
         if (!OperatingSystem.IsWindows() || !Array.Exists(batch, IsSourceFileAddedOrRemoved))
             return batch;
@@ -263,12 +267,13 @@ internal sealed partial class RoslynConnection
             .Where(IsSourceFileAddedOrRemoved)
             .SelectMany(change => NearestProjects(change.Path, projectsByDirectory))
             .Distinct(StringComparer.Ordinal)
-            .Select(project => new FileChange(project, FileChanged));
+            .Select(project => new FileEvent(project, FileEventType.Changed));
         return batch.Concat(reloads);
     }
 
-    private static bool IsSourceFileAddedOrRemoved(FileChange change) =>
-        change.Type is FileCreated or FileDeleted && WorkspacePaths.IsCSharpFile(change.Path);
+    private static bool IsSourceFileAddedOrRemoved(FileEvent change) =>
+        change.Type is FileEventType.Created or FileEventType.Deleted
+        && WorkspacePaths.IsCSharpFile(change.Path);
 
     private IEnumerable<string> NearestProjects(
         string path,
@@ -287,8 +292,16 @@ internal sealed partial class RoslynConnection
         return [];
     }
 
-    private JsonNode ToFileEvent(FileChange change) =>
-        new JsonObject { ["uri"] = new Uri(change.Path).AbsoluteUri, ["type"] = change.Type };
+    private JsonNode ToFileEvent(FileEvent change) =>
+        new JsonObject { ["uri"] = new Uri(change.Path).AbsoluteUri, ["type"] = (int)change.Type };
 
-    private readonly record struct FileChange(string Path, int Type);
+    private readonly record struct FileEvent(string Path, FileEventType Type);
+
+    // The values of the LSP FileChangeType
+    private enum FileEventType
+    {
+        Created = 1,
+        Changed = 2,
+        Deleted = 3,
+    }
 }

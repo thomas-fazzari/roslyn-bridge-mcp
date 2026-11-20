@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 using RoslynBridge.Editing;
-using RoslynBridge.Results;
 
 namespace RoslynBridge.Tests.Unit.Editing;
 

@@ -2,14 +2,15 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 using ModelContextProtocol.Protocol;
-using RoslynBridge.Changes;
+using RoslynBridge.Features.BulkNavigate;
+using RoslynBridge.Features.Edit.CodeActions;
 using RoslynBridge.Lsp;
-using RoslynBridge.Output;
+using RoslynBridge.Lsp.Protocol;
 using RoslynBridge.Requests;
+using RoslynBridge.Results;
 using RoslynBridge.Settings;
 using RoslynBridge.Tests.Assertions;
 using RoslynBridge.Tests.Fakes;
-using RoslynBridge.Tools;
 using StreamJsonRpc;
 using static RoslynBridge.Tests.Fakes.LspLocationJson;
 using static RoslynBridge.Tests.Fakes.LspSymbolJson;
@@ -20,6 +21,7 @@ namespace RoslynBridge.Tests.Unit.Tools;
 public sealed class LspToolTests : TempWorkspaceTests
 {
     private const string SourceText = "class A {}\nclass B {}\nclass C {}\nclass D {}\n";
+    private const string HoverMarkdown = "```csharp\nvoid Greet()\n```";
 
     private const int Error = (int)DiagnosticSeverity.Error;
     private const int Warning = (int)DiagnosticSeverity.Warning;
@@ -731,7 +733,7 @@ public sealed class LspToolTests : TempWorkspaceTests
 
     [Theory]
     [InlineData(0)]
-    [InlineData(BulkRequest.MaximumQueries + 1)]
+    [InlineData(BulkNavigateRequest.MaximumQueries + 1)]
     public async Task BulkRejectsAnEmptyOrOversizedBatchAsync(int count)
     {
         await using var session = CreateSession(Root, FakeServer());
@@ -1208,9 +1210,9 @@ public sealed class LspToolTests : TempWorkspaceTests
             .Should()
             .Equal(
                 "0 quickfix Remove it",
-                $"1 {LspChanges.SuppressionGroup} > Suppress X > in Source",
-                $"2 {LspChanges.SuppressionGroup} > Configure X severity > Error",
-                $"3 {LspChanges.SuppressionGroup} > Configure X severity > Warning",
+                $"1 {CodeActionsHandler.SuppressionGroup} > Suppress X > in Source",
+                $"2 {CodeActionsHandler.SuppressionGroup} > Configure X severity > Error",
+                $"3 {CodeActionsHandler.SuppressionGroup} > Configure X severity > Warning",
                 "4 quickfix Add it"
             );
     }
@@ -1383,30 +1385,97 @@ public sealed class LspToolTests : TempWorkspaceTests
             Root,
             DiagnosticServer(("A.cs", 0, 0, Error, "CS0246"), ("A.cs", 1, 0, Hint, hintCode))
         );
-        using var tool = CreateTool(session);
-        var withProjectSeverity = new DiagnosticsTool(tool.Lsp, Monitor(options));
-        var withBuiltInSeverity = new DiagnosticsTool(
-            tool.Lsp,
-            Monitor(options with { DiagnosticsSeverity = null })
+        using var withProjectSeverity = CreateTool(session, options);
+        using var withBuiltInSeverity = CreateTool(
+            session,
+            options with
+            {
+                DiagnosticsSeverity = null,
+            }
         );
 
-        var projectDefault = await withProjectSeverity.DiagnosticsAsync(
-            "A.cs",
-            cancellationToken: TestCt
+        var unset = new LspRequest { Action = LspAction.Diagnostics, File = "A.cs" };
+
+        var projectDefault = await withProjectSeverity.ExecuteAsync(unset, TestCt);
+        var explicitWarning = await withProjectSeverity.ExecuteAsync(
+            unset with
+            {
+                Severity = DiagnosticSeverity.Warning,
+            },
+            TestCt
         );
-        var explicitWarning = await withProjectSeverity.DiagnosticsAsync(
-            "A.cs",
-            DiagnosticSeverity.Warning,
-            cancellationToken: TestCt
-        );
-        var builtInDefault = await withBuiltInSeverity.DiagnosticsAsync(
-            "A.cs",
-            cancellationToken: TestCt
-        );
+        var builtInDefault = await withBuiltInSeverity.ExecuteAsync(unset, TestCt);
 
         ResponseText(projectDefault).Should().Contain(hintCode);
         ResponseText(explicitWarning).Should().NotContain(hintCode);
         ResponseText(builtInDefault).Should().NotContain(hintCode);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task HoverReducesItsContentsToTextAsync(bool markup)
+    {
+        await WriteFileAsync(Root, SourceFile, SourceText);
+        await using var session = CreateSession(
+            Root,
+            FakeServer(server =>
+                server.HoverContents = markup
+                    ? new JsonObject { ["kind"] = "markdown", ["value"] = HoverMarkdown + "\n  \n" }
+                    : new JsonArray(HoverMarkdown)
+            )
+        );
+        using var tool = CreateTool(session);
+
+        var response = await tool.ExecuteAsync(
+            new LspRequest
+            {
+                Action = LspAction.Hover,
+                File = SourceFile,
+                Line = 1,
+                Character = 1,
+            },
+            TestCt
+        );
+
+        ResponseText(response).Should().Be(HoverMarkdown);
+    }
+
+    [Fact]
+    public async Task DefinitionAnswersTheSameForNoResultAndAnEmptyListAsync()
+    {
+        await WriteFileAsync(Root, SourceFile, SourceText);
+
+        var none = await DefinitionAnsweredWithAsync(null);
+        var empty = await DefinitionAnsweredWithAsync(new JsonArray());
+
+        ResponseText(empty).Should().Be(ResponseText(none));
+    }
+
+    private async Task<CallToolResult> DefinitionAnsweredWithAsync(JsonNode? definitions)
+    {
+        await using var session = CreateSession(
+            Root,
+            FakeServer(server =>
+                server.Handle = (method, _) =>
+                    Task.FromResult(
+                        method is LspMethods.TextDocumentDefinition
+                            ? definitions?.DeepClone()
+                            : null
+                    )
+            )
+        );
+        using var tool = CreateTool(session);
+        return await tool.ExecuteAsync(
+            new LspRequest
+            {
+                Action = LspAction.Definition,
+                File = SourceFile,
+                Line = 1,
+                Character = 1,
+            },
+            TestCt
+        );
     }
 
     // a diagnostic is its file, zero-based line and character, LSP severity and code
@@ -1526,7 +1595,8 @@ public sealed class LspToolTests : TempWorkspaceTests
                 ["data"] = new JsonObject
                 {
                     ["CodeActionPath"] = new JsonArray([
-                        .. path.Prepend(LspChanges.SuppressionGroup).Select(part => (JsonNode)part),
+                        .. path.Prepend(CodeActionsHandler.SuppressionGroup)
+                            .Select(part => (JsonNode)part),
                     ]),
                 },
             };
@@ -1536,7 +1606,7 @@ public sealed class LspToolTests : TempWorkspaceTests
             Fix("Remove it"),
             new JsonObject
             {
-                ["title"] = LspChanges.SuppressionGroup,
+                ["title"] = CodeActionsHandler.SuppressionGroup,
                 ["kind"] = "quickfix",
                 ["data"] = new JsonObject
                 {

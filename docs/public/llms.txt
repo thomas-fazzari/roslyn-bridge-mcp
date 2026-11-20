@@ -257,7 +257,7 @@ as framework code:
   the .NET base class library, as hosted services, controllers and message
   handlers do, and the public members of these classes and of attributed types
 - public properties with a public setter, which serializers write
-- the types that hold an attributed member or an entry point
+- the types that contain an attributed member or an entry point
 
 A selection of more than 1000 files is an invalid_request error. The check
 searches the references of every declaration, so narrow file on a large
@@ -363,8 +363,8 @@ BULK NAVIGATION
 ---------------
 bulk_navigate runs up to 16 independent navigate queries in one call,
 concurrently. A query cannot use another query's result. Each query takes the
-action, symbol, file, line and character of navigate. context, limit and offset
-sit at the top level and apply to every query:
+action, symbol, file, line, character and inherited of navigate. context, limit
+and offset sit at the top level and apply to every query:
 bulk_navigate {"queries":[{"action":"source","symbol":"Calculator.Add"},{"action":"references","symbol":"Calculator.Add"}],"limit":20}
 
 The result has one section per query in request order, headed
@@ -429,7 +429,7 @@ For a selection, also pass endLine and endCharacter, both one-based.
 Available actions depend on the installed Roslyn version and loaded project.
 
 To fix a diagnostic, pass its code instead of a position. Add line to pick
-an occurrence. The listing then holds only fixes for that diagnostic:
+an occurrence. The listing then shows only fixes for that diagnostic:
 edit {"action":"code_actions","file":"src/Calculator.cs","diagnostic":"IDE0005"}
 
 2. Choose an action from the returned listing. Resolve its preview using the
@@ -473,7 +473,7 @@ These display limits do not change the edit stored by proposalId.
 
 PROPOSAL LIFETIME AND FAILURES
 ------------------------------
-Proposals expire after five minutes. Reload discards them.
+Proposals expire after five minutes. A reload or a Roslyn restart discards them.
 A change to a file the proposal edits, or to a project, props, solution or
 editorconfig file, makes it stale. Changes to other source files do not.
 On stale_edit, request a new preview against current files. Do not retry the old ID.
@@ -537,8 +537,9 @@ Use capabilities when support for an operation is uncertain.
 Reload:
 lsp {"action":"reload"}
 
-Reload discards pending proposals. Use it when results remain stale after an
-external change, then issue the original query again. Reload reads
+Reload discards pending proposals, as does any Roslyn restart. Use it when
+results remain stale after an external change, then issue the original query
+again. Reload reads
 .roslyn-bridge.json again. When the file has become invalid, the call returns
 invalid_settings and the bridge keeps the settings it had.
 

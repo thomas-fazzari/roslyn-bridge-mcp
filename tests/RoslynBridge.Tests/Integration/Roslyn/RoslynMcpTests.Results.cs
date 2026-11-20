@@ -3,7 +3,6 @@
 
 using System.Text.RegularExpressions;
 using ModelContextProtocol.Protocol;
-using RoslynBridge.Requests;
 using static RoslynBridge.Tests.Assertions.ResultLines;
 using static RoslynBridge.Tests.Unit.TestHelpers;
 
