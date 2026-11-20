@@ -66,7 +66,8 @@ internal sealed class WorkspacePaths(string root)
         ".csproj",
     }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
-    public string Root { get; } = Path.TrimEndingDirectorySeparator(Path.GetFullPath(root));
+    public string Root { get; } =
+        OnDiskSpelling(Path.TrimEndingDirectorySeparator(Path.GetFullPath(root)));
 
     public static bool IsCSharpFile(string path) =>
         path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)
@@ -84,46 +85,22 @@ internal sealed class WorkspacePaths(string root)
     /// <summary>
     /// Turns a workspace-relative path, a full path or a file URI from a client or from Roslyn into a workspace file.
     /// </summary>
-    public Result<WorkspaceFilePath> Resolve(string file)
-    {
-        // Path APIs reject a null character with an ArgumentException, which would read as a bridge bug
-        if (string.IsNullOrWhiteSpace(file) || file.Contains('\0', StringComparison.Ordinal))
-            return ToolError.InvalidRequest("Provide a valid workspace file path.");
+    /// <remarks>
+    /// Existing path components take their on-disk casing, so a path has one spelling on a case-insensitive file system.
+    /// </remarks>
+    public Result<WorkspaceFilePath> Resolve(string file) => ResolveCore(file, Spelling.OnDisk);
 
-        var local =
-            Uri.TryCreate(file, UriKind.Absolute, out var uri) && uri.IsFile
-                ? LocalPath(uri)
-                : file;
-        var fullPath = Path.GetFullPath(local, Root);
-        var relative = Relative(fullPath);
-        if (IsOutside(relative))
-            return ToolError.InvalidRequest("The path must be inside the workspace.");
-
-        var current = Root;
-        foreach (var part in relative.Split(Path.DirectorySeparatorChar))
-        {
-            current = Path.Combine(current, part);
-            FileSystemInfo entry = Directory.Exists(current)
-                ? new DirectoryInfo(current)
-                : new FileInfo(current);
-            if (entry.LinkTarget is not null)
-            {
-                return ToolError.InvalidRequest(
-                    "Symbolic links inside the workspace are not supported."
-                );
-            }
-        }
-
-        return new WorkspaceFilePath(fullPath, RelativePath(fullPath));
-    }
-
-    public Result<string> ToUri(string file) => Resolve(file).Map(path => path.ToUri());
+    /// <summary>
+    /// Like <see cref="Resolve(string)"/>, but the file name keeps its given casing, as a rename may change only that.
+    /// </summary>
+    public Result<WorkspaceFilePath> ResolveRenameTarget(string file) =>
+        ResolveCore(file, Spelling.GivenFileName);
 
     /// <summary>
     /// Checks a file again before the bridge opens or writes it, as a symbolic link may have appeared since it was resolved.
     /// </summary>
     public Result Recheck(WorkspaceFilePath file) =>
-        Resolve(file.FullPath) is ToolError error ? error : Result.Success;
+        ResolveCore(file.FullPath, Spelling.Given) is ToolError error ? error : Result.Success;
 
     /// <summary>
     /// Handles a Windows drive written as c%3A, which <see cref="Uri.LocalPath"/> leaves unusable.
@@ -235,7 +212,111 @@ internal sealed class WorkspacePaths(string root)
         relative.EndsWith(suffix, StringComparison.Ordinal)
         && (relative.Length == suffix.Length || relative[^(suffix.Length + 1)] == '/');
 
+    private Result<WorkspaceFilePath> ResolveCore(string file, Spelling spelling)
+    {
+        // Path APIs reject a null character with an ArgumentException, which would read as a bridge bug
+        if (string.IsNullOrWhiteSpace(file) || file.Contains('\0', StringComparison.Ordinal))
+            return ToolError.InvalidRequest("Provide a valid workspace file path.");
+
+        var local =
+            Uri.TryCreate(file, UriKind.Absolute, out var uri) && uri.IsFile
+                ? LocalPath(uri)
+                : file;
+        var fullPath = Path.GetFullPath(local, Root);
+        var relative = Relative(fullPath);
+        if (IsOutside(relative))
+            return ToolError.InvalidRequest("The path must be inside the workspace.");
+
+        var current = Root;
+        var parts = string.Equals(relative, ".", StringComparison.Ordinal)
+            ? Array.Empty<string>()
+            : relative.Split(Path.DirectorySeparatorChar);
+        for (var index = 0; index < parts.Length; index++)
+        {
+            var part = parts[index];
+            var keepsPart =
+                spelling is Spelling.Given
+                || (spelling is Spelling.GivenFileName && index == parts.Length - 1);
+            current = Path.Combine(current, keepsPart ? part : OnDiskName(current, part));
+            FileSystemInfo entry = Directory.Exists(current)
+                ? new DirectoryInfo(current)
+                : new FileInfo(current);
+            if (entry.LinkTarget is not null)
+            {
+                return ToolError.InvalidRequest(
+                    "Symbolic links inside the workspace are not supported."
+                );
+            }
+        }
+
+        return new WorkspaceFilePath(current, RelativePath(current));
+    }
+
     private string Relative(string fullPath) => Path.GetRelativePath(Root, fullPath);
+
+    private static string OnDiskSpelling(string fullPath)
+    {
+        var top = Path.GetPathRoot(fullPath) ?? string.Empty;
+        var current = top is [var drive, ':', ..] ? char.ToUpperInvariant(drive) + top[1..] : top;
+        var parts = fullPath[top.Length..]
+            .Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries);
+        foreach (var part in parts)
+        {
+            current = Path.Combine(current, OnDiskName(current, part));
+        }
+
+        return current;
+    }
+
+    // Keeps the given name when the entry is missing or the file system is case-sensitive
+    private static string OnDiskName(string parent, string name)
+    {
+        var swapped = SwapCase(name);
+        if (
+            string.Equals(swapped, name, StringComparison.Ordinal)
+            || !Path.Exists(Path.Combine(parent, swapped))
+            || !Path.Exists(Path.Combine(parent, name))
+        )
+        {
+            return name;
+        }
+
+        try
+        {
+            List<string> matches =
+            [
+                .. new FileSystemEnumerable<string>(
+                    parent,
+                    static (ref entry) => entry.FileName.ToString(),
+                    new EnumerationOptions { AttributesToSkip = default }
+                )
+                {
+                    ShouldIncludePredicate = (ref entry) =>
+                        entry.FileName.Equals(name, StringComparison.OrdinalIgnoreCase),
+                },
+            ];
+            if (matches.Contains(name, StringComparer.Ordinal))
+                return name;
+
+            return matches is [var only] ? only : name;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            return name;
+        }
+    }
+
+    private static string SwapCase(string name) =>
+        string.Create(name.Length, name, static (span, source) =>
+        {
+            for (var index = 0; index < source.Length; index++)
+            {
+                var letter = source[index];
+                span[index] = char.IsUpper(letter)
+                    ? char.ToLowerInvariant(letter)
+                    : char.ToUpperInvariant(letter);
+            }
+        });
 
     private static string[] Components(WorkspaceFilePath file) => file.RelativePath.Split('/');
 
@@ -295,6 +376,13 @@ internal sealed class WorkspacePaths(string root)
         }
 
         return files;
+    }
+
+    private enum Spelling
+    {
+        OnDisk = 0,
+        GivenFileName = 1,
+        Given = 2,
     }
 }
 

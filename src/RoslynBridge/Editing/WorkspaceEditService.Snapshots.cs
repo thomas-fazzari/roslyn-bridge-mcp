@@ -162,7 +162,7 @@ internal sealed partial class WorkspaceEditService
     private static ToolError ChangedFile(WorkspaceFilePath path) =>
         ToolError.StaleEdit($"The source file changed after the request: {path.FullPath}");
 
-    private Result<WorkspaceFilePath> ResolveEditPath(string value)
+    private Result<WorkspaceFilePath> ResolveEditPath(string value, bool isRenameTarget = false)
     {
         if (
             !Uri.TryCreate(value, UriKind.Absolute, out var uri)
@@ -175,7 +175,9 @@ internal sealed partial class WorkspaceEditService
             return ToolError.InvalidLspData("Workspace edits require local file URIs.");
         }
 
-        if (paths.Resolve(WorkspacePaths.LocalPath(uri)).IsError(out var error, out var resolved))
+        var local = WorkspacePaths.LocalPath(uri);
+        var resolution = isRenameTarget ? paths.ResolveRenameTarget(local) : paths.Resolve(local);
+        if (resolution.IsError(out var error, out var resolved))
             return error;
 
         if (!IsSourceFile(resolved))

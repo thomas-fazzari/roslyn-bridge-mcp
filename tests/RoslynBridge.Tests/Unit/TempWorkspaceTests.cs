@@ -17,6 +17,23 @@ public abstract class TempWorkspaceTests : IDisposable
         GC.SuppressFinalize(this);
     }
 
+    protected void SkipOnCaseSensitiveFileSystem()
+    {
+        var probe = Path.Combine(Root, "CaseProbe.tmp");
+        File.WriteAllText(probe, string.Empty);
+        try
+        {
+            Assert.SkipUnless(
+                File.Exists(Path.Combine(Root, "caseprobe.tmp")),
+                "The file system is case-sensitive."
+            );
+        }
+        finally
+        {
+            File.Delete(probe);
+        }
+    }
+
     protected virtual void Dispose(bool disposing)
     {
         if (!disposing)

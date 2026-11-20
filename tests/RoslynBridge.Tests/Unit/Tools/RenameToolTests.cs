@@ -148,6 +148,31 @@ public sealed class RenameToolTests : TempWorkspaceTests
     }
 
     [Fact]
+    public async Task RenameFileCanChangeOnlyTheCaseOfTheNameAsync()
+    {
+        SkipOnCaseSensitiveFileSystem();
+        await WriteFileAsync(Root, SourceFile, SourceText);
+        await using var session = CreateSession(
+            Root,
+            FakeServer(server => server.Capabilities = LspCapabilityJson.WillRenameFiles())
+        );
+        using var tool = CreateTool(Root, session);
+        var lowerCase = SourceFile.ToLowerInvariant();
+
+        var response = await tool.ExecuteAsync(
+            RenameFileRequest() with
+            {
+                NewName = lowerCase,
+                Apply = true,
+            },
+            TestCt
+        );
+
+        response.Should().BeSuccessful();
+        Directory.GetFiles(Root).Select(Path.GetFileName).Should().Equal(lowerCase);
+    }
+
+    [Fact]
     public async Task RoslynExitAfterTheWriteReportsTheMovedFileAsync()
     {
         var source = await WriteFileAsync(Root, SourceFile, SourceText);

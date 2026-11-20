@@ -35,6 +35,30 @@ public sealed class SessionDocumentTests : TempWorkspaceTests
     }
 
     [Fact]
+    public async Task FileGivenInAnotherCasingIsNeitherAnnouncedNorOpenedTwiceAsync()
+    {
+        SkipOnCaseSensitiveFileSystem();
+        var path = await WriteFileAsync(Root, "Greeter.cs", "class A {}");
+        var servers = new List<FakeRoslynServer>();
+        await using var session = CreateSession(Root, FakeServer(servers.Add));
+        (await session.EnsureStartedAsync(TestCt)).ErrorCode().Should().BeNull();
+        await RegisterWatchedFilesAsync(servers[0]);
+        var other = Resolved(Root, "greeter.cs");
+
+        (await session.SynchronizeNewFilesAsync([other], TestCt)).ErrorCode().Should().BeNull();
+        (await session.OpenDocumentAsync(other, TestCt)).Succeeded();
+        (await session.OpenDocumentAsync(Resolved(Root, path), TestCt)).Succeeded();
+        (await session.SynchronizeWorkspaceAsync(TestCt)).Succeeded();
+
+        (await ReceivedAsync(session, servers[0], LspMethods.TextDocumentDidOpen))
+            .Should()
+            .ContainSingle();
+        (await ReceivedAsync(session, servers[0], LspMethods.WorkspaceDidChangeWatchedFiles))
+            .Should()
+            .BeEmpty();
+    }
+
+    [Fact]
     public async Task SendsSameLengthEditsButNotTouchedFilesAsync()
     {
         var path = await WriteFileAsync(Root, "Greeter.cs", "class A {}");

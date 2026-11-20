@@ -116,6 +116,22 @@ public sealed class WorkspacePathsTests : TempWorkspaceTests
     }
 
     [Fact]
+    public async Task ResolveUsesTheOnDiskCasingOfExistingComponentsAsync()
+    {
+        SkipOnCaseSensitiveFileSystem();
+        var path = await WriteFileAsync(Root, Path.Combine("Src", "Greeter.cs"), "class A {}");
+        var paths = new WorkspacePaths(Root);
+
+        var file = paths.Resolve("src/greeter.cs").Succeeded();
+        var created = paths.Resolve("src/new.cs").Succeeded();
+
+        file.FullPath.Should().Be(path);
+        file.RelativePath.Should().Be("Src/Greeter.cs");
+        created.RelativePath.Should().Be("Src/new.cs");
+        new WorkspacePaths(Root.ToUpperInvariant()).Root.Should().Be(Root);
+    }
+
+    [Fact]
     public void ResolveReportsAPathWithANullCharacterAsAnInvalidRequest() =>
         new WorkspacePaths(Root)
             .Resolve("src/A\0.cs")
