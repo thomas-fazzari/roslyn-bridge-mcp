@@ -282,8 +282,8 @@ internal sealed class UnusedHandler
 
         var reported = found
             .OrderBy(entry => entry.Item.Uri, StringComparer.Ordinal)
-            .ThenBy(entry => entry.Item.SelectionRange.Start.Line)
-            .ThenBy(entry => entry.Item.SelectionRange.Start.Character)
+            .ThenBy(entry => entry.Item.SelectionRange?.Start.Line)
+            .ThenBy(entry => entry.Item.SelectionRange?.Start.Character)
             .ToList();
         var positions = reported
             .Select((entry, position) => (entry.Index, position))

@@ -253,6 +253,13 @@ internal sealed class FakeRoslynServer : IRoslynServer
             server.Handle(LspMethods.TextDocumentDefinition, parameters);
 
         [JsonRpcMethod(
+            LspMethods.TextDocumentImplementation,
+            UseSingleObjectParameterDeserialization = true
+        )]
+        public Task<JsonNode?> ImplementationAsync(JsonNode? parameters) =>
+            server.Handle(LspMethods.TextDocumentImplementation, parameters);
+
+        [JsonRpcMethod(
             LspMethods.TextDocumentReferences,
             UseSingleObjectParameterDeserialization = true
         )]

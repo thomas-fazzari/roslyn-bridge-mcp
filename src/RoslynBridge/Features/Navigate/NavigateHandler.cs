@@ -155,7 +155,9 @@ internal sealed partial class NavigateHandler(
         {
             Items = items,
             Accesses = hierarchy.Accesses,
+            External = calls.External,
             Hierarchy = hierarchy.Prepared ? request.Action : null,
+            CompilerCallsMissing = hierarchy.CompilerCallsMissing,
         };
         if (!request.Context)
             return result;
@@ -229,7 +231,12 @@ internal sealed partial class NavigateHandler(
             accesses += calls.Accesses;
         }
 
-        return new Hierarchy(related, accesses, Prepared: items.Length > 0);
+        return new Hierarchy(
+            related,
+            accesses,
+            Prepared: items.Length > 0,
+            CompilerCallsMissing: items.Any(item => LspSymbolKinds.CanHideCalls(item.Symbol.Kind))
+        );
     }
 
     // Outgoing calls also list property, field and constant accesses, which hide the calls
@@ -249,5 +256,11 @@ internal sealed partial class NavigateHandler(
     }
 
     /// <param name="Prepared">False when Roslyn found no symbol to expand.</param>
-    private readonly record struct Hierarchy(List<SymbolItem> Related, int Accesses, bool Prepared);
+    /// <param name="CompilerCallsMissing">True when the calls come from callHierarchy for a member that can have compiler-inserted calls.</param>
+    private readonly record struct Hierarchy(
+        List<SymbolItem> Related,
+        int Accesses,
+        bool Prepared,
+        bool CompilerCallsMissing = false
+    );
 }

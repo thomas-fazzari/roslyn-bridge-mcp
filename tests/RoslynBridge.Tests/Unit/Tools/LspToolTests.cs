@@ -1110,14 +1110,17 @@ public sealed class LspToolTests : TempWorkspaceTests
 
         ResultLines
             .Lines(ResponseText(response))
-            .Where(ResultLines.IsFileLine)
             .Should()
-            .Equal("Box.cs:3:12 constructor Box.Box()", "Greeter.cs:1:7 constructor Greeter");
+            .Equal(
+                "Box.cs:3:12 constructor Box.Box()",
+                "Greeter.cs:1:7 constructor Greeter",
+                "compiler-inserted calls not included"
+            );
     }
 
     [Theory]
-    [InlineData("callers", 2)]
-    [InlineData("callees", 1)]
+    [InlineData("callers", 3)]
+    [InlineData("callees", 2)]
     [InlineData("supertypes", 1)]
     [InlineData("subtypes", 1)]
     public async Task EmptyHierarchyResultNamesWhatIsMissingAsync(string action, int lineCount)
