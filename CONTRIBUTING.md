@@ -32,10 +32,10 @@ Integration tests start the installed `roslyn-language-server`. Set `ROSLYN_BRID
 
 Run `mise lock` after you change a tool in `mise.toml` or the SDK in `global.json`, including on a Renovate branch.
 
-To try a local package, run `mise run pack`, then install it from `artifacts/nupkg`:
+To try a local package, run `mise run pack`, then install it from `artifacts/nupkg` at the repository root. The brackets pin the exact version. Without them, `0.0.0-dev` is a minimum and NuGet installs the latest release instead:
 
 ```sh
-dotnet tool install ThomasFazzari.RoslynBridge --tool-path DIRECTORY --add-source artifacts/nupkg --version 0.0.0-dev
+dotnet tool install ThomasFazzari.RoslynBridge --tool-path DIRECTORY --add-source artifacts/nupkg --version "[0.0.0-dev]"
 ```
 
 [bench/README.md](bench/README.md) explains how to run the benchmarks and read their results.
