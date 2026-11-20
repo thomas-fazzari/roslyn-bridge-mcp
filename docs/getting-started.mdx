@@ -2,19 +2,11 @@
 title: "Get started"
 ---
 
-import { Aside } from "@astrojs/starlight/components";
-
 ## Install
 
 Prerequisites: the .NET 11 SDK and a Model Context Protocol (MCP) client such as Claude Code, Codex, GitHub Copilot CLI, pi or Antigravity.
 
 The bridge is a .NET tool on [NuGet](https://www.nuget.org/packages/ThomasFazzari.RoslynBridge).
-
-<Aside type="caution" title="Install script before 2.0">
-  If you installed the bridge with the former install script, delete `roslyn-bridge-mcp` from
-  `~/.local/bin` or `%LOCALAPPDATA%\Programs\roslyn-bridge-mcp`, then install the .NET tool and
-  register it again.
-</Aside>
 
 ```sh
 dotnet tool install --global ThomasFazzari.RoslynBridge

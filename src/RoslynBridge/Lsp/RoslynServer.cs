@@ -30,6 +30,8 @@ internal delegate IRoslynServer RoslynLauncher(BridgeOptions options, WorkspaceP
 
 internal sealed class RoslynProcess(Process process) : IRoslynServer
 {
+    private const string ProjectDataCacheVariable = "DOTNET_PROJECTDATA_CACHE_DIR";
+
     public static IRoslynServer Start(BridgeOptions options, WorkspacePaths paths)
     {
         var locator = RoslynLocator.Current;
@@ -53,6 +55,14 @@ internal sealed class RoslynProcess(Process process) : IRoslynServer
         RoslynLocator.ApplyDotnetRoot(
             startInfo.Environment,
             locator.FindDotnetRoot(options.DotnetRoot)
+        );
+
+        // TODO: remove once the pinned Roslyn server includes https://github.com/dotnet/roslyn/pull/86148
+        //
+        // Roslyn loads a cached project without its references, and a new path per process is never read back
+        startInfo.Environment[ProjectDataCacheVariable] = Path.Combine(
+            Path.GetTempPath(),
+            $"roslyn-bridge-projectdata-{Guid.NewGuid():N}"
         );
 
         var process = Process.Start(startInfo)

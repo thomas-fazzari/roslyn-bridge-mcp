@@ -13,6 +13,10 @@ html:root {
   content: none;
 }
 
+:root:not([data-has-hero]) main > .content-panel {
+  background-color: transparent;
+}
+
 @media (min-width: 50rem) {
   .sidebar-pane {
     border-start-end-radius: 0;
