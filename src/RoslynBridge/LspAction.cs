@@ -52,6 +52,8 @@ internal enum LspAction
     Reads = 22,
 
     Writes = 23,
+
+    Expression = 24,
 }
 
 internal static class LspActions

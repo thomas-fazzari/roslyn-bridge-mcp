@@ -13,6 +13,76 @@ internal sealed record HoverText(string Text) : ToolResult
     internal override void Write(StringBuilder text, int budget) => text.Append(Text);
 }
 
+internal sealed record NoExpression : ToolResult
+{
+    public override bool IsEmpty => true;
+
+    internal override void Write(StringBuilder text, int budget) => text.Append("no expression\n");
+}
+
+/// <param name="Text">The expression, or the declared name.</param>
+/// <param name="Kind">The syntax kind of the expression, or of the declaration.</param>
+/// <param name="Declaration">True when the position is on the name that a declaration introduces.</param>
+/// <param name="Symbol">The bound or declared symbol.</param>
+/// <param name="Instantiation">The constructed generic or reduced extension method that the code uses.</param>
+/// <param name="UnboundReason">Why the expression binds to no symbol, with the <paramref name="Candidates"/> it could mean.</param>
+/// <remarks>
+/// Each fact that the compiler does not give is null and has no line.
+/// </remarks>
+internal sealed record ExpressionFacts(
+    string Text,
+    string Kind,
+    bool Declaration,
+    string? Type,
+    string? ConvertedType,
+    string? Nullability,
+    string? Conversion,
+    string? Constant,
+    SymbolItem? Symbol,
+    string? Instantiation,
+    string? UnboundReason,
+    IReadOnlyList<SymbolItem> Candidates,
+    string? Documentation
+) : ToolResult
+{
+    internal override void Write(StringBuilder text, int budget)
+    {
+        text.Append(Declaration ? "declaration " : "expression ").Append(Text).Append('\n');
+        AppendFact(text, "kind", Kind);
+        AppendFact(text, "type", Type);
+        AppendFact(text, "converted", ConvertedType);
+        AppendFact(text, "nullability", Nullability);
+        AppendFact(text, "conversion", Conversion);
+        AppendFact(text, "constant", Constant);
+        if (Symbol is { } symbol)
+        {
+            AppendSymbol(text, symbol, indent: string.Empty);
+            AppendFact(text, "instantiation", Instantiation, Indent);
+            AppendFact(text, "doc", Documentation, Indent);
+        }
+
+        if (UnboundReason is null)
+            return;
+
+        text.Append("no symbol: ").Append(UnboundReason).Append('\n');
+        foreach (var candidate in Candidates)
+        {
+            AppendSymbol(text, candidate, Indent);
+        }
+    }
+
+    private static void AppendFact(
+        StringBuilder text,
+        string name,
+        string? value,
+        string indent = ""
+    )
+    {
+        if (value is not null)
+            text.Append(indent).Append(name).Append(' ').Append(value).Append('\n');
+    }
+}
+
 internal sealed record FileLocations(
     LocationFile File,
     IReadOnlyList<SourcePosition> Positions,

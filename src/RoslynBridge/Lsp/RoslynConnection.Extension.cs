@@ -10,6 +10,7 @@ internal sealed partial class RoslynConnection
 {
     internal const string ReferencesMessage = "RoslynBridge.Extension.ReferencesHandler";
     internal const string CallersMessage = "RoslynBridge.Extension.CallersHandler";
+    internal const string ExpressionMessage = "RoslynBridge.Extension.ExpressionHandler";
     internal const string UnusedMessage = "RoslynBridge.Extension.UnusedHandler";
     internal const int RequestCancelledCode = -32800;
     internal const int ServerCancelledCode = -32802;
@@ -20,10 +21,18 @@ internal sealed partial class RoslynConnection
         "RoslynBridge.Extension.dll"
     );
 
-    private static readonly string[] _documentMessages = [ReferencesMessage, CallersMessage];
+    private static readonly string[] _documentMessages =
+    [
+        ReferencesMessage,
+        CallersMessage,
+        ExpressionMessage,
+    ];
     private static readonly string[] _workspaceMessages = [UnusedMessage];
 
-    private bool _documentHandlersActive;
+    // A failing handler leaves the others active, and bulk_navigate dispatches concurrently
+    private readonly ConcurrentDictionary<string, byte> _activeDocumentMessages = new(
+        StringComparer.Ordinal
+    );
     private bool _workspaceHandlersActive;
 
     /// <summary>
@@ -33,7 +42,7 @@ internal sealed partial class RoslynConnection
         DocumentPosition position,
         CancellationToken cancellationToken
     ) =>
-        DispatchDocumentMessageAsync<ExtensionReferences>(
+        DispatchWithFallbackAsync<ExtensionReferences>(
             ReferencesMessage,
             position,
             cancellationToken
@@ -45,8 +54,28 @@ internal sealed partial class RoslynConnection
     public Task<Result<ExtensionCallers>> FindCallersAsync(
         DocumentPosition position,
         CancellationToken cancellationToken
-    ) =>
-        DispatchDocumentMessageAsync<ExtensionCallers>(CallersMessage, position, cancellationToken);
+    ) => DispatchWithFallbackAsync<ExtensionCallers>(CallersMessage, position, cancellationToken);
+
+    /// <summary>
+    /// Reads the compiler facts of the expression or declared name at a position. It has no LSP fallback.
+    /// </summary>
+    public async Task<Result<ExtensionExpression>> DescribeExpressionAsync(
+        DocumentPosition position,
+        CancellationToken cancellationToken
+    )
+    {
+        var described = await DispatchDocumentMessageAsync<ExtensionExpression>(
+            ExpressionMessage,
+            position,
+            disableOnFailure: false,
+            cancellationToken
+        );
+        return described is ToolError error && IsCancelled(error)
+            ? ToolError.InvalidLspData(
+                "Roslyn cancelled the description of the expression. Retry the call."
+            )
+            : described;
+    }
 
     /// <summary>
     /// Finds the declarations of some files that no live code uses.
@@ -110,15 +139,40 @@ internal sealed partial class RoslynConnection
     private static bool IsCancelled(ToolError error) =>
         error.RpcCode is RequestCancelledCode or ServerCancelledCode;
 
-    private async Task<Result<T>> DispatchDocumentMessageAsync<T>(
+    // A failed or cancelled dispatch answers not found, which sends the caller to the LSP request
+    private async Task<Result<T>> DispatchWithFallbackAsync<T>(
         string messageName,
         DocumentPosition position,
         CancellationToken cancellationToken
     )
         where T : IExtensionAnswer<T>
     {
-        if (!_documentHandlersActive)
-            return T.NotFound;
+        var dispatched = await DispatchDocumentMessageAsync<T>(
+            messageName,
+            position,
+            disableOnFailure: true,
+            cancellationToken
+        );
+        return dispatched is ToolError { Code: ErrorCodes.Lsp } ? T.NotFound : dispatched;
+    }
+
+    /// <summary>
+    /// A failure other than a cancellation disables the handler of <paramref name="messageName"/> for the session when <paramref name="disableOnFailure"/> is set.
+    /// </summary>
+    private async Task<Result<T>> DispatchDocumentMessageAsync<T>(
+        string messageName,
+        DocumentPosition position,
+        bool disableOnFailure,
+        CancellationToken cancellationToken
+    )
+        where T : IExtensionAnswer<T>
+    {
+        if (!_activeDocumentMessages.ContainsKey(messageName))
+        {
+            return ToolError.InvalidLspData(
+                $"The Roslyn extension handler {messageName} is unavailable in this session."
+            );
+        }
 
         var parameters = LspParameters.At(position);
         var dispatched = await RequestAsync(
@@ -133,37 +187,20 @@ internal sealed partial class RoslynConnection
         );
         if (dispatched.IsError(out var error, out var result))
         {
-            if (IsCancelled(error))
-                return T.NotFound;
-
-            if (error is { Code: ErrorCodes.Lsp })
-            {
-                DisableDocumentHandlers(error.Message);
-                return T.NotFound;
-            }
-
-            return error;
+            return error is { Code: ErrorCodes.Lsp } && !IsCancelled(error)
+                ? DocumentMessageFailure(messageName, error.Message, disableOnFailure)
+                : error;
         }
 
         if (ReadDispatch(result).IsError(out var invalidDispatch, out var dispatch))
-        {
-            DisableDocumentHandlers(invalidDispatch.Message);
-            return T.NotFound;
-        }
+            return DocumentMessageFailure(messageName, invalidDispatch.Message, disableOnFailure);
 
         if (dispatch.Answer is not { } response)
-        {
-            DisableDocumentHandlers(dispatch.Error);
-            return T.NotFound;
-        }
+            return DocumentMessageFailure(messageName, dispatch.Error, disableOnFailure);
 
-        if (LspJson.Parse<T>(response).IsError(out var invalid, out var answer))
-        {
-            DisableDocumentHandlers(invalid.Message);
-            return T.NotFound;
-        }
-
-        return answer;
+        return LspJson.Parse<T>(response).IsError(out var invalid, out var answer)
+            ? DocumentMessageFailure(messageName, invalid.Message, disableOnFailure)
+            : answer;
     }
 
     private async Task<Result> ActivateExtensionAsync(CancellationToken cancellationToken)
@@ -196,24 +233,44 @@ internal sealed partial class RoslynConnection
             return Result.Success;
         }
 
-        var unregistered = Unregistered(activation.DocumentMessageHandlers, _documentMessages);
-        _documentHandlersActive = unregistered.Count == 0;
-        if (!_documentHandlersActive)
-            LogExtensionUnavailable(logger, ActivationError(activation, unregistered));
+        var unregisteredDocuments = Unregistered(
+            activation.DocumentMessageHandlers,
+            _documentMessages
+        );
+        foreach (
+            var message in _documentMessages.Except(unregisteredDocuments, StringComparer.Ordinal)
+        )
+        {
+            _activeDocumentMessages.TryAdd(message, 0);
+        }
 
-        unregistered = Unregistered(activation.WorkspaceMessageHandlers, _workspaceMessages);
-        _workspaceHandlersActive = unregistered.Count == 0;
-        if (_documentHandlersActive && !_workspaceHandlersActive)
-            LogUnusedUnavailable(logger, ActivationError(activation, unregistered));
+        var unregisteredWorkspace = Unregistered(
+            activation.WorkspaceMessageHandlers,
+            _workspaceMessages
+        );
+        _workspaceHandlersActive = unregisteredWorkspace.Count == 0;
+        List<string> unregistered = [.. unregisteredDocuments, .. unregisteredWorkspace];
+        if (unregistered.Count > 0)
+        {
+            LogHandlersUnregistered(
+                logger,
+                string.Join(", ", unregistered.Select(Consequence)),
+                activation.ExtensionException?.Message ?? "Roslyn reported no error"
+            );
+        }
 
         return Result.Success;
     }
 
-    // One warning per session is enough, and a broken handler would fail every request the same way
-    private void DisableDocumentHandlers(string reason)
+    // A broken handler would fail every request the same way, so one warning per handler is enough
+    private ToolError DocumentMessageFailure(string messageName, string reason, bool disable)
     {
-        _documentHandlersActive = false;
-        LogExtensionFailed(logger, reason);
+        if (disable && _activeDocumentMessages.TryRemove(messageName, out _))
+            LogExtensionFailed(logger, messageName, reason);
+
+        return ToolError.InvalidLspData(
+            $"The Roslyn extension handler {messageName} failed: {reason}"
+        );
     }
 
     private static ToolError UnusedFailure(string reason) =>
@@ -226,31 +283,38 @@ internal sealed partial class RoslynConnection
             ),
         ];
 
-    private static string ActivationError(
-        ExtensionActivation activation,
-        List<string> unregistered
-    ) =>
-        activation.ExtensionException?.Message
-        ?? $"Roslyn registered no handler for {string.Join(", ", unregistered)}.";
+    private static string Consequence(string messageName) =>
+        messageName switch
+        {
+            ReferencesMessage => "references (uses the LSP request)",
+            CallersMessage => "callers (uses the LSP request)",
+            ExpressionMessage => "expression (unavailable)",
+            UnusedMessage => "unused (unavailable)",
+            _ => throw new ArgumentOutOfRangeException(nameof(messageName), messageName, null),
+        };
 
     private static Result<ExtensionDispatch> ReadDispatch(JsonNode? result) =>
         result is null ? ExtensionDispatch.None : result.Read<ExtensionDispatch>();
 
     [LoggerMessage(
         Level = LogLevel.Warning,
-        Message = "The Roslyn extension is unavailable, references and callers will use the LSP requests and unused symbols cannot be listed: {Reason}"
+        Message = "The Roslyn extension is unavailable, references and callers will use the LSP requests, and unused symbols and expressions cannot be listed or described: {Reason}"
     )]
     private static partial void LogExtensionUnavailable(ILogger logger, string reason);
 
     [LoggerMessage(
         Level = LogLevel.Warning,
-        Message = "The Roslyn extension cannot list unused symbols: {Reason}"
+        Message = "The Roslyn extension did not register some handlers: {Handlers}. Reason: {Reason}"
     )]
-    private static partial void LogUnusedUnavailable(ILogger logger, string reason);
+    private static partial void LogHandlersUnregistered(
+        ILogger logger,
+        string handlers,
+        string reason
+    );
 
     [LoggerMessage(
         Level = LogLevel.Warning,
-        Message = "The Roslyn extension failed, references and callers will use the LSP requests until the next session: {Reason}"
+        Message = "The Roslyn extension handler {Handler} failed and stays disabled until the next session: {Reason}"
     )]
-    private static partial void LogExtensionFailed(ILogger logger, string reason);
+    private static partial void LogExtensionFailed(ILogger logger, string handler, string reason);
 }

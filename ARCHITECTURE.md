@@ -52,8 +52,8 @@ flowchart LR
 
 ## Roslyn extension
 
-`src/RoslynBridge.Extension` runs inside the Roslyn process and calls internal Roslyn members through reflection. It answers `references`, `reads` and `writes` without the 500 ms batching delay of the LSP handler, `callers` through interface and base members, and `symbols` with `unused`, which LSP cannot answer.
+`src/RoslynBridge.Extension` runs inside the Roslyn process and calls internal Roslyn members through reflection. It answers `references`, `reads` and `writes` without the 500 ms batching delay of the LSP handler, `callers` through interface and base members, `expression` with the compiler facts at a position, and `symbols` with `unused`. LSP cannot answer the last two.
 
-When it fails, the bridge logs a warning and uses the LSP requests until the next session. `unused` has no fallback and returns `lsp_error`.
+When a handler fails, the bridge logs a warning and disables only that handler until the next session. `references`, `reads`, `writes` and `callers` then use the LSP requests. `unused` and `expression` have no fallback and return `lsp_error`.
 
 `RoslynServerVersion` in `Directory.Packages.props` sets the server that `setup` installs, that the CI tests against and that the extension compiles against. A new version must pass `mise run test-integration` on every platform the CI covers, since Roslyn changes its path handling between versions.

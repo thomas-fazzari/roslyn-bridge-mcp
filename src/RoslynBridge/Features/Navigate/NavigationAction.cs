@@ -47,6 +47,9 @@ internal enum NavigationAction
 
     [JsonStringEnumMemberName("writes")]
     Writes = 13,
+
+    [JsonStringEnumMemberName("expression")]
+    Expression = 14,
 }
 
 internal static class NavigationActions
@@ -70,6 +73,7 @@ internal static class NavigationActions
                 NavigationAction.Impact => LspAction.Impact,
                 NavigationAction.Reads => LspAction.Reads,
                 NavigationAction.Writes => LspAction.Writes,
+                NavigationAction.Expression => LspAction.Expression,
                 _ => throw new ArgumentOutOfRangeException(nameof(action)),
             };
     }

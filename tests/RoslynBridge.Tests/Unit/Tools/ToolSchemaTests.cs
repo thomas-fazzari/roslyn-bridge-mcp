@@ -94,6 +94,7 @@ public sealed partial class ToolSchemaTests
                     "impact",
                     "reads",
                     "writes",
+                    "expression",
                 ]
             },
             { SymbolsTool.Name, [], null },

@@ -27,6 +27,31 @@ public sealed partial class RoslynMcpTests
             new LspRequest { Action = LspAction.Diagnostics, File = ConsumerTestFile }
         );
 
+    private static async Task WriteExpressionsAsync(RoslynTestWorkspace workspace)
+    {
+        await StartRoslynAsync(workspace);
+        await workspace.WriteFileAsync(ExpressionsTestFile, ExpressionsSource);
+        await workspace.CallAsync(
+            new LspRequest { Action = LspAction.Diagnostics, File = ExpressionsTestFile }
+        );
+    }
+
+    private static async Task<string> ExpressionAtAsync(
+        RoslynTestWorkspace workspace,
+        string marker,
+        int cursorOffset = 0,
+        string file = ExpressionsTestFile
+    )
+    {
+        var request = await workspace.AtAsync(LspAction.Expression, file, marker);
+        return await workspace.CallAsync(
+            request with
+            {
+                Character = request.Character + cursorOffset,
+            }
+        );
+    }
+
     private static async Task<Diagnostic[]> DiagnosticsAsync(RoslynTestWorkspace workspace) =>
         Diagnostics(
             await workspace.CallAsync(

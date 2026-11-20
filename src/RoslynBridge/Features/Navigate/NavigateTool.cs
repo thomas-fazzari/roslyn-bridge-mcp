@@ -24,7 +24,7 @@ internal sealed class NavigateTool(
     public static string Name => "navigate";
 
     public static string Description =>
-        "Find the definition, type definition, implementations, references, callers, callees, supertypes or subtypes of a C# symbol, read its hover information or source, list a type's members, gather the impact of changing it, or list the reads or writes of a field, property, local, parameter or event. Name the symbol, or give its one-based position.";
+        "Find the definition, type definition, implementations, references, callers, callees, supertypes or subtypes of a C# symbol, read its hover information or source, read the compiler facts of the expression or declared name at a position (type, conversion, constant, chosen overload), list a type's members, gather the impact of changing it, or list the reads or writes of a field, property, local, parameter or event. Name the symbol, or give its one-based position.";
 
     public static bool ReadOnly => true;
 

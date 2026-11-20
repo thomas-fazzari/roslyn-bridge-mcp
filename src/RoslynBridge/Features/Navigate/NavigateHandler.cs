@@ -69,6 +69,7 @@ internal sealed partial class NavigateHandler(
             LspAction.Hover => (
                 await session.HoverAsync(position, cancellationToken)
             ).Map<ToolResult>(text => new HoverText(text)),
+            LspAction.Expression => await ExpressionAsync(position, cancellationToken),
             LspAction.Definition => DeclarationLocations(
                 request,
                 await session.DefinitionAsync(position, cancellationToken)

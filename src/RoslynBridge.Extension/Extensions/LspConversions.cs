@@ -52,10 +52,13 @@ internal static class LspConversions
 
     extension(ISymbol symbol)
     {
-        public string MemberName => symbol.ToDisplayString(_memberFormat);
+        public string MemberName =>
+            symbol is ILocalSymbol or IParameterSymbol or IRangeVariableSymbol
+                ? symbol.Name
+                : symbol.ToDisplayString(_memberFormat);
 
         /// <summary>
-        /// The LSP SymbolKind of a caller.
+        /// The LSP SymbolKind of a symbol.
         /// </summary>
         public int LspKind =>
             (int)(
@@ -78,6 +81,10 @@ internal static class LspConversions
                         LspSymbolKind.EnumMember,
                     IFieldSymbol => LspSymbolKind.Field,
                     IEventSymbol => LspSymbolKind.Event,
+                    ILocalSymbol or IParameterSymbol or IRangeVariableSymbol =>
+                        LspSymbolKind.Variable,
+                    ITypeParameterSymbol => LspSymbolKind.TypeParameter,
+                    INamespaceSymbol => LspSymbolKind.Namespace,
                     INamedTypeSymbol { TypeKind: TypeKind.Interface } => LspSymbolKind.Interface,
                     INamedTypeSymbol { TypeKind: TypeKind.Struct } => LspSymbolKind.Struct,
                     INamedTypeSymbol { TypeKind: TypeKind.Enum } => LspSymbolKind.Enum,
@@ -88,6 +95,7 @@ internal static class LspConversions
 
     private enum LspSymbolKind
     {
+        Namespace = 3,
         Class = 5,
         Method = 6,
         Property = 7,
@@ -96,10 +104,12 @@ internal static class LspConversions
         Enum = 10,
         Interface = 11,
         Function = 12,
+        Variable = 13,
         Constant = 14,
         EnumMember = 22,
         Struct = 23,
         Event = 24,
         Operator = 25,
+        TypeParameter = 26,
     }
 }

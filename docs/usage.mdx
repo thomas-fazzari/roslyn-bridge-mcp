@@ -18,14 +18,14 @@ The [agent reference](/roslyn-bridge-mcp/llms.txt) gives this reference in plain
 
 ## Tools
 
-| Tool            | Arguments                                                                                                                                                                                                                                                                          | Result                                                                        |
-| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| `diagnostics`   | `file` path or glob, `severity`, `ids`, `summary`, `limit`, `offset`                                                                                                                                                                                                               | Errors, warnings and suggestions                                              |
-| `navigate`      | `action` (`definition`, `type_definition`, `implementation`, `references`, `reads`, `writes`, `callers`, `callees`, `supertypes`, `subtypes`, `hover`, `source`, `members`, `impact`), and `symbol` or `file`, `line`, `character`, plus `context`, `inherited`, `limit`, `offset` | Locations, related symbols, hover text, source or members                     |
-| `bulk_navigate` | `queries` (1 to 16 items, each with the `action`, `inherited` and the `symbol` or `file`, `line`, `character` of `navigate`), `context`, `limit`, `offset`                                                                                                                         | One section per query                                                         |
-| `symbols`       | `file` or `query`, or `unused` with an optional `file` path or glob, and `limit`, `offset`                                                                                                                                                                                         | Document, workspace or unused symbols                                         |
-| `edit`          | `action` (`rename`, `rename_file`, `code_actions`), `symbol` or `file`, `line`, `character`, `endLine`, `endCharacter`, `newName`, `diagnostic`, `actionIndex`, `proposalId`, `apply`, `all`, `limit`                                                                              | Edit previews, then applied changes                                           |
-| `lsp`           | `action` (`status`, `capabilities`, `reload`, `request`), `method`, `parameters`, `apply`                                                                                                                                                                                          | Session state, a fresh session or a raw Language Server Protocol (LSP) result |
+| Tool            | Arguments                                                                                                                                                                                                                                                                                        | Result                                                                        |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------- |
+| `diagnostics`   | `file` path or glob, `severity`, `ids`, `summary`, `limit`, `offset`                                                                                                                                                                                                                             | Errors, warnings and suggestions                                              |
+| `navigate`      | `action` (`definition`, `type_definition`, `implementation`, `references`, `reads`, `writes`, `callers`, `callees`, `supertypes`, `subtypes`, `hover`, `expression`, `source`, `members`, `impact`), and `symbol` or `file`, `line`, `character`, plus `context`, `inherited`, `limit`, `offset` | Locations, related symbols, hover text, expression facts, source or members   |
+| `bulk_navigate` | `queries` (1 to 16 items, each with the `action`, `inherited` and the `symbol` or `file`, `line`, `character` of `navigate`), `context`, `limit`, `offset`                                                                                                                                       | One section per query                                                         |
+| `symbols`       | `file` or `query`, or `unused` with an optional `file` path or glob, and `limit`, `offset`                                                                                                                                                                                                       | Document, workspace or unused symbols                                         |
+| `edit`          | `action` (`rename`, `rename_file`, `code_actions`), `symbol` or `file`, `line`, `character`, `endLine`, `endCharacter`, `newName`, `diagnostic`, `actionIndex`, `proposalId`, `apply`, `all`, `limit`                                                                                            | Edit previews, then applied changes                                           |
+| `lsp`           | `action` (`status`, `capabilities`, `reload`, `request`), `method`, `parameters`, `apply`                                                                                                                                                                                                        | Session state, a fresh session or a raw Language Server Protocol (LSP) result |
 
 `diagnostics`, `navigate`, `bulk_navigate` and `symbols` are read-only. `edit` and `lsp` can write files.
 Each tool takes flat arguments:
@@ -80,6 +80,7 @@ Raw requests and `capabilities` return JSON.
 | `reads`, `writes`                                               | The references that read or write a field, property, local, parameter or event, in the format of `references`. An empty result reads `no reads` or `no writes`.                                                                      |
 | `callers`, `callees`, `supertypes`, `subtypes`                  | One line per symbol: its declaration, its kind and its name. A caller that goes through a base or interface member names it on a `through` line. An empty result reads `no callers`, `no callees`, `no supertypes` or `no subtypes`. |
 | `hover`                                                         | Plain text.                                                                                                                                                                                                                          |
+| `expression`                                                    | One line per fact that the compiler gives about the expression or declared name at the position, as described in [Expression facts](#expression-facts).                                                                              |
 | `symbols`                                                       | The symbol lines of the related actions. For a file, they give the declaration end after a dash, as in `5:18-9:2`, and are indented under their container.                                                                           |
 | `source`                                                        | The saved text of each declaration, documentation comment included, after a `file:first-last kind name` header. A partial type returns every part.                                                                                   |
 | `members`                                                       | The type, then the members it declares grouped by file, with names relative to the type.                                                                                                                                             |
@@ -191,6 +192,43 @@ After a `truncated:` line, omitted files are not necessarily clean.
 | `symbol_not_found` | No declaration matches `symbol`, or the position touches no symbol.                                       | Send a candidate from the message back, or search with `symbols`. |
 | `ambiguous_symbol` | `symbol` matches several declarations.                                                                    | Send one of the listed candidates back unchanged.                 |
 | `ambiguous_file`   | `file` matches several workspace files.                                                                   | Send more of the path.                                            |
+
+## Expression facts
+
+`navigate` with `expression` tells what the compiler knows about the expression or the declared name at a position.
+`hover` describes a symbol. `expression` describes one use of it: the type, the conversion, the constant and the overload the compiler chose.
+Give a position, or a `symbol` to read its declaration. A position on a member name reports its whole member access, on a callee its call, and on a created type its creation.
+
+```text
+expression Formatter.Format(42)
+kind InvocationExpression
+type string
+nullability NotAnnotated/NotNull
+src/Formatter.cs:12:19 method MyApp.Formatter.Format(int)
+  doc Formats an Int32 value.
+```
+
+A fact that the compiler does not give has no line.
+
+| Line                | Meaning                                                                                                                                                                                    |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `expression`        | The text of the expression, with white space collapsed and cut at 200 characters.                                                                                                          |
+| `kind`              | The Roslyn syntax kind.                                                                                                                                                                    |
+| `type`, `converted` | The type, and the type after the conversion when it differs. A trailing `?` marks a nullable annotation.                                                                                   |
+| `nullability`       | The annotation and the flow state, as in `Annotated/MaybeNull`. The flow state is `None` on a declaration without an initializer. Absent when nullable analysis is off.                    |
+| `conversion`        | The words of the conversion, such as `implicit numeric`, `implicit reference` or `implicit user-defined op_Implicit`. Absent for identity.                                                 |
+| `constant`          | The value as a C# literal, or `null`.                                                                                                                                                      |
+| Symbol line         | The symbol the expression binds to, in the format of `callers`. A symbol from metadata or generated code keeps Roslyn's name and has no position.                                          |
+| `instantiation`     | The constructed generic or the extension method as the code calls it. It follows the symbol line.                                                                                          |
+| `doc`               | The summary of the documentation comment, cut at 400 characters. It follows the symbol line.                                                                                               |
+| `no symbol: REASON` | The expression binds to no symbol. REASON is the Roslyn candidate reason, such as `OverloadResolutionFailure`. One indented symbol line per candidate follows, in file and position order. |
+| `declaration`       | Replaces the `expression` line on the name that a declaration introduces. `type` is the declared type, or the return type of a method. A constant local or field has a `constant` line.    |
+
+The symbol line of a `variable`, a local or parameter, has its bare name, which `navigate` does not accept.
+A position that touches a symbol but has no expression and no declared name returns `no expression`. Move the position onto the name.
+A position that touches no symbol returns the error `symbol_not_found`, as for other actions.
+`context`, `limit` and `offset` do not apply.
+`expression` needs the Roslyn extension of the bridge. Without it, or when it fails, the call returns the error `lsp_error`. The other actions keep working.
 
 ## Unused code
 

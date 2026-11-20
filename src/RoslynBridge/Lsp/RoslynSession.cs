@@ -205,6 +205,11 @@ internal sealed partial class RoslynSession(
         CancellationToken cancellationToken
     ) => Connection.FindCallersAsync(position, cancellationToken);
 
+    public Task<Result<ExtensionExpression>> DescribeExpressionAsync(
+        DocumentPosition position,
+        CancellationToken cancellationToken
+    ) => Connection.DescribeExpressionAsync(position, cancellationToken);
+
     /// <summary>
     /// Routes the workspace/applyEdit requests of the command to <paramref name="onEdit"/>.
     /// </summary>
