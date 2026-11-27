@@ -36,6 +36,8 @@
 !/.pi/extensions/
 !/.pi/extensions/format.ts
 !/.pi/skills/
+!/.pi/skills/git-workflow/
+!/.pi/skills/git-workflow/SKILL.md
 !/.pi/skills/roslyn/
 !/.pi/skills/roslyn/SKILL.md
 
