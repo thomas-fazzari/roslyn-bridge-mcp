@@ -50,7 +50,7 @@ internal sealed record Success
 /// <summary>
 /// The outcome of an operation that returns no value.
 /// </summary>
-internal union Result(Success, ToolError)
+internal readonly union Result(Success, ToolError)
 {
     public static Result Success => RoslynBridge.Success.Instance;
 }
@@ -58,7 +58,7 @@ internal union Result(Success, ToolError)
 /// <summary>
 /// The outcome of an operation that returns a value.
 /// </summary>
-internal union Result<T>(T, ToolError)
+internal readonly union Result<T>(T, ToolError)
 {
     /// <summary>
     /// Splits the result so that the value is readable only after the error check.

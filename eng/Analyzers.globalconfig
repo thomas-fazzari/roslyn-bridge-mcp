@@ -3,9 +3,15 @@ is_global = true
 # AnalysisLevel latest-all already raises every CA rule to an error.
 # This file lists only the rules that differ from that baseline or from each package default.
 
+# A regex with a constant pattern uses [GeneratedRegex]
+dotnet_diagnostic.SYSLIB1045.severity = error
+
 # Code style
 csharp_style_namespace_declarations = file_scoped
 dotnet_diagnostic.IDE0161.severity = warning
+# Unnecessary qualification: import the namespace instead
+dotnet_diagnostic.IDE0001.severity = warning
+dotnet_diagnostic.IDE0002.severity = warning
 dotnet_diagnostic.IDE0011.severity = warning
 csharp_prefer_braces = when_multiline
 csharp_style_var_for_built_in_types = true
@@ -20,6 +26,9 @@ dotnet_diagnostic.IDE0031.severity = warning
 dotnet_diagnostic.IDE0019.severity = warning
 dotnet_diagnostic.IDE0020.severity = warning
 dotnet_diagnostic.IDE0018.severity = warning
+dotnet_diagnostic.IDE0250.severity = warning
+csharp_style_prefer_primary_constructors = true
+dotnet_diagnostic.IDE0290.severity = warning
 
 # Expression bodies wherever the body fits on one line
 csharp_style_expression_bodied_methods = true
@@ -118,6 +127,8 @@ dotnet_diagnostic.RCS1194.severity = none
 
 # Meziantou
 MA0134.report_discarded = true
+MA0053.public_class_should_be_sealed = true
+dotnet_diagnostic.MA0053.severity = warning
 dotnet_diagnostic.MA0032.severity = warning
 dotnet_diagnostic.MA0040.severity = warning
 dotnet_diagnostic.MA0079.severity = warning

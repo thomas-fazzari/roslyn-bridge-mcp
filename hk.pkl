@@ -1,7 +1,7 @@
 amends "package://github.com/jdx/hk/releases/download/v2.10.0/hk@2.10.0#/Config.pkl"
 import "package://github.com/jdx/hk/releases/download/v2.10.0/hk@2.10.0#/Builtins.pkl"
 
-local dotnet = "**/*.{cs,csx,csproj,props,targets,slnx,xml,config,resx}"
+local dotnet = "**/*.{cs,csx,csproj,props,targets,slnx,slnf,xml,config,resx}"
 
 // Steps of `hk check`, `hk fix` and the pre-commit hook. `mise run fix` runs them on every file.
 local linters = new Mapping<String, Step> {
@@ -14,6 +14,7 @@ local linters = new Mapping<String, Step> {
     glob = List("**/*.md", "**/*.mdx")
   }
   ["shellcheck"] = Builtins.shellcheck
+  ["shfmt"] = Builtins.shfmt
 }
 
 steps = linters
@@ -29,7 +30,7 @@ hooks {
   ["pre-push"] {
     steps = (linters) {
       ["build"] {
-        glob = List(dotnet, "global.json", "**/.editorconfig", "eng/Analyzers.globalconfig")
+        glob = List(dotnet, "global.json", "**/.editorconfig", "eng/*.globalconfig", "**/packages.lock.json")
         check = "mise run build"
       }
       ["docs-build"] {
