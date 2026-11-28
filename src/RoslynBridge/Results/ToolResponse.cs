@@ -18,12 +18,12 @@ internal static class ToolResponse
         {
             var heading = ResultText.ResolvedFiles(resolvedFiles ?? []);
             var text =
-                heading + result.Render(ResultText.MaximumResponseCharacters - heading.Length);
-            return text.Length <= ResultText.MaximumResponseCharacters || result.MustDeliver
+                heading + result.Render(ResultText.MAXIMUM_RESPONSE_CHARACTERS - heading.Length);
+            return text.Length <= ResultText.MAXIMUM_RESPONSE_CHARACTERS || result.MustDeliver
                 ? Text(text, isError: false)
                 : new ToolError(
-                    ErrorCodes.ResultTooLarge,
-                    $"The result exceeds {ResultText.MaximumResponseCharacters} characters. Narrow the query or lower limit."
+                    ErrorCodes.RESULT_TOO_LARGE,
+                    $"The result exceeds {ResultText.MAXIMUM_RESPONSE_CHARACTERS} characters. Narrow the query or lower limit."
                 ).ToResponse();
         }
     }

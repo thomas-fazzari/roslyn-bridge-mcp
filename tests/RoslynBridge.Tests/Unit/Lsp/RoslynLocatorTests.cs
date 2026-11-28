@@ -95,7 +95,7 @@ public sealed class RoslynLocatorTests : TempWorkspaceTests
     {
         var tool = CreateFile(Path.Combine(Root, "store", Server));
         var server = CreateFile(
-            Path.Combine(Root, "store", Executable(RoslynLocator.ServerBinaryName))
+            Path.Combine(Root, "store", Executable(RoslynLocator.SERVER_BINARY_NAME))
         );
         var bin = Directory.CreateDirectory(Path.Combine(Root, "bin")).FullName;
         try
@@ -141,7 +141,7 @@ public sealed class RoslynLocatorTests : TempWorkspaceTests
 
     private static string Dotnet => Executable("dotnet");
 
-    private static string Server => Executable(RoslynLocator.ServerName);
+    private static string Server => Executable(RoslynLocator.SERVER_NAME);
 
     private static string Executable(string name) =>
         OperatingSystem.IsWindows() ? $"{name}.exe" : name;

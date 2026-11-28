@@ -18,7 +18,7 @@ public sealed class CallCancellationTests : TempWorkspaceTests
     public async Task CallWithoutAnAnswerEndsOnTheRequestTimeoutAsync()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        await WriteFileAsync(Root, SourceFile, "class A {}\n");
+        await WriteFileAsync(Root, SOURCE_FILE, "class A {}\n");
         var options = new BridgeOptions
         {
             WorkspaceRoot = Root,
@@ -31,7 +31,7 @@ public sealed class CallCancellationTests : TempWorkspaceTests
             Root,
             FakeServer(server =>
                 server.Handle = (method, _) =>
-                    method is LspMethods.TextDocumentReferences
+                    method is LspMethods.TEXT_DOCUMENT_REFERENCES
                         ? unanswered.Task
                         : Task.FromResult<JsonNode?>(null)
             ),
@@ -47,29 +47,29 @@ public sealed class CallCancellationTests : TempWorkspaceTests
             new LspRequest
             {
                 Action = LspAction.References,
-                File = SourceFile,
+                File = SOURCE_FILE,
                 Line = 1,
                 Character = 1,
             },
             cancellationToken
         );
 
-        response.Should().BeError(ErrorCodes.Timeout);
+        response.Should().BeError(ErrorCodes.TIMEOUT);
         unanswered.SetResult(null);
     }
 
     [Fact]
     public async Task RequestThatRoslynCancelsFailsWithAnLspErrorAsync()
     {
-        await WriteFileAsync(Root, SourceFile, "class A {}\n");
+        await WriteFileAsync(Root, SOURCE_FILE, "class A {}\n");
         await using var session = CreateSession(
             Root,
             FakeServer(server =>
                 server.Handle = (method, _) =>
-                    method is LspMethods.TextDocumentReferences
+                    method is LspMethods.TEXT_DOCUMENT_REFERENCES
                         ? throw new LocalRpcException("The request was cancelled.")
                         {
-                            ErrorCode = RoslynConnection.RequestCancelledCode,
+                            ErrorCode = RoslynConnection.REQUEST_CANCELLED_CODE,
                         }
                         : Task.FromResult<JsonNode?>(null)
             )
@@ -80,20 +80,20 @@ public sealed class CallCancellationTests : TempWorkspaceTests
             new LspRequest
             {
                 Action = LspAction.References,
-                File = SourceFile,
+                File = SOURCE_FILE,
                 Line = 1,
                 Character = 1,
             },
             TestCt
         );
 
-        response.Should().BeError(ErrorCodes.Lsp);
+        response.Should().BeError(ErrorCodes.LSP);
     }
 
     [Fact(Timeout = 30_000)]
     public async Task CancellationDuringAnAppliedEditReportsTheWrittenFilesAsync()
     {
-        var source = await WriteFileAsync(Root, SourceFile, "class A {}\n");
+        var source = await WriteFileAsync(Root, SOURCE_FILE, "class A {}\n");
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(
             TestContext.Current.CancellationToken
         );
@@ -108,7 +108,7 @@ public sealed class CallCancellationTests : TempWorkspaceTests
                 // The bridge asks for the project contexts only after it wrote the files
                 server.Handle = async (method, _) =>
                 {
-                    if (method is not LspMethods.TextDocumentGetProjectContexts)
+                    if (method is not LspMethods.TEXT_DOCUMENT_GET_PROJECT_CONTEXTS)
                         return null;
 
                     await cancellation.CancelAsync();
@@ -120,7 +120,7 @@ public sealed class CallCancellationTests : TempWorkspaceTests
 
         var response = await tool.ExecuteAsync(RenameFileApplied(), cancellation.Token);
 
-        response.Should().BeError(ErrorCodes.Cancelled);
+        response.Should().BeError(ErrorCodes.CANCELLED);
         AssertTheMovedFileIsReported(response, source);
         afterTheWrite.SetResult(null);
     }
@@ -129,7 +129,7 @@ public sealed class CallCancellationTests : TempWorkspaceTests
     public async Task TimeoutDuringAnAppliedEditReportsTheWrittenFilesAsync()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        var source = await WriteFileAsync(Root, SourceFile, "class A {}\n");
+        var source = await WriteFileAsync(Root, SOURCE_FILE, "class A {}\n");
         var options = new BridgeOptions
         {
             WorkspaceRoot = Root,
@@ -150,7 +150,7 @@ public sealed class CallCancellationTests : TempWorkspaceTests
                 server.Capabilities = LspCapabilityJson.WillRenameFiles();
                 server.Handle = (method, _) =>
                     Task.FromResult<JsonNode?>(
-                        method is LspMethods.TextDocumentGetProjectContexts
+                        method is LspMethods.TEXT_DOCUMENT_GET_PROJECT_CONTEXTS
                             ? outsideEveryProject.DeepClone()
                             : null
                     );
@@ -161,7 +161,7 @@ public sealed class CallCancellationTests : TempWorkspaceTests
 
         var response = await tool.ExecuteAsync(RenameFileApplied(), cancellationToken);
 
-        response.Should().BeError(ErrorCodes.Timeout);
+        response.Should().BeError(ErrorCodes.TIMEOUT);
         AssertTheMovedFileIsReported(response, source);
     }
 
@@ -169,8 +169,8 @@ public sealed class CallCancellationTests : TempWorkspaceTests
         new()
         {
             Action = LspAction.RenameFile,
-            File = SourceFile,
-            NewName = RenamedFile,
+            File = SOURCE_FILE,
+            NewName = RENAMED_FILE,
             Apply = true,
         };
 
@@ -181,9 +181,9 @@ public sealed class CallCancellationTests : TempWorkspaceTests
             .Should()
             .Contain("failed step: synchronize")
             .And.Contain("applied: 2 files, 2 operations, Roslyn not synchronized")
-            .And.Contain($"create {RenamedFile}")
-            .And.Contain($"delete {SourceFile}");
+            .And.Contain($"create {RENAMED_FILE}")
+            .And.Contain($"delete {SOURCE_FILE}");
         File.Exists(source).Should().BeFalse();
-        File.Exists(Path.Combine(Root, RenamedFile)).Should().BeTrue();
+        File.Exists(Path.Combine(Root, RENAMED_FILE)).Should().BeTrue();
     }
 }

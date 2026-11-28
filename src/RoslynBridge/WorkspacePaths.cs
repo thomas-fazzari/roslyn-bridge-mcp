@@ -8,9 +8,9 @@ namespace RoslynBridge;
 [DebuggerDisplay("{Root}")]
 internal sealed class WorkspacePaths(string root)
 {
-    internal const int MaximumFileCount = 100_000;
-    internal const string IntermediateDirectoryName = "obj";
-    private const int ProjectSearchDepth = 2;
+    internal const int MAXIMUM_FILE_COUNT = 100_000;
+    internal const string INTERMEDIATE_DIRECTORY_NAME = "obj";
+    private const int PROJECT_SEARCH_DEPTH = 2;
 
     internal static FrozenSet<string> ExcludedDirectories { get; } =
         new[]
@@ -27,7 +27,7 @@ internal sealed class WorkspacePaths(string root)
             ".ionide",
             ".history",
             "bin",
-            IntermediateDirectoryName,
+            INTERMEDIATE_DIRECTORY_NAME,
             "packages",
             "publish",
             "artifacts",
@@ -190,7 +190,7 @@ internal sealed class WorkspacePaths(string root)
 
     // Restore changes under obj must still reach Roslyn's file watchers
     public bool IsWatchedDirectory(string name) =>
-        string.Equals(name, IntermediateDirectoryName, StringComparison.Ordinal)
+        string.Equals(name, INTERMEDIATE_DIRECTORY_NAME, StringComparison.Ordinal)
         || !IsExcludedDirectory(name);
 
     public bool IsExcluded(WorkspaceFilePath file) => Components(file).Any(IsExcludedDirectory);
@@ -204,7 +204,7 @@ internal sealed class WorkspacePaths(string root)
     {
         try
         {
-            return Files(name => !IsExcludedDirectory(name), ProjectSearchDepth)
+            return Files(name => !IsExcludedDirectory(name), PROJECT_SEARCH_DEPTH)
                 .Any(file => _projectExtensions.Contains(Path.GetExtension(file.Path.FullPath)));
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
@@ -368,10 +368,10 @@ internal sealed class WorkspacePaths(string root)
             foreach (var file in Files(includeDirectory))
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                if (files.Count == MaximumFileCount)
+                if (files.Count == MAXIMUM_FILE_COUNT)
                 {
                     return ToolError.InvalidRequest(
-                        $"The workspace exceeds {MaximumFileCount} files. Select a narrower root."
+                        $"The workspace exceeds {MAXIMUM_FILE_COUNT} files. Select a narrower root."
                     );
                 }
 

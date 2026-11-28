@@ -18,7 +18,7 @@ namespace RoslynBridge.Extension;
 internal sealed class UnusedHandler
     : IExtensionWorkspaceMessageHandler<UnusedRequest, UnusedResponse>
 {
-    private const int MaximumConcurrentSearches = 4;
+    private const int MAXIMUM_CONCURRENT_SEARCHES = 4;
 
     public async Task<UnusedResponse> ExecuteAsync(
         UnusedRequest message,
@@ -44,7 +44,7 @@ internal sealed class UnusedHandler
             Enumerable.Range(0, candidates.Count),
             new ParallelOptions
             {
-                MaxDegreeOfParallelism = MaximumConcurrentSearches,
+                MaxDegreeOfParallelism = MAXIMUM_CONCURRENT_SEARCHES,
                 CancellationToken = cancellationToken,
             },
             async (index, token) =>

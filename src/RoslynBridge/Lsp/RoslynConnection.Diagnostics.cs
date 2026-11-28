@@ -8,7 +8,7 @@ namespace RoslynBridge.Lsp;
 
 internal sealed partial class RoslynConnection
 {
-    private const string UnchangedReport = "unchanged";
+    private const string UNCHANGED_REPORT = "unchanged";
 
     private readonly ConcurrentDictionary<string, LspDiagnosticReport> _diagnosticReports = new(
         StringComparer.Ordinal
@@ -32,7 +32,7 @@ internal sealed partial class RoslynConnection
         }
 
         var response = await RequestAsync(
-            LspMethods.TextDocumentDiagnostic,
+            LspMethods.TEXT_DOCUMENT_DIAGNOSTIC,
             parameters,
             cancellationToken
         );
@@ -42,7 +42,7 @@ internal sealed partial class RoslynConnection
         if (result.Read<LspDiagnosticReport>().IsError(out var invalid, out var report))
             return invalid;
 
-        if (previous is not null && report.Kind is UnchangedReport)
+        if (previous is not null && report.Kind is UNCHANGED_REPORT)
         {
             BridgeTelemetry.CountDiagnosticReport(reused: true);
             return previous;

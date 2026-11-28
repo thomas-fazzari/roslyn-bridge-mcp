@@ -10,8 +10,8 @@ namespace RoslynBridge.Tests.Unit.Tools;
 
 public sealed class EditRecoveryTests : TempWorkspaceTests
 {
-    private const string UntouchedFile = "Untouched.cs";
-    private const string SourceText = "class A {}";
+    private const string UNTOUCHED_FILE = "Untouched.cs";
+    private const string SOURCE_TEXT = "class A {}";
 
     [Fact]
     public async Task FailedCodeActionCommandAfterAWriteDropsProposalsAndReloadsRoslynAsync()
@@ -19,7 +19,7 @@ public sealed class EditRecoveryTests : TempWorkspaceTests
         var failing = new LspRequest
         {
             Action = LspAction.CodeActions,
-            File = SourceFile,
+            File = SOURCE_FILE,
             Line = 1,
             Character = 7,
             ActionIndex = 0,
@@ -35,7 +35,7 @@ public sealed class EditRecoveryTests : TempWorkspaceTests
         var failing = new LspRequest
         {
             Action = LspAction.Request,
-            Method = LspMethods.WorkspaceExecuteCommand,
+            Method = LspMethods.WORKSPACE_EXECUTE_COMMAND,
             Parameters = new JsonObject { ["command"] = "test.command" },
             Apply = true,
         };
@@ -45,8 +45,8 @@ public sealed class EditRecoveryTests : TempWorkspaceTests
 
     private async Task AssertRecoversAsync(LspRequest failing, bool serverWritesInCommand)
     {
-        var source = await WriteFileAsync(Root, SourceFile, SourceText);
-        var untouched = await WriteFileAsync(Root, UntouchedFile, SourceText);
+        var source = await WriteFileAsync(Root, SOURCE_FILE, SOURCE_TEXT);
+        var untouched = await WriteFileAsync(Root, UNTOUCHED_FILE, SOURCE_TEXT);
         var launches = 0;
         await using var session = CreateSession(
             Root,
@@ -55,19 +55,19 @@ public sealed class EditRecoveryTests : TempWorkspaceTests
                 launches++;
                 server.Handle = async (method, _) =>
                 {
-                    if (method is LspMethods.TextDocumentRename)
+                    if (method is LspMethods.TEXT_DOCUMENT_RENAME)
                         return WorkspaceChanges(untouched, TextEdit(0, 6, 0, 7, "B"));
 
-                    if (method is LspMethods.TextDocumentCodeAction)
+                    if (method is LspMethods.TEXT_DOCUMENT_CODE_ACTION)
                         return CodeActionWithEditAndCommand(source);
 
-                    if (method is not LspMethods.WorkspaceExecuteCommand)
+                    if (method is not LspMethods.WORKSPACE_EXECUTE_COMMAND)
                         return null;
 
                     if (serverWritesInCommand)
                     {
                         await server.RequestClientAsync(
-                            LspMethods.WorkspaceApplyEdit,
+                            LspMethods.WORKSPACE_APPLY_EDIT,
                             new JsonObject
                             {
                                 ["edit"] = WorkspaceChanges(source, TextEdit(0, 6, 0, 7, "B")),
@@ -85,7 +85,7 @@ public sealed class EditRecoveryTests : TempWorkspaceTests
             new LspRequest
             {
                 Action = LspAction.Rename,
-                File = UntouchedFile,
+                File = UNTOUCHED_FILE,
                 Line = 1,
                 Character = 7,
                 NewName = "B",
@@ -96,7 +96,7 @@ public sealed class EditRecoveryTests : TempWorkspaceTests
 
         var response = await tool.ExecuteAsync(failing, TestCt);
 
-        response.Should().BeError(ErrorCodes.Lsp);
+        response.Should().BeError(ErrorCodes.LSP);
         ResultLines.Lines(ResponseText(response)).Should().Contain("failed step: command");
         launches.Should().Be(1);
 
@@ -105,7 +105,7 @@ public sealed class EditRecoveryTests : TempWorkspaceTests
             TestCt
         );
 
-        reused.Should().BeError(ErrorCodes.InvalidRequest);
+        reused.Should().BeError(ErrorCodes.INVALID_REQUEST);
         launches.Should().Be(2);
     }
 

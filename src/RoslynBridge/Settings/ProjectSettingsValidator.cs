@@ -45,15 +45,15 @@ internal static class ProjectSettingsValidator
 
     public static bool IsTimeout(int seconds) =>
         seconds
-            is >= ProjectSettings.MinimumTimeoutSeconds
-                and <= ProjectSettings.MaximumTimeoutSeconds;
+            is >= ProjectSettings.MINIMUM_TIMEOUT_SECONDS
+                and <= ProjectSettings.MAXIMUM_TIMEOUT_SECONDS;
 
     private static void CheckTimeout(string key, int? seconds, List<string> faults)
     {
         if (seconds is { } value && !IsTimeout(value))
         {
             faults.Add(
-                $"{key} must be from {ProjectSettings.MinimumTimeoutSeconds} to {ProjectSettings.MaximumTimeoutSeconds} seconds"
+                $"{key} must be from {ProjectSettings.MINIMUM_TIMEOUT_SECONDS} to {ProjectSettings.MAXIMUM_TIMEOUT_SECONDS} seconds"
             );
         }
     }

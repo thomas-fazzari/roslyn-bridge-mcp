@@ -7,17 +7,17 @@ namespace RoslynBridge.Tests.Unit;
 
 public sealed class SetupTests
 {
-    private const string Launcher = "/home/me/.dotnet/tools/roslyn-bridge-mcp";
-    private const string Root = "/opt/dotnet";
+    private const string LAUNCHER = "/home/me/.dotnet/tools/roslyn-bridge-mcp";
+    private const string ROOT = "/opt/dotnet";
 
     [Fact]
     public void DnxRunRegistersDnxBesideTheDotnetHost()
     {
         Assert.SkipWhen(OperatingSystem.IsWindows(), "Windows registers dnx from PATH.");
 
-        var command = Setup.BridgeCommand($"{Root}/dotnet", Root, [Root]);
+        var command = Setup.BridgeCommand($"{ROOT}/dotnet", ROOT, [ROOT]);
 
-        command.Should().StartWith($"{Root}/dnx {Setup.PackageId}@").And.EndWith(" --yes");
+        command.Should().StartWith($"{ROOT}/dnx {Setup.PACKAGE_ID}@").And.EndWith(" --yes");
         command.Should().NotContain("+");
     }
 
@@ -30,10 +30,10 @@ public sealed class SetupTests
         );
 
         Setup
-            .BridgeCommand(Launcher, Root, ["/usr/share/dotnet"])
+            .BridgeCommand(LAUNCHER, ROOT, ["/usr/share/dotnet"])
             .Should()
-            .Be($"/usr/bin/env DOTNET_ROOT={Root} {Launcher}");
-        Setup.BridgeCommand(Launcher, Root, [$"{Root}/"]).Should().Be(Launcher);
+            .Be($"/usr/bin/env DOTNET_ROOT={ROOT} {LAUNCHER}");
+        Setup.BridgeCommand(LAUNCHER, ROOT, [$"{ROOT}/"]).Should().Be(LAUNCHER);
     }
 
     [Theory]
@@ -52,7 +52,7 @@ public sealed class SetupTests
         );
 
         agent
-            .Registration(Setup.BridgeCommand("/opt/my tools/roslyn-bridge-mcp", Root, [Root]))
+            .Registration(Setup.BridgeCommand("/opt/my tools/roslyn-bridge-mcp", ROOT, [ROOT]))
             .Should()
             .Be(expected);
     }

@@ -20,13 +20,13 @@ namespace RoslynBridge.Tests.Unit.Tools;
 
 public sealed class LspToolTests : TempWorkspaceTests
 {
-    private const string SourceText = "class A {}\nclass B {}\nclass C {}\nclass D {}\n";
-    private const string HoverMarkdown = "```csharp\nvoid Greet()\n```";
+    private const string SOURCE_TEXT = "class A {}\nclass B {}\nclass C {}\nclass D {}\n";
+    private const string HOVER_MARKDOWN = "```csharp\nvoid Greet()\n```";
 
-    private const int Error = (int)DiagnosticSeverity.Error;
-    private const int Warning = (int)DiagnosticSeverity.Warning;
-    private const int Hint = (int)DiagnosticSeverity.Hint;
-    private const string ReportedCode = "CS0168";
+    private const int ERROR = (int)DiagnosticSeverity.Error;
+    private const int WARNING = (int)DiagnosticSeverity.Warning;
+    private const int HINT = (int)DiagnosticSeverity.Hint;
+    private const string REPORTED_CODE = "CS0168";
 
     [Fact]
     public async Task BridgeBugIsNotReportedAsAnInvalidRequestAsync()
@@ -43,10 +43,10 @@ public sealed class LspToolTests : TempWorkspaceTests
     }
 
     [Theory]
-    [InlineData(LspMethods.Initialize)]
-    [InlineData(LspMethods.TextDocumentDidOpen)]
-    [InlineData(LspMethods.WorkspaceDidChangeWatchedFiles)]
-    [InlineData(LspMethods.WorkspaceApplyEdit)]
+    [InlineData(LspMethods.INITIALIZE)]
+    [InlineData(LspMethods.TEXT_DOCUMENT_DID_OPEN)]
+    [InlineData(LspMethods.WORKSPACE_DID_CHANGE_WATCHED_FILES)]
+    [InlineData(LspMethods.WORKSPACE_APPLY_EDIT)]
     public async Task RawRequestRefusesMethodsTheBridgeOwnsAsync(string method)
     {
         await using var session = CreateSession(Root, FakeServer());
@@ -62,11 +62,11 @@ public sealed class LspToolTests : TempWorkspaceTests
             TestCt
         );
 
-        response.Should().BeError(ErrorCodes.InvalidRequest);
+        response.Should().BeError(ErrorCodes.INVALID_REQUEST);
     }
 
     [Theory]
-    [InlineData(LspMethods.WorkspaceExecuteCommand)]
+    [InlineData(LspMethods.WORKSPACE_EXECUTE_COMMAND)]
     [InlineData("custom/unlistedMethod")]
     public async Task RawRequestOutsideTheReadOnlyMethodsRequiresApplyAsync(string method)
     {
@@ -83,20 +83,20 @@ public sealed class LspToolTests : TempWorkspaceTests
             TestCt
         );
 
-        response.Should().BeError(ErrorCodes.InvalidRequest);
+        response.Should().BeError(ErrorCodes.INVALID_REQUEST);
     }
 
     [Fact]
     public async Task CommandFailureAfterAWriteReportsTheAppliedFilesAsync()
     {
-        var source = await WriteFileAsync(Root, SourceFile, "class A {}");
+        var source = await WriteFileAsync(Root, SOURCE_FILE, "class A {}");
         await using var session = CreateSession(
             Root,
             FakeServer(server =>
                 server.Handle = async (_, _) =>
                 {
                     await server.RequestClientAsync(
-                        LspMethods.WorkspaceApplyEdit,
+                        LspMethods.WORKSPACE_APPLY_EDIT,
                         new JsonObject
                         {
                             ["edit"] = WorkspaceChanges(source, TextEdit(0, 6, 0, 7, "B")),
@@ -113,14 +113,14 @@ public sealed class LspToolTests : TempWorkspaceTests
             new LspRequest
             {
                 Action = LspAction.Request,
-                Method = LspMethods.WorkspaceExecuteCommand,
+                Method = LspMethods.WORKSPACE_EXECUTE_COMMAND,
                 Parameters = new JsonObject { ["command"] = "test.command" },
                 Apply = true,
             },
             TestCt
         );
 
-        response.Should().BeError(ErrorCodes.Lsp);
+        response.Should().BeError(ErrorCodes.LSP);
         ResponseText(response)
             .Should()
             .Contain("failed step: command")
@@ -142,7 +142,7 @@ public sealed class LspToolTests : TempWorkspaceTests
 
         var response = await tool.ExecuteAsync(SymbolQuery(), TestCt);
 
-        response.Should().BeError(ErrorCodes.Io);
+        response.Should().BeError(ErrorCodes.IO);
     }
 
     [Fact]
@@ -163,7 +163,7 @@ public sealed class LspToolTests : TempWorkspaceTests
 
         var response = await tool.ExecuteAsync(SymbolQuery(), TestCt);
 
-        response.Should().BeError(ErrorCodes.Loading);
+        response.Should().BeError(ErrorCodes.LOADING);
         session.IsLoading.Should().BeTrue();
     }
 
@@ -261,7 +261,7 @@ public sealed class LspToolTests : TempWorkspaceTests
             FakeServer(server =>
                 server.Handle = (method, _) =>
                 {
-                    if (method is not LspMethods.TextDocumentGetProjectContexts)
+                    if (method is not LspMethods.TEXT_DOCUMENT_GET_PROJECT_CONTEXTS)
                         return Task.FromResult<JsonNode?>(FakeDiagnosticServer.FullReport([]));
 
                     contextRequests++;
@@ -309,7 +309,7 @@ public sealed class LspToolTests : TempWorkspaceTests
             TestCt
         );
 
-        response.Should().BeError(ErrorCodes.Lsp);
+        response.Should().BeError(ErrorCodes.LSP);
     }
 
     [Theory]
@@ -345,7 +345,7 @@ public sealed class LspToolTests : TempWorkspaceTests
         var sent = new ConcurrentQueue<string?>();
         await using var session = CreateSession(
             Root,
-            FakeDiagnosticServer.WithResultIds(ReportedCode, sent)
+            FakeDiagnosticServer.WithResultIds(REPORTED_CODE, sent)
         );
         using var tool = CreateTool(session);
         var request = new LspRequest { Action = LspAction.Diagnostics, File = "A.cs" };
@@ -353,9 +353,9 @@ public sealed class LspToolTests : TempWorkspaceTests
         var first = ResponseText(await tool.ExecuteAsync(request, TestCt));
         var second = ResponseText(await tool.ExecuteAsync(request, TestCt));
 
-        first.Should().Contain(ReportedCode);
+        first.Should().Contain(REPORTED_CODE);
         second.Should().Be(first);
-        sent.Should().Equal(null, FakeDiagnosticServer.ResultId);
+        sent.Should().Equal(null, FakeDiagnosticServer.RESULT_ID);
     }
 
     [Fact]
@@ -365,7 +365,7 @@ public sealed class LspToolTests : TempWorkspaceTests
         var sent = new ConcurrentQueue<string?>();
         await using var session = CreateSession(
             Root,
-            FakeDiagnosticServer.WithResultIds(ReportedCode, sent)
+            FakeDiagnosticServer.WithResultIds(REPORTED_CODE, sent)
         );
         using var tool = CreateTool(session);
         var request = new LspRequest { Action = LspAction.Diagnostics, File = "A.cs" };
@@ -374,7 +374,7 @@ public sealed class LspToolTests : TempWorkspaceTests
         await tool.ExecuteAsync(new LspRequest { Action = LspAction.Reload }, TestCt);
         var afterReload = ResponseText(await tool.ExecuteAsync(request, TestCt));
 
-        afterReload.Should().Contain(ReportedCode);
+        afterReload.Should().Contain(REPORTED_CODE);
         sent.Should().Equal(null, null);
     }
 
@@ -384,7 +384,7 @@ public sealed class LspToolTests : TempWorkspaceTests
         await WriteFileAsync(Root, "A.cs", "class A {}");
         await using var session = CreateSession(
             Root,
-            DiagnosticServer(("A.cs", 0, 0, Error, "CS0246"), ("A.cs", 1, 0, Warning, "CS8618"))
+            DiagnosticServer(("A.cs", 0, 0, ERROR, "CS0246"), ("A.cs", 1, 0, WARNING, "CS8618"))
         );
         using var tool = CreateTool(session);
 
@@ -426,14 +426,14 @@ public sealed class LspToolTests : TempWorkspaceTests
         await using var session = CreateSession(
             Root,
             DiagnosticServer(
-                ("A.cs", 0, 2, Warning, "CS8618"),
-                ("A.cs", 1, 0, Error, "CS0246"),
-                ("A.cs", 3, 4, Error, "CS0246"),
-                ("A.cs", 5, 0, Warning, "CS0168"),
-                ("B.cs", 0, 0, Error, "CS0246"),
-                ("B.cs", 1, 1, Warning, "CS0168"),
-                ("B.cs", 2, 0, Warning, "CS8618"),
-                ("B.cs", 3, 0, Warning, "IDE0051")
+                ("A.cs", 0, 2, WARNING, "CS8618"),
+                ("A.cs", 1, 0, ERROR, "CS0246"),
+                ("A.cs", 3, 4, ERROR, "CS0246"),
+                ("A.cs", 5, 0, WARNING, "CS0168"),
+                ("B.cs", 0, 0, ERROR, "CS0246"),
+                ("B.cs", 1, 1, WARNING, "CS0168"),
+                ("B.cs", 2, 0, WARNING, "CS8618"),
+                ("B.cs", 3, 0, WARNING, "IDE0051")
             )
         );
         using var tool = CreateTool(session);
@@ -469,10 +469,10 @@ public sealed class LspToolTests : TempWorkspaceTests
         await using var session = CreateSession(
             Root,
             DiagnosticServer(
-                ("A.cs", 4, 0, Error, "CS0001"),
-                ("A.cs", 1, 0, Error, "CS0002"),
-                ("B.cs", 0, 0, Error, "CS0003"),
-                ("B.cs", 2, 0, Error, "CS0004")
+                ("A.cs", 4, 0, ERROR, "CS0001"),
+                ("A.cs", 1, 0, ERROR, "CS0002"),
+                ("B.cs", 0, 0, ERROR, "CS0003"),
+                ("B.cs", 2, 0, ERROR, "CS0004")
             )
         );
         using var tool = CreateTool(session);
@@ -497,7 +497,7 @@ public sealed class LspToolTests : TempWorkspaceTests
     [Fact]
     public async Task OffsetReadsTheNextPageAndTheTruncationNamesTheNextOffsetAsync()
     {
-        await WriteFileAsync(Root, SourceFile, SourceText);
+        await WriteFileAsync(Root, SOURCE_FILE, SOURCE_TEXT);
         await using var session = CreateSession(
             Root,
             FakeServer(server =>
@@ -525,7 +525,7 @@ public sealed class LspToolTests : TempWorkspaceTests
     [Fact]
     public async Task BulkAppliesItsOffsetToEveryQueryAsync()
     {
-        await WriteFileAsync(Root, SourceFile, SourceText);
+        await WriteFileAsync(Root, SOURCE_FILE, SOURCE_TEXT);
         await using var session = CreateSession(
             Root,
             FakeServer(server =>
@@ -561,7 +561,7 @@ public sealed class LspToolTests : TempWorkspaceTests
 
         var response = await tool.ExecuteAsync(SymbolQuery() with { Offset = -1 }, TestCt);
 
-        response.Should().BeError(ErrorCodes.InvalidRequest);
+        response.Should().BeError(ErrorCodes.INVALID_REQUEST);
     }
 
     [Fact]
@@ -594,7 +594,7 @@ public sealed class LspToolTests : TempWorkspaceTests
     public async Task BulkReportsEachQueryInRequestOrderAsync()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        await WriteFileAsync(Root, SourceFile, SourceText);
+        await WriteFileAsync(Root, SOURCE_FILE, SOURCE_TEXT);
         var othersAnswered = new TaskCompletionSource(
             TaskCreationOptions.RunContinuationsAsynchronously
         );
@@ -638,7 +638,7 @@ public sealed class LspToolTests : TempWorkspaceTests
     [Fact]
     public async Task BulkReportsAFailedQueryInItsSectionAndRunsTheOthersAsync()
     {
-        await WriteFileAsync(Root, SourceFile, SourceText);
+        await WriteFileAsync(Root, SOURCE_FILE, SOURCE_TEXT);
         await using var session = CreateSession(
             Root,
             FakeServer(server =>
@@ -663,23 +663,25 @@ public sealed class LspToolTests : TempWorkspaceTests
         var sections = ResponseText(response).Split("\n## ");
         sections.Should().HaveCount(3);
         sections[0].Should().EndWith("Found.cs 1:1");
-        sections[1].Should().StartWith($"2 references Missing\nerror {ErrorCodes.SymbolNotFound}:");
+        sections[1]
+            .Should()
+            .StartWith($"2 references Missing\nerror {ErrorCodes.SYMBOL_NOT_FOUND}:");
         sections[2].Should().EndWith("Found.cs 1:1");
     }
 
     [Fact]
     public async Task BulkShowsTheRpcCodeOfAFailedRoslynRequestInItsSectionAsync()
     {
-        const int HandlerFailureCode = -32603;
-        await WriteFileAsync(Root, SourceFile, SourceText);
+        const int HANDLER_FAILURE_CODE = -32603;
+        await WriteFileAsync(Root, SOURCE_FILE, SOURCE_TEXT);
         await using var session = CreateSession(
             Root,
             FakeServer(server =>
                 server.Handle = (method, parameters) =>
-                    method is LspMethods.TextDocumentReferences && LineOf(parameters) == 2
+                    method is LspMethods.TEXT_DOCUMENT_REFERENCES && LineOf(parameters) == 2
                         ? throw new LocalRpcException("Roslyn failed.")
                         {
-                            ErrorCode = HandlerFailureCode,
+                            ErrorCode = HANDLER_FAILURE_CODE,
                         }
                         : Task.FromResult<JsonNode?>(Found("Found.cs"))
             )
@@ -691,7 +693,7 @@ public sealed class LspToolTests : TempWorkspaceTests
         ResponseText(response)
             .Should()
             .Contain(
-                $"## 2 references Source.cs:2:1\nerror {ErrorCodes.Lsp} (LSP {HandlerFailureCode}): Roslyn failed."
+                $"## 2 references Source.cs:2:1\nerror {ErrorCodes.LSP} (LSP {HANDLER_FAILURE_CODE}): Roslyn failed."
             );
     }
 
@@ -704,7 +706,7 @@ public sealed class LspToolTests : TempWorkspaceTests
             FakeServer(server =>
                 server.Handle = (method, _) =>
                 {
-                    if (method is LspMethods.WorkspaceSymbol)
+                    if (method is LspMethods.WORKSPACE_SYMBOL)
                         Interlocked.Increment(ref symbolRequests);
 
                     return Task.FromResult<JsonNode?>(null);
@@ -726,14 +728,14 @@ public sealed class LspToolTests : TempWorkspaceTests
             .Should()
             .HaveCount(2)
             .And.AllSatisfy(section =>
-                section.Should().Contain($"error {ErrorCodes.SymbolNotFound}:")
+                section.Should().Contain($"error {ErrorCodes.SYMBOL_NOT_FOUND}:")
             );
         symbolRequests.Should().Be(1);
     }
 
     [Theory]
     [InlineData(0)]
-    [InlineData(BulkNavigateRequest.MaximumQueries + 1)]
+    [InlineData(BulkNavigateRequest.MAXIMUM_QUERIES + 1)]
     public async Task BulkRejectsAnEmptyOrOversizedBatchAsync(int count)
     {
         await using var session = CreateSession(Root, FakeServer());
@@ -744,13 +746,13 @@ public sealed class LspToolTests : TempWorkspaceTests
             TestCt
         );
 
-        response.Should().BeError(ErrorCodes.InvalidRequest);
+        response.Should().BeError(ErrorCodes.INVALID_REQUEST);
     }
 
     [Fact]
     public async Task BulkOmitsTheSectionsThatDoNotFitAndListsTheirSizesAsync()
     {
-        await WriteFileAsync(Root, SourceFile, SourceText);
+        await WriteFileAsync(Root, SOURCE_FILE, SOURCE_TEXT);
         await using var session = CreateSession(
             Root,
             FakeServer(server =>
@@ -770,14 +772,14 @@ public sealed class LspToolTests : TempWorkspaceTests
         var response = await tool.ExecuteAsync(
             Bulk(ReferencesAt(1), ReferencesAt(2), ReferencesAt(3), ReferencesAt(4)) with
             {
-                Limit = Paging.MaximumLimit,
+                Limit = Paging.MAXIMUM_LIMIT,
             },
             TestCt
         );
 
         response.Should().BeSuccessful();
         var text = ResponseText(response);
-        text.Length.Should().BeLessThanOrEqualTo(ResultText.MaximumResponseCharacters);
+        text.Length.Should().BeLessThanOrEqualTo(ResultText.MAXIMUM_RESPONSE_CHARACTERS);
         text.Should()
             .Contain("## 3 references Source.cs:3:1\nSmall.cs 1:1")
             .And.Contain("## 4 references Source.cs:4:1: none");
@@ -793,7 +795,7 @@ public sealed class LspToolTests : TempWorkspaceTests
     public async Task BulkKeepsFinishedSectionsWhenTheTimeoutEndsTheCallAsync()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        await WriteFileAsync(Root, SourceFile, SourceText);
+        await WriteFileAsync(Root, SOURCE_FILE, SOURCE_TEXT);
         var options = new BridgeOptions
         {
             WorkspaceRoot = Root,
@@ -821,7 +823,7 @@ public sealed class LspToolTests : TempWorkspaceTests
         var sections = ResponseText(response).Split("\n## ");
         sections.Should().HaveCount(3);
         sections[0].Should().EndWith("Found.cs 1:1");
-        sections[1].Should().Contain($"error {ErrorCodes.Timeout}:");
+        sections[1].Should().Contain($"error {ErrorCodes.TIMEOUT}:");
         sections[2].Should().EndWith("Found.cs 1:1");
     }
 
@@ -851,7 +853,7 @@ public sealed class LspToolTests : TempWorkspaceTests
 
         var unknown = await tool.ExecuteAsync(SourceOf("Calculater"), TestCt);
 
-        unknown.Should().BeError(ErrorCodes.SymbolNotFound);
+        unknown.Should().BeError(ErrorCodes.SYMBOL_NOT_FOUND);
         var candidate = ResponseText(unknown).Split('\n').Skip(1).Should().ContainSingle().Which;
         var name = candidate.Split(' ', 3)[2];
         var resolved = await tool.ExecuteAsync(SourceOf(name), TestCt);
@@ -870,7 +872,7 @@ public sealed class LspToolTests : TempWorkspaceTests
 
         var response = await CallAsync(server, SourceOf("Calculater"));
 
-        response.Should().BeError(ErrorCodes.SymbolNotFound);
+        response.Should().BeError(ErrorCodes.SYMBOL_NOT_FOUND);
         ResponseText(response).Split('\n').Should().ContainSingle();
     }
 
@@ -892,7 +894,7 @@ public sealed class LspToolTests : TempWorkspaceTests
 
         var response = await CallAsync(server, ReferencesOf("Nope.Missing"));
 
-        response.Should().BeError(ErrorCodes.SymbolNotFound);
+        response.Should().BeError(ErrorCodes.SYMBOL_NOT_FOUND);
         ResultLines
             .Lines(ResponseText(response))
             .Should()
@@ -919,8 +921,8 @@ public sealed class LspToolTests : TempWorkspaceTests
             "Box",
             box,
             (int)LspSymbolKind.Method,
-            MethodLine,
-            MethodCharacter
+            METHOD_LINE,
+            METHOD_CHARACTER
         );
         constructor["containerName"] = "in Box (project App)";
         await using var session = CreateSession(
@@ -930,11 +932,11 @@ public sealed class LspToolTests : TempWorkspaceTests
                     Task.FromResult<JsonNode?>(
                         method switch
                         {
-                            LspMethods.WorkspaceSymbol => new JsonArray(
+                            LspMethods.WORKSPACE_SYMBOL => new JsonArray(
                                 WorkspaceSymbol("Box", box),
                                 constructor.DeepClone()
                             ),
-                            LspMethods.TextDocumentDocumentSymbol => new JsonArray(
+                            LspMethods.TEXT_DOCUMENT_DOCUMENT_SYMBOL => new JsonArray(
                                 DocumentSymbol("Box", DocumentMethod("Box(int)"))
                             ),
                             _ => null,
@@ -990,7 +992,7 @@ public sealed class LspToolTests : TempWorkspaceTests
 
         var response = await CallAsync(server, ReferencesOf("Calculator.Missing"));
 
-        response.Should().BeError(ErrorCodes.SymbolNotFound);
+        response.Should().BeError(ErrorCodes.SYMBOL_NOT_FOUND);
         ResultLines
             .CandidateNames(ResponseText(response))
             .Should()
@@ -1014,7 +1016,7 @@ public sealed class LspToolTests : TempWorkspaceTests
 
         var response = await CallAsync(server, ReferencesOf("Calculator.Missing"));
 
-        response.Should().BeError(ErrorCodes.SymbolNotFound);
+        response.Should().BeError(ErrorCodes.SYMBOL_NOT_FOUND);
         ResultLines.CandidateNames(ResponseText(response)).Should().BeEmpty();
     }
 
@@ -1039,7 +1041,7 @@ public sealed class LspToolTests : TempWorkspaceTests
 
         var response = await CallAsync(server, ReferencesOf("Nope.Missing"));
 
-        response.Should().BeError(ErrorCodes.SymbolNotFound);
+        response.Should().BeError(ErrorCodes.SYMBOL_NOT_FOUND);
         ResultLines.CandidateNames(ResponseText(response)).Should().BeEmpty();
         ResponseText(response).Should().Contain("Nopes", Exactly.Once());
     }
@@ -1061,14 +1063,14 @@ public sealed class LspToolTests : TempWorkspaceTests
 
         var response = await CallAsync(server, ReferencesOf("Sample.Calculater"));
 
-        response.Should().BeError(ErrorCodes.SymbolNotFound);
+        response.Should().BeError(ErrorCodes.SYMBOL_NOT_FOUND);
         ResultLines.CandidateNames(ResponseText(response)).Should().Equal("Sample.Calculator");
     }
 
     [Fact]
     public async Task CalleesListConstructorsWithTheConstructorKindAsync()
     {
-        await WriteFileAsync(Root, SourceFile, SourceText);
+        await WriteFileAsync(Root, SOURCE_FILE, SOURCE_TEXT);
         var box = await WriteFileAsync(Root, "Box.cs", "class Box\n{\n    public Box() {}\n}\n");
         var greeter = await WriteFileAsync(Root, "Greeter.cs", "class Greeter(string name);\n");
         await using var session = CreateSession(
@@ -1078,14 +1080,14 @@ public sealed class LspToolTests : TempWorkspaceTests
                     Task.FromResult<JsonNode?>(
                         method switch
                         {
-                            LspMethods.TextDocumentPrepareCallHierarchy => PreparedItem(),
-                            LspMethods.CallHierarchyOutgoingCalls => new JsonArray(
-                                OutgoingCall("Box.Box()", box, MethodLine, MethodCharacter),
+                            LspMethods.TEXT_DOCUMENT_PREPARE_CALL_HIERARCHY => PreparedItem(),
+                            LspMethods.CALL_HIERARCHY_OUTGOING_CALLS => new JsonArray(
+                                OutgoingCall("Box.Box()", box, METHOD_LINE, METHOD_CHARACTER),
                                 OutgoingCall("Greeter.Greeter(string)", greeter, 0, 6)
                             ),
-                            LspMethods.TextDocumentDocumentSymbol => parameters!["textDocument"]![
-                                "uri"
-                            ]!
+                            LspMethods.TEXT_DOCUMENT_DOCUMENT_SYMBOL => parameters![
+                                "textDocument"
+                            ]!["uri"]!
                                 .GetValue<string>()
                                 .EndsWith("Box.cs", StringComparison.Ordinal)
                                 ? new JsonArray(DocumentSymbol("Box", DocumentMethod("Box()")))
@@ -1101,7 +1103,7 @@ public sealed class LspToolTests : TempWorkspaceTests
             new LspRequest
             {
                 Action = LspAction.Callees,
-                File = SourceFile,
+                File = SOURCE_FILE,
                 Line = 1,
                 Character = 1,
             },
@@ -1125,15 +1127,15 @@ public sealed class LspToolTests : TempWorkspaceTests
     [InlineData("subtypes", 1)]
     public async Task EmptyHierarchyResultNamesWhatIsMissingAsync(string action, int lineCount)
     {
-        await WriteFileAsync(Root, SourceFile, SourceText);
+        await WriteFileAsync(Root, SOURCE_FILE, SOURCE_TEXT);
         await using var session = CreateSession(
             Root,
             FakeServer(server =>
                 server.Handle = (method, _) =>
                     Task.FromResult<JsonNode?>(
                         method
-                            is LspMethods.TextDocumentPrepareCallHierarchy
-                                or LspMethods.TextDocumentPrepareTypeHierarchy
+                            is LspMethods.TEXT_DOCUMENT_PREPARE_CALL_HIERARCHY
+                                or LspMethods.TEXT_DOCUMENT_PREPARE_TYPE_HIERARCHY
                             ? PreparedItem()
                             : null
                     )
@@ -1145,7 +1147,7 @@ public sealed class LspToolTests : TempWorkspaceTests
             new LspRequest
             {
                 Action = Enum.Parse<LspAction>(action, ignoreCase: true),
-                File = SourceFile,
+                File = SOURCE_FILE,
                 Line = 1,
                 Character = 1,
             },
@@ -1160,7 +1162,7 @@ public sealed class LspToolTests : TempWorkspaceTests
     [Fact]
     public async Task HierarchyWithoutAPreparedItemReportsNoSymbolsAsync()
     {
-        await WriteFileAsync(Root, SourceFile, SourceText);
+        await WriteFileAsync(Root, SOURCE_FILE, SOURCE_TEXT);
         await using var session = CreateSession(Root, FakeServer());
         using var tool = CreateTool(session);
 
@@ -1168,7 +1170,7 @@ public sealed class LspToolTests : TempWorkspaceTests
             new LspRequest
             {
                 Action = LspAction.Callers,
-                File = SourceFile,
+                File = SOURCE_FILE,
                 Line = 1,
                 Character = 1,
             },
@@ -1181,13 +1183,13 @@ public sealed class LspToolTests : TempWorkspaceTests
     [Fact]
     public async Task CodeActionListingHidesSuppressionsButKeepsTheIndexesAsync()
     {
-        await WriteFileAsync(Root, SourceFile, SourceText);
+        await WriteFileAsync(Root, SOURCE_FILE, SOURCE_TEXT);
         await using var session = CreateSession(
             Root,
             FakeServer(server =>
                 server.Handle = (method, _) =>
                     Task.FromResult<JsonNode?>(
-                        method is LspMethods.TextDocumentCodeAction
+                        method is LspMethods.TEXT_DOCUMENT_CODE_ACTION
                             ? FixesAroundASuppressionGroup()
                             : null
                     )
@@ -1197,7 +1199,7 @@ public sealed class LspToolTests : TempWorkspaceTests
         var request = new LspRequest
         {
             Action = LspAction.CodeActions,
-            File = SourceFile,
+            File = SOURCE_FILE,
             Line = 1,
             Character = 1,
         };
@@ -1213,9 +1215,9 @@ public sealed class LspToolTests : TempWorkspaceTests
             .Should()
             .Equal(
                 "0 quickfix Remove it",
-                $"1 {CodeActionsHandler.SuppressionGroup} > Suppress X > in Source",
-                $"2 {CodeActionsHandler.SuppressionGroup} > Configure X severity > Error",
-                $"3 {CodeActionsHandler.SuppressionGroup} > Configure X severity > Warning",
+                $"1 {CodeActionsHandler.SUPPRESSION_GROUP} > Suppress X > in Source",
+                $"2 {CodeActionsHandler.SUPPRESSION_GROUP} > Configure X severity > Error",
+                $"3 {CodeActionsHandler.SUPPRESSION_GROUP} > Configure X severity > Warning",
                 "4 quickfix Add it"
             );
     }
@@ -1240,11 +1242,11 @@ public sealed class LspToolTests : TempWorkspaceTests
             ResponseText(response)
                 .Split('\n')[0]
                 .Should()
-                .Be(ResultText.ResolvedFilePrefix + "src/Math/Calculator.cs");
+                .Be(ResultText.RESOLVED_FILE_PREFIX + "src/Math/Calculator.cs");
             return;
         }
 
-        response.Should().BeError(ErrorCodes.InvalidRequest);
+        response.Should().BeError(ErrorCodes.INVALID_REQUEST);
     }
 
     [Fact]
@@ -1260,14 +1262,14 @@ public sealed class LspToolTests : TempWorkspaceTests
             TestCt
         );
 
-        response.Should().BeError(ErrorCodes.AmbiguousFile);
+        response.Should().BeError(ErrorCodes.AMBIGUOUS_FILE);
         ResponseText(response).Should().Contain("A/Calculator.cs").And.Contain("B/Calculator.cs");
     }
 
     [Fact]
     public async Task BulkResolvesEachQueryFileAndEchoesTheResolvedPathOnceAsync()
     {
-        await WriteFileAsync(Root, "src/Math/Source.cs", SourceText);
+        await WriteFileAsync(Root, "src/Math/Source.cs", SOURCE_TEXT);
         await using var session = CreateSession(
             Root,
             FakeServer(server =>
@@ -1293,7 +1295,7 @@ public sealed class LspToolTests : TempWorkspaceTests
         ResponseText(response)
             .Should()
             .Be(
-                $"{ResultText.ResolvedFilePrefix}src/Math/Source.cs\n"
+                $"{ResultText.RESOLVED_FILE_PREFIX}src/Math/Source.cs\n"
                     + "## 1 references src/Math/Source.cs:1:1\nFound.cs 1:1\n"
                     + "## 2 references src/Math/Source.cs:2:1\nFound.cs 1:1"
             );
@@ -1302,9 +1304,9 @@ public sealed class LspToolTests : TempWorkspaceTests
     [Fact]
     public async Task BulkReportsAnAmbiguousFileInTheSectionOfItsQueryAsync()
     {
-        await WriteFileAsync(Root, "A/Calculator.cs", SourceText);
-        await WriteFileAsync(Root, "B/Calculator.cs", SourceText);
-        await WriteFileAsync(Root, "src/Math/Source.cs", SourceText);
+        await WriteFileAsync(Root, "A/Calculator.cs", SOURCE_TEXT);
+        await WriteFileAsync(Root, "B/Calculator.cs", SOURCE_TEXT);
+        await WriteFileAsync(Root, "src/Math/Source.cs", SOURCE_TEXT);
         await using var session = CreateSession(
             Root,
             FakeServer(server =>
@@ -1333,12 +1335,12 @@ public sealed class LspToolTests : TempWorkspaceTests
         lines[..2]
             .Should()
             .Equal(
-                $"{ResultText.ResolvedFilePrefix}src/Math/Source.cs",
+                $"{ResultText.RESOLVED_FILE_PREFIX}src/Math/Source.cs",
                 "## 1 references Calculator.cs:1:1"
             );
         lines[2]
             .Should()
-            .StartWith($"error {ErrorCodes.AmbiguousFile}:")
+            .StartWith($"error {ErrorCodes.AMBIGUOUS_FILE}:")
             .And.Contain("A/Calculator.cs")
             .And.Contain("B/Calculator.cs");
         lines[3..].Should().Equal("## 2 references src/Math/Source.cs:2:1", "Found.cs 1:1");
@@ -1347,13 +1349,13 @@ public sealed class LspToolTests : TempWorkspaceTests
     [Fact]
     public async Task ReloadReadsTheSettingsAgainAndKeepsThemWhenTheFileIsInvalidAsync()
     {
-        const int firstSeconds = 20;
-        const int secondSeconds = 40;
+        const int FIRST_SECONDS = 20;
+        const int SECOND_SECONDS = 40;
 
-        var settingsPath = Path.Combine(Root, ProjectSettings.FileName);
-        var arguments = LaunchArguments.Parse([LaunchArguments.WorkspaceArgument, Root]);
+        var settingsPath = Path.Combine(Root, ProjectSettings.FILE_NAME);
+        var arguments = LaunchArguments.Parse([LaunchArguments.WORKSPACE_ARGUMENT, Root]);
 
-        await File.WriteAllTextAsync(settingsPath, StartupTimeoutSetting(firstSeconds), TestCt);
+        await File.WriteAllTextAsync(settingsPath, StartupTimeoutSetting(FIRST_SECONDS), TestCt);
         var settings = new SettingsMonitor(() =>
             BridgeOptions.From(arguments, ProjectSettingsReader.Read(Root))
         );
@@ -1361,23 +1363,23 @@ public sealed class LspToolTests : TempWorkspaceTests
         using var tool = CreateTool(session, settings);
         var reload = new LspRequest { Action = LspAction.Reload };
 
-        await File.WriteAllTextAsync(settingsPath, StartupTimeoutSetting(secondSeconds), TestCt);
+        await File.WriteAllTextAsync(settingsPath, StartupTimeoutSetting(SECOND_SECONDS), TestCt);
         var reloaded = await tool.ExecuteAsync(reload, TestCt);
         var afterReload = settings.CurrentValue.StartupTimeout;
         await File.WriteAllTextAsync(settingsPath, "{ \"unknown\": 1 }", TestCt);
         var invalid = await tool.ExecuteAsync(reload, TestCt);
 
         reloaded.Should().BeSuccessful();
-        afterReload.Should().Be(TimeSpan.FromSeconds(secondSeconds));
-        invalid.Should().BeError(ErrorCodes.InvalidSettings);
+        afterReload.Should().Be(TimeSpan.FromSeconds(SECOND_SECONDS));
+        invalid.Should().BeError(ErrorCodes.INVALID_SETTINGS);
         ResponseText(invalid).Should().Contain("unknown");
-        settings.CurrentValue.StartupTimeout.Should().Be(TimeSpan.FromSeconds(secondSeconds));
+        settings.CurrentValue.StartupTimeout.Should().Be(TimeSpan.FromSeconds(SECOND_SECONDS));
     }
 
     [Fact]
     public async Task DiagnosticsUseTheProjectSeverityWhenTheCallGivesNoneAsync()
     {
-        const string hintCode = "IDE0005";
+        const string HINT_CODE = "IDE0005";
         await WriteFileAsync(Root, "A.cs", "class A {}");
         var options = new BridgeOptions
         {
@@ -1386,7 +1388,7 @@ public sealed class LspToolTests : TempWorkspaceTests
         };
         await using var session = CreateSession(
             Root,
-            DiagnosticServer(("A.cs", 0, 0, Error, "CS0246"), ("A.cs", 1, 0, Hint, hintCode))
+            DiagnosticServer(("A.cs", 0, 0, ERROR, "CS0246"), ("A.cs", 1, 0, HINT, HINT_CODE))
         );
         using var withProjectSeverity = CreateTool(session, options);
         using var withBuiltInSeverity = CreateTool(
@@ -1409,9 +1411,9 @@ public sealed class LspToolTests : TempWorkspaceTests
         );
         var builtInDefault = await withBuiltInSeverity.ExecuteAsync(unset, TestCt);
 
-        ResponseText(projectDefault).Should().Contain(hintCode);
-        ResponseText(explicitWarning).Should().NotContain(hintCode);
-        ResponseText(builtInDefault).Should().NotContain(hintCode);
+        ResponseText(projectDefault).Should().Contain(HINT_CODE);
+        ResponseText(explicitWarning).Should().NotContain(HINT_CODE);
+        ResponseText(builtInDefault).Should().NotContain(HINT_CODE);
     }
 
     [Theory]
@@ -1419,13 +1421,17 @@ public sealed class LspToolTests : TempWorkspaceTests
     [InlineData(false)]
     public async Task HoverReducesItsContentsToTextAsync(bool markup)
     {
-        await WriteFileAsync(Root, SourceFile, SourceText);
+        await WriteFileAsync(Root, SOURCE_FILE, SOURCE_TEXT);
         await using var session = CreateSession(
             Root,
             FakeServer(server =>
                 server.HoverContents = markup
-                    ? new JsonObject { ["kind"] = "markdown", ["value"] = HoverMarkdown + "\n  \n" }
-                    : new JsonArray(HoverMarkdown)
+                    ? new JsonObject
+                    {
+                        ["kind"] = "markdown",
+                        ["value"] = HOVER_MARKDOWN + "\n  \n",
+                    }
+                    : new JsonArray(HOVER_MARKDOWN)
             )
         );
         using var tool = CreateTool(session);
@@ -1434,20 +1440,20 @@ public sealed class LspToolTests : TempWorkspaceTests
             new LspRequest
             {
                 Action = LspAction.Hover,
-                File = SourceFile,
+                File = SOURCE_FILE,
                 Line = 1,
                 Character = 1,
             },
             TestCt
         );
 
-        ResponseText(response).Should().Be(HoverMarkdown);
+        ResponseText(response).Should().Be(HOVER_MARKDOWN);
     }
 
     [Fact]
     public async Task DefinitionAnswersTheSameForNoResultAndAnEmptyListAsync()
     {
-        await WriteFileAsync(Root, SourceFile, SourceText);
+        await WriteFileAsync(Root, SOURCE_FILE, SOURCE_TEXT);
 
         var none = await DefinitionAnsweredWithAsync(definitions: null);
         var empty = await DefinitionAnsweredWithAsync(new JsonArray());
@@ -1462,7 +1468,7 @@ public sealed class LspToolTests : TempWorkspaceTests
             FakeServer(server =>
                 server.Handle = (method, _) =>
                     Task.FromResult(
-                        method is LspMethods.TextDocumentDefinition
+                        method is LspMethods.TEXT_DOCUMENT_DEFINITION
                             ? definitions?.DeepClone()
                             : null
                     )
@@ -1473,7 +1479,7 @@ public sealed class LspToolTests : TempWorkspaceTests
             new LspRequest
             {
                 Action = LspAction.Definition,
-                File = SourceFile,
+                File = SOURCE_FILE,
                 Line = 1,
                 Character = 1,
             },
@@ -1489,7 +1495,7 @@ public sealed class LspToolTests : TempWorkspaceTests
             server.Handle = (method, parameters) =>
             {
                 var items = new JsonArray();
-                if (method is LspMethods.TextDocumentDiagnostic)
+                if (method is LspMethods.TEXT_DOCUMENT_DIAGNOSTIC)
                 {
                     var uri = parameters!["textDocument"]!["uri"]!.GetValue<string>();
                     var file = Path.GetFileName(new Uri(uri).LocalPath);
@@ -1539,7 +1545,7 @@ public sealed class LspToolTests : TempWorkspaceTests
         new()
         {
             Action = LspAction.References,
-            File = SourceFile,
+            File = SOURCE_FILE,
             Line = line,
             Character = 1,
         };
@@ -1553,7 +1559,7 @@ public sealed class LspToolTests : TempWorkspaceTests
     private JsonArray LargeFound() =>
         [
             .. Enumerable
-                .Range(0, Paging.MaximumLimit)
+                .Range(0, Paging.MAXIMUM_LIMIT)
                 .Select(index =>
                     Location(
                         Path.Combine(
@@ -1598,7 +1604,7 @@ public sealed class LspToolTests : TempWorkspaceTests
                 ["data"] = new JsonObject
                 {
                     ["CodeActionPath"] = new JsonArray([
-                        .. path.Prepend(CodeActionsHandler.SuppressionGroup)
+                        .. path.Prepend(CodeActionsHandler.SUPPRESSION_GROUP)
                             .Select(part => (JsonNode)part),
                     ]),
                 },
@@ -1609,7 +1615,7 @@ public sealed class LspToolTests : TempWorkspaceTests
             Fix("Remove it"),
             new JsonObject
             {
-                ["title"] = CodeActionsHandler.SuppressionGroup,
+                ["title"] = CodeActionsHandler.SUPPRESSION_GROUP,
                 ["kind"] = "quickfix",
                 ["data"] = new JsonObject
                 {

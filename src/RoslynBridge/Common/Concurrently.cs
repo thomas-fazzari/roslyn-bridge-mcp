@@ -7,7 +7,7 @@ namespace RoslynBridge.Common;
 
 internal static class Concurrently
 {
-    private const int MaximumConcurrentQueries = 4;
+    private const int MAXIMUM_CONCURRENT_QUERIES = 4;
 
     /// <summary>
     /// Returns one result per item, in item order. A query that the cancellation stops returns a timeout error, so the others keep their results.
@@ -21,7 +21,7 @@ internal static class Concurrently
         var results = new Result<T>[items.Count];
         await Parallel.ForEachAsync(
             Enumerable.Range(0, items.Count),
-            new ParallelOptions { MaxDegreeOfParallelism = MaximumConcurrentQueries },
+            new ParallelOptions { MaxDegreeOfParallelism = MAXIMUM_CONCURRENT_QUERIES },
             async (index, _) =>
             {
                 try
@@ -31,7 +31,7 @@ internal static class Concurrently
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
                 {
                     results[index] = new ToolError(
-                        ErrorCodes.Timeout,
+                        ErrorCodes.TIMEOUT,
                         "The query did not finish before the request timeout."
                     );
                 }

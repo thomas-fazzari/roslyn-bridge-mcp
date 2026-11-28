@@ -54,9 +54,9 @@ public sealed partial class ToolSchemaTests
     [Fact]
     public void ServerInstructionsFitClientLimits()
     {
-        const string instructions = BridgeServices.ServerInstructions;
-        instructions.Length.Should().BeLessThanOrEqualTo(2_048);
-        instructions.Split("\n\n")[0].Length.Should().BeLessThanOrEqualTo(512);
+        const string INSTRUCTIONS = BridgeServices.SERVER_INSTRUCTIONS;
+        INSTRUCTIONS.Length.Should().BeLessThanOrEqualTo(2_048);
+        INSTRUCTIONS.Split("\n\n")[0].Length.Should().BeLessThanOrEqualTo(512);
     }
 
     [Fact]
@@ -192,7 +192,7 @@ public sealed partial class ToolSchemaTests
                         : null
                 )
             )
-            .Append(BridgeServices.ServerInstructions)
+            .Append(BridgeServices.SERVER_INSTRUCTIONS)
             .OfType<string>()
             .SelectMany(text => pattern.Matches(text).Select(match => match.Value))
             .Distinct(StringComparer.Ordinal);

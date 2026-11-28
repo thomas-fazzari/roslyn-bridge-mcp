@@ -18,7 +18,7 @@ internal sealed class TelemetryRecorder : IDisposable
         _activityListener = new ActivityListener
         {
             ShouldListenTo = static source =>
-                string.Equals(source.Name, BridgeTelemetry.Name, StringComparison.Ordinal),
+                string.Equals(source.Name, BridgeTelemetry.NAME, StringComparison.Ordinal),
             Sample = static (ref _) => ActivitySamplingResult.AllDataAndRecorded,
             ActivityStopped = _activities.Enqueue,
         };
@@ -27,7 +27,7 @@ internal sealed class TelemetryRecorder : IDisposable
         _meterListener.InstrumentPublished = static (instrument, listener) =>
         {
             if (
-                string.Equals(instrument.Meter.Name, BridgeTelemetry.Name, StringComparison.Ordinal)
+                string.Equals(instrument.Meter.Name, BridgeTelemetry.NAME, StringComparison.Ordinal)
             )
             {
                 listener.EnableMeasurementEvents(instrument);

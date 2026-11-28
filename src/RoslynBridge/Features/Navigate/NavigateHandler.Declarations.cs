@@ -11,7 +11,7 @@ namespace RoslynBridge.Features.Navigate;
 internal sealed partial class NavigateHandler
 {
     // Keeps the text within a 32,000-character response, with room for headers
-    private const int MaximumSourceCharacters = 31_000;
+    private const int MAXIMUM_SOURCE_CHARACTERS = 31_000;
 
     /// <summary>
     /// Declarations that do not fit the response budget are left out and counted.
@@ -26,7 +26,7 @@ internal sealed partial class NavigateHandler
             return error;
 
         var parts = new List<SourcePart>();
-        var remaining = MaximumSourceCharacters;
+        var remaining = MAXIMUM_SOURCE_CHARACTERS;
         var omitted = 0;
         foreach (var part in found)
         {

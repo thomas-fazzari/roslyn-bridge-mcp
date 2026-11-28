@@ -11,12 +11,12 @@ namespace RoslynBridge.Tests.Unit.Changes;
 
 public sealed class CommandEditsTests : TempWorkspaceTests
 {
-    private const int TestTimeoutMilliseconds = 30_000;
+    private const int TEST_TIMEOUT_MILLISECONDS = 30_000;
 
     [Fact]
     public async Task CaptureFailureAfterApplyAcknowledgesWrittenFilesAndClosesCallbacksAsync()
     {
-        var path = await WriteFileAsync(Root, SourceFile, "class A {}");
+        var path = await WriteFileAsync(Root, SOURCE_FILE, "class A {}");
         var service = CreateService();
         var snapshot = Snapshot(Root);
         var captureCalls = 0;
@@ -44,7 +44,7 @@ public sealed class CommandEditsTests : TempWorkspaceTests
             .Which.Phase.Should()
             .Be(EditApplicationPhase.Synchronize);
         commandEdits.Result.FileCount.Should().Be(1);
-        commandEdits.Result.Operations[0].Path.Should().Be(SourceFile);
+        commandEdits.Result.Operations[0].Path.Should().Be(SOURCE_FILE);
         await AssertFileTextAsync(path, "class B {}");
 
         var rejected = await commandEdits.ApplyAsync(Edit(path, TextEdit(0, 6, 0, 7, "C")), TestCt);
@@ -57,7 +57,7 @@ public sealed class CommandEditsTests : TempWorkspaceTests
     [Fact]
     public async Task SecondCallbackFailureRetainsTheFirstReceiptAsync()
     {
-        var path = await WriteFileAsync(Root, SourceFile, "class A {}");
+        var path = await WriteFileAsync(Root, SOURCE_FILE, "class A {}");
         var service = CreateService();
         var snapshot = Snapshot(Root);
         await using var commandEdits = new CommandEdits(
@@ -82,7 +82,7 @@ public sealed class CommandEditsTests : TempWorkspaceTests
         File.Exists(Path.Combine(Root, "Missing.cs")).Should().BeFalse();
     }
 
-    [Fact(Timeout = TestTimeoutMilliseconds)]
+    [Fact(Timeout = TEST_TIMEOUT_MILLISECONDS)]
     public async Task ConcurrentCallbacksApplyAndCaptureInOrderAsync()
     {
         // Tests with a timeout must reference the xUnit token directly
@@ -137,12 +137,12 @@ public sealed class CommandEditsTests : TempWorkspaceTests
         await AssertFileTextAsync(secondPath, "class Changed {}");
     }
 
-    [Fact(Timeout = TestTimeoutMilliseconds)]
+    [Fact(Timeout = TEST_TIMEOUT_MILLISECONDS)]
     public async Task StopDuringCapturePreservesTheWriteAndRejectsLaterCallbacksAsync()
     {
         // Tests with a timeout must reference the xUnit token directly
         var cancellationToken = TestContext.Current.CancellationToken;
-        var path = await WriteFileAsync(Root, SourceFile, "class A {}");
+        var path = await WriteFileAsync(Root, SOURCE_FILE, "class A {}");
         var service = CreateService();
         var snapshot = Snapshot(Root);
         var captureStarted = new TaskCompletionSource(
@@ -174,7 +174,7 @@ public sealed class CommandEditsTests : TempWorkspaceTests
             .Failure.Should()
             .BeOfType<EditFailure>()
             .Which.Code.Should()
-            .Be(ErrorCodes.Cancelled);
+            .Be(ErrorCodes.CANCELLED);
         commandEdits.Result.Applied.Should().BeTrue();
         commandEdits.Result.FileCount.Should().Be(1);
         (await pending).Applied.Should().BeTrue();

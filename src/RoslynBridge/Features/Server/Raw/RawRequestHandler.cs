@@ -23,7 +23,7 @@ internal sealed class RawRequestHandler(
         if (await OpenDocumentAsync(request.Parameters, cancellationToken) is ToolError error)
             return error;
 
-        if (request.Method is LspMethods.WorkspaceExecuteCommand)
+        if (request.Method is LspMethods.WORKSPACE_EXECUTE_COMMAND)
         {
             var command = new LspCommand(request.Parameters ?? []);
             return (await executor.ExecuteCommandAsync(command, cancellationToken)).AsToolResult();

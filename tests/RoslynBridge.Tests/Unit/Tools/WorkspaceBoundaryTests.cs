@@ -38,6 +38,6 @@ public sealed class WorkspaceBoundaryTests : TempWorkspaceTests
             TestCt
         );
 
-        response.Should().BeError(ErrorCodes.InvalidRequest);
+        response.Should().BeError(ErrorCodes.INVALID_REQUEST);
     }
 }

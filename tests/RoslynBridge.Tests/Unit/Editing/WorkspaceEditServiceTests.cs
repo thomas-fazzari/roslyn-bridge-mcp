@@ -20,7 +20,7 @@ public sealed class WorkspaceEditServiceTests : TempWorkspaceTests
     [InlineData("\u0085")]
     public async Task ApplyCountsUnicodeLineSeparatorsLikeRoslynAsync(string separator)
     {
-        var path = Path.Combine(Root, SourceFile);
+        var path = Path.Combine(Root, SOURCE_FILE);
         await File.WriteAllTextAsync(path, $"// a{separator}b\nclass C {{}}\n", TestCt);
         var service = CreateService();
         var snapshot = Snapshot(Root);
@@ -36,7 +36,7 @@ public sealed class WorkspaceEditServiceTests : TempWorkspaceTests
     [Fact]
     public async Task ApplyPreservesUtf8BomCrLfAndUtf16PositionsAsync()
     {
-        var path = Path.Combine(Root, SourceFile);
+        var path = Path.Combine(Root, SOURCE_FILE);
         await File.WriteAllBytesAsync(
             path,
             [0xEF, 0xBB, 0xBF, .. Encoding.UTF8.GetBytes("// 😀 name\r\nclass C {}\r\n")],
@@ -96,7 +96,7 @@ public sealed class WorkspaceEditServiceTests : TempWorkspaceTests
             failure.Phase.Should().Be(EditApplicationPhase.Write);
             failure.FailedPath.Should().Be(Path.Combine("Nested", "Delete.cs"));
             failure.FailedOperation.Should().Be(FileChange.Delete);
-            failure.Code.Should().Be(ErrorCodes.Io);
+            failure.Code.Should().Be(ErrorCodes.IO);
             failure.Receipt.Applied.Should().BeFalse();
             failure
                 .Receipt.Operations.Should()
@@ -113,7 +113,7 @@ public sealed class WorkspaceEditServiceTests : TempWorkspaceTests
     [Fact]
     public async Task PreviewDoesNotChangeFilesAsync()
     {
-        var path = await WriteFileAsync(Root, SourceFile, "class A {}");
+        var path = await WriteFileAsync(Root, SOURCE_FILE, "class A {}");
         var service = CreateService();
         var snapshot = Snapshot(Root);
 
@@ -132,12 +132,12 @@ public sealed class WorkspaceEditServiceTests : TempWorkspaceTests
     [Fact]
     public async Task GlobalPreviewBudgetDoesNotLimitAppliedFilesAsync()
     {
-        const int fileCount = 64;
-        var before = new string('a', EditedDocument.MaximumPreviewCharacters + 100);
+        const int FILE_COUNT = 64;
+        var before = new string('a', EditedDocument.MAXIMUM_PREVIEW_CHARACTERS + 100);
         var after = new string('b', before.Length);
         var changes = new JsonObject();
-        var paths = new string[fileCount];
-        for (var index = 0; index < fileCount; index++)
+        var paths = new string[FILE_COUNT];
+        for (var index = 0; index < FILE_COUNT; index++)
         {
             var path = await WriteFileAsync(
                 Root,
@@ -159,15 +159,15 @@ public sealed class WorkspaceEditServiceTests : TempWorkspaceTests
             new ProposalPreview("proposal", preview, Command: null).ToResponse()
         );
 
-        preview.Should().HaveCount(fileCount);
+        preview.Should().HaveCount(FILE_COUNT);
         rendered.Should().Contain("files shown");
-        rendered.Length.Should().BeLessThanOrEqualTo(ResultText.MaximumResponseCharacters);
+        rendered.Length.Should().BeLessThanOrEqualTo(ResultText.MAXIMUM_RESPONSE_CHARACTERS);
         await AssertFileTextAsync(Path.Combine(Root, "Source0.cs"), before);
 
         var applied = (await service.ApplyAsync(Parse(edit), snapshot, TestCt)).Succeeded();
 
         applied.Applied.Should().BeTrue();
-        applied.Operations.Should().HaveCount(fileCount);
+        applied.Operations.Should().HaveCount(FILE_COUNT);
         foreach (var path in paths)
         {
             await AssertFileTextAsync(path, after);
@@ -187,7 +187,7 @@ public sealed class WorkspaceEditServiceTests : TempWorkspaceTests
         );
         await File.WriteAllTextAsync(second, "class External {}", TestCt);
 
-        await AssertErrorAsync(Apply, ErrorCodes.StaleEdit);
+        await AssertErrorAsync(Apply, ErrorCodes.STALE_EDIT);
         await AssertFileTextAsync(first, "class A {}");
         await AssertFileTextAsync(second, "class External {}");
         return;
@@ -204,7 +204,7 @@ public sealed class WorkspaceEditServiceTests : TempWorkspaceTests
         var snapshot = Snapshot(Root);
         await File.WriteAllTextAsync(project, "<Project Sdk=\"Microsoft.NET.Sdk\" />", TestCt);
 
-        await AssertErrorAsync(Apply, ErrorCodes.StaleEdit);
+        await AssertErrorAsync(Apply, ErrorCodes.STALE_EDIT);
         await AssertFileTextAsync(target, "class A {}");
         return;
 
@@ -247,7 +247,7 @@ public sealed class WorkspaceEditServiceTests : TempWorkspaceTests
         await File.WriteAllTextAsync(target, "class B {}", TestCt);
         File.SetLastWriteTimeUtc(target, written);
 
-        await AssertErrorAsync(Apply, ErrorCodes.StaleEdit);
+        await AssertErrorAsync(Apply, ErrorCodes.STALE_EDIT);
         await AssertFileTextAsync(target, "class B {}");
         return;
 
@@ -257,7 +257,7 @@ public sealed class WorkspaceEditServiceTests : TempWorkspaceTests
     [Fact]
     public async Task SamePositionInsertsPreserveProtocolOrderAsync()
     {
-        var source = await WriteFileAsync(Root, SourceFile, "class A {}");
+        var source = await WriteFileAsync(Root, SOURCE_FILE, "class A {}");
         var service = CreateService();
         var snapshot = Snapshot(Root);
         var edit = WorkspaceChanges(
@@ -299,9 +299,9 @@ public sealed class WorkspaceEditServiceTests : TempWorkspaceTests
         }
 
         var source = await WriteFileAsync(Root, "Script.cs", "class Script {}");
-        const UnixFileMode executable =
+        const UnixFileMode EXECUTABLE =
             UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute;
-        File.SetUnixFileMode(source, executable);
+        File.SetUnixFileMode(source, EXECUTABLE);
         var destination = Path.Combine(Root, "Renamed.cs");
         var service = CreateService();
         var snapshot = Snapshot(Root);
@@ -312,7 +312,7 @@ public sealed class WorkspaceEditServiceTests : TempWorkspaceTests
             TestCt
         );
 
-        File.GetUnixFileMode(destination).Should().Be(executable);
+        File.GetUnixFileMode(destination).Should().Be(EXECUTABLE);
     }
 
     [Fact]
@@ -336,7 +336,7 @@ public sealed class WorkspaceEditServiceTests : TempWorkspaceTests
     [Fact]
     public async Task CancelledApplyWritesNothingAsync()
     {
-        var source = await WriteFileAsync(Root, SourceFile, "class A {}");
+        var source = await WriteFileAsync(Root, SOURCE_FILE, "class A {}");
         var service = CreateService();
         var snapshot = Snapshot(Root);
 
@@ -362,7 +362,7 @@ public sealed class WorkspaceEditServiceTests : TempWorkspaceTests
         var service = CreateService();
         var snapshot = Snapshot(Root);
 
-        await AssertErrorAsync(Apply, ErrorCodes.InvalidRequest);
+        await AssertErrorAsync(Apply, ErrorCodes.INVALID_REQUEST);
         File.Exists(target).Should().BeFalse();
         return;
 
@@ -375,13 +375,13 @@ public sealed class WorkspaceEditServiceTests : TempWorkspaceTests
     [InlineData(false)]
     public async Task EditTargetMustBeInsideTheWorkspaceAsync(bool createsFile)
     {
-        var source = await WriteFileAsync(Root, SourceFile, "class Source {}");
+        var source = await WriteFileAsync(Root, SOURCE_FILE, "class Source {}");
         var target = Path.Combine(_outside, "Target.cs");
         var service = CreateService();
         var snapshot = Snapshot(Root);
         var operation = createsFile ? CreateFile(target) : RenameFile(source, target);
 
-        await AssertErrorAsync(Apply, ErrorCodes.InvalidRequest);
+        await AssertErrorAsync(Apply, ErrorCodes.INVALID_REQUEST);
         File.Exists(target).Should().BeFalse();
         await AssertFileTextAsync(source, "class Source {}");
         return;
@@ -409,7 +409,7 @@ public sealed class WorkspaceEditServiceTests : TempWorkspaceTests
             $"/{new Uri(target).AbsolutePath.TrimStart('/')}"
         );
 
-        await AssertErrorAsync(Apply, ErrorCodes.Lsp);
+        await AssertErrorAsync(Apply, ErrorCodes.LSP);
         File.Exists(target).Should().BeFalse();
         return;
 
@@ -422,13 +422,13 @@ public sealed class WorkspaceEditServiceTests : TempWorkspaceTests
     [InlineData(false)]
     public async Task ReplacingAnExistingFileRequiresOverwriteAsync(bool createsFile)
     {
-        var source = await WriteFileAsync(Root, SourceFile, "class Source {}");
+        var source = await WriteFileAsync(Root, SOURCE_FILE, "class Source {}");
         var target = await WriteFileAsync(Root, "Target.cs", "class Target {}");
         var service = CreateService();
         var snapshot = Snapshot(Root);
         var operation = createsFile ? CreateFile(target) : RenameFile(source, target);
 
-        await AssertErrorAsync(Apply, ErrorCodes.InvalidRequest);
+        await AssertErrorAsync(Apply, ErrorCodes.INVALID_REQUEST);
         await AssertFileTextAsync(source, "class Source {}");
         await AssertFileTextAsync(target, "class Target {}");
         return;

@@ -5,7 +5,7 @@ namespace RoslynBridge.Benchmarks.Jellyfin;
 
 public abstract class JellyfinBenchmarks : BridgeBenchmarks
 {
-    internal const string RepositoryName = "jellyfin";
+    internal const string REPOSITORY_NAME = "jellyfin";
 
-    private protected override string Repository => RepositoryName;
+    private protected override string Repository => REPOSITORY_NAME;
 }

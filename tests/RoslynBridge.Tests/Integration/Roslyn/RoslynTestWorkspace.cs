@@ -46,7 +46,7 @@ internal sealed class RoslynTestWorkspace : IAsyncDisposable
                 workspace.CopyFixture(overlay);
 
             if (settings is not null)
-                await workspace.WriteFileAsync(ProjectSettings.FileName, settings);
+                await workspace.WriteFileAsync(ProjectSettings.FILE_NAME, settings);
 
             await workspace.RestoreAsync();
             await workspace.ConnectAsync(requestTimeoutSeconds);
@@ -207,11 +207,11 @@ internal sealed class RoslynTestWorkspace : IAsyncDisposable
                 ArgumentList =
                 {
                     typeof(ToolPipeline).Assembly.Location,
-                    LaunchArguments.WorkspaceArgument,
+                    LaunchArguments.WORKSPACE_ARGUMENT,
                     _directory.FullName,
-                    LaunchArguments.StartupTimeoutArgument,
+                    LaunchArguments.STARTUP_TIMEOUT_ARGUMENT,
                     "60",
-                    LaunchArguments.RequestTimeoutArgument,
+                    LaunchArguments.REQUEST_TIMEOUT_ARGUMENT,
                     requestTimeoutSeconds.ToString(CultureInfo.InvariantCulture),
                 },
                 RedirectStandardInput = true,
@@ -223,7 +223,7 @@ internal sealed class RoslynTestWorkspace : IAsyncDisposable
         var server = Environment.GetEnvironmentVariable("ROSLYN_BRIDGE_TEST_SERVER");
         if (!string.IsNullOrWhiteSpace(server))
         {
-            _process.StartInfo.ArgumentList.Add(LaunchArguments.ServerArgument);
+            _process.StartInfo.ArgumentList.Add(LaunchArguments.SERVER_ARGUMENT);
             _process.StartInfo.ArgumentList.Add(server);
         }
 

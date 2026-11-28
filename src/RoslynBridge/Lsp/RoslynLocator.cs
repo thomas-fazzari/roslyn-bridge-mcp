@@ -12,11 +12,11 @@ internal sealed class RoslynLocator(
     string bridgeRoot
 )
 {
-    internal const string ServerName = "roslyn-language-server";
-    internal const string ServerBinaryName = "Microsoft.CodeAnalysis.LanguageServer";
+    internal const string SERVER_NAME = "roslyn-language-server";
+    internal const string SERVER_BINARY_NAME = "Microsoft.CodeAnalysis.LanguageServer";
 
     // Roslyn targets net10.0 and rolls forward to a later major version
-    private const int MinimumRuntimeMajorVersion = 10;
+    private const int MINIMUM_RUNTIME_MAJOR_VERSION = 10;
 
     private static readonly string[] _architectureVariables =
     [
@@ -43,14 +43,14 @@ internal sealed class RoslynLocator(
     public string FindServer(string? explicitPath)
     {
         var launcher = explicitPath
-            ?? FindOnPath(ServerName)
-            ?? ExistingFile(Path.Combine(GlobalToolsDirectory, Executable(ServerName)))
+            ?? FindOnPath(SERVER_NAME)
+            ?? ExistingFile(Path.Combine(GlobalToolsDirectory, Executable(SERVER_NAME)))
             ?? throw new FileNotFoundException(
                 "The Roslyn language server was not found on PATH or in ~/.dotnet/tools. Install it with `roslyn-bridge-mcp setup`, or pass --server."
             );
         var server = Path.Combine(
             Path.GetDirectoryName(RealPath(launcher))!,
-            Executable(ServerBinaryName)
+            Executable(SERVER_BINARY_NAME)
         );
         return File.Exists(server) ? server : launcher;
     }
@@ -102,7 +102,7 @@ internal sealed class RoslynLocator(
 
     private static bool IsSupportedRuntime(string runtime) =>
         Version.TryParse(Path.GetFileName(runtime).Split('-')[0], out var version)
-        && version.Major >= MinimumRuntimeMajorVersion;
+        && version.Major >= MINIMUM_RUNTIME_MAJOR_VERSION;
 
     private string? FindOnPath(string name)
     {

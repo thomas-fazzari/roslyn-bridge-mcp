@@ -7,10 +7,10 @@ namespace RoslynBridge.Lsp;
 
 internal sealed partial class RoslynConnection
 {
-    private const int FileChangeBatchSize = 128;
+    private const int FILE_CHANGE_BATCH_SIZE = 128;
 
     // On Windows, the 8 KB default overflows on a branch switch or a restore, which forces a full rescan
-    private const int WatcherBufferBytes = 64 * 1024;
+    private const int WATCHER_BUFFER_BYTES = 64 * 1024;
 
     /// <summary>
     /// The first reason the watcher stopped, otherwise null. Every synchronization then scans the workspace.
@@ -22,7 +22,7 @@ internal sealed partial class RoslynConnection
         if (!paths.IsWatched(path))
             return;
 
-        if (_pendingFiles.Count >= WorkspacePaths.MaximumFileCount)
+        if (_pendingFiles.Count >= WorkspacePaths.MAXIMUM_FILE_COUNT)
         {
             Interlocked.Exchange(ref _scanRequested, 1);
             return;
@@ -39,7 +39,7 @@ internal sealed partial class RoslynConnection
             _watcher = new FileSystemWatcher(paths.Root)
             {
                 IncludeSubdirectories = true,
-                InternalBufferSize = WatcherBufferBytes,
+                InternalBufferSize = WATCHER_BUFFER_BYTES,
                 NotifyFilter =
                     NotifyFilters.FileName
                     | NotifyFilters.DirectoryName
@@ -254,12 +254,12 @@ internal sealed partial class RoslynConnection
         CancellationToken cancellationToken
     )
     {
-        foreach (var batch in changes.Chunk(FileChangeBatchSize))
+        foreach (var batch in changes.Chunk(FILE_CHANGE_BATCH_SIZE))
         {
             if (callbacks.WatchesFiles)
             {
                 var notified = await NotifyAsync(
-                    LspMethods.WorkspaceDidChangeWatchedFiles,
+                    LspMethods.WORKSPACE_DID_CHANGE_WATCHED_FILES,
                     new JsonObject
                     {
                         ["changes"] = new JsonArray([

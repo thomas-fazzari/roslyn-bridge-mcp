@@ -13,9 +13,9 @@ namespace RoslynBridge.Benchmarks;
 /// </summary>
 internal sealed class BridgeSession : IAsyncDisposable
 {
-    internal const string ExecutableVariable = "ROSLYN_BRIDGE_BENCH_EXECUTABLE";
-    internal const string RepositoriesVariable = "ROSLYN_BRIDGE_BENCH_REPOS";
-    internal const string LogsVariable = "ROSLYN_BRIDGE_BENCH_LOGS";
+    internal const string EXECUTABLE_VARIABLE = "ROSLYN_BRIDGE_BENCH_EXECUTABLE";
+    internal const string REPOSITORIES_VARIABLE = "ROSLYN_BRIDGE_BENCH_REPOS";
+    internal const string LOGS_VARIABLE = "ROSLYN_BRIDGE_BENCH_LOGS";
 
     private static readonly TimeSpan _loadTimeout = TimeSpan.FromMinutes(10);
 
@@ -108,10 +108,10 @@ internal sealed class BridgeSession : IAsyncDisposable
 
     private async Task ConnectAsync(string repository, CancellationToken cancellationToken)
     {
-        var workspace = Path.Combine(RequiredVariable(RepositoriesVariable), repository);
+        var workspace = Path.Combine(RequiredVariable(REPOSITORIES_VARIABLE), repository);
         _process = new Process
         {
-            StartInfo = new ProcessStartInfo(RequiredVariable(ExecutableVariable))
+            StartInfo = new ProcessStartInfo(RequiredVariable(EXECUTABLE_VARIABLE))
             {
                 ArgumentList = { "--workspace", workspace },
                 WorkingDirectory = workspace,
@@ -158,7 +158,7 @@ internal sealed class BridgeSession : IAsyncDisposable
         if (!status.Contains("running: true", StringComparison.Ordinal))
         {
             throw new InvalidOperationException(
-                $"Roslyn failed to load the workspace. The bridge log is in {LogsVariable}."
+                $"Roslyn failed to load the workspace. The bridge log is in {LOGS_VARIABLE}."
             );
         }
     }
@@ -197,7 +197,7 @@ internal sealed class BridgeSession : IAsyncDisposable
     // Named after the benchmark and job that BenchmarkDotNet passes on the command line
     private static StreamWriter? OpenLog()
     {
-        if (Environment.GetEnvironmentVariable(LogsVariable) is not { Length: > 0 } directory)
+        if (Environment.GetEnvironmentVariable(LOGS_VARIABLE) is not { Length: > 0 } directory)
         {
             return null;
         }

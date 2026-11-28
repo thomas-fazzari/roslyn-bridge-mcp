@@ -15,7 +15,7 @@ internal sealed class SymbolsTool(
     IToolHandler<UnusedRequest, UnusedSymbols> unusedSymbols
 ) : IRoslynTool
 {
-    private const string UnusedDescription =
+    private const string UNUSED_DESCRIPTION =
         "List the types and members of file that nothing uses, or that only unused code or tests use. Slow on many files.";
 
     public static string Name => "symbols";
@@ -31,11 +31,11 @@ internal sealed class SymbolsTool(
         )]
             string? file = null,
         [Description("Symbol name to search when file is omitted.")] string? query = null,
-        [Description(UnusedDescription)] bool unused = false,
-        [Description(Paging.LimitDescription)]
-        [Range(1, Paging.MaximumLimit)]
-            int limit = Paging.DefaultLimit,
-        [Description(Paging.OffsetDescription)] [Range(0, int.MaxValue)] int offset = 0,
+        [Description(UNUSED_DESCRIPTION)] bool unused = false,
+        [Description(Paging.LIMIT_DESCRIPTION)]
+        [Range(1, Paging.MAXIMUM_LIMIT)]
+            int limit = Paging.DEFAULT_LIMIT,
+        [Description(Paging.OFFSET_DESCRIPTION)] [Range(0, int.MaxValue)] int offset = 0,
         CancellationToken cancellationToken = default
     ) =>
         unused

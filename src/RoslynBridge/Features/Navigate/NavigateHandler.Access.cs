@@ -11,8 +11,8 @@ namespace RoslynBridge.Features.Navigate;
 
 internal sealed partial class NavigateHandler
 {
-    private const int ReadHighlight = 2;
-    private const int WriteHighlight = 3;
+    private const int READ_HIGHLIGHT = 2;
+    private const int WRITE_HIGHLIGHT = 3;
 
     private async Task<Result<FoundReferences>> ReferencesAsync(
         DocumentPosition position,
@@ -142,8 +142,8 @@ internal sealed partial class NavigateHandler
             return requestError;
 
         var lines = SourceLines.TryReadLines(reference.File.WorkspaceFile);
-        var reads = StartsOf(highlights, ReadHighlight);
-        var written = StartsOf(highlights, WriteHighlight);
+        var reads = StartsOf(highlights, READ_HIGHLIGHT);
+        var written = StartsOf(highlights, WRITE_HIGHLIGHT);
         return reads
             .Where(_ => Accesses(writes, written: null))
             .Concat(written.Where(start => Accesses(writes, ByRefAccess.Of(lines, start))))

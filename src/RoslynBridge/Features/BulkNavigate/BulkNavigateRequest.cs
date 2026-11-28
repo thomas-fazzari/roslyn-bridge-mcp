@@ -13,7 +13,7 @@ internal sealed record BulkNavigateRequest(
     Paging Page
 ) : ToolRequest
 {
-    internal const int MaximumQueries = 16;
+    internal const int MAXIMUM_QUERIES = 16;
 
     public override Paging Page { get; } = Page;
 
@@ -30,8 +30,8 @@ internal sealed record BulkNavigateRequest(
         bool context,
         Paging page
     ) =>
-        queries is { Count: < 1 or > MaximumQueries }
-            ? ToolError.InvalidRequest($"Send between 1 and {MaximumQueries} queries.")
+        queries is { Count: < 1 or > MAXIMUM_QUERIES }
+            ? ToolError.InvalidRequest($"Send between 1 and {MAXIMUM_QUERIES} queries.")
             : new BulkNavigateRequest(queries, context, page);
 
     public override BulkNavigateRequest WithFiles(FileResolver resolve) =>

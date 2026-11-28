@@ -13,13 +13,13 @@ using static RoslynBridge.Tests.Unit.TestHelpers;
 
 namespace RoslynBridge.Tests.Unit.Telemetry;
 
-[Collection(TelemetryCollection.Name)]
+[Collection(TelemetryCollection.NAME)]
 public sealed class ToolTelemetryTests : IAsyncDisposable
 {
-    private const int TimeoutMilliseconds = 30_000;
+    private const int TIMEOUT_MILLISECONDS = 30_000;
 
-    private const string SourceFile = "Source.cs";
-    private const string References = "references";
+    private const string SOURCE_FILE = "Source.cs";
+    private const string REFERENCES = "references";
     private static readonly string _toolSpan = $"execute_tool {NavigateTool.Name}";
 
     private readonly string _root = Directory
@@ -28,7 +28,7 @@ public sealed class ToolTelemetryTests : IAsyncDisposable
     private readonly TelemetryRecorder _recorder = new();
     private RoslynSession? _session;
 
-    [Fact(Timeout = TimeoutMilliseconds)]
+    [Fact(Timeout = TIMEOUT_MILLISECONDS)]
     public async Task RecordsASuccessfulCallAndNestsItsRoslynRequestsAsync()
     {
         var response = await CallReferencesAsync(
@@ -44,16 +44,16 @@ public sealed class ToolTelemetryTests : IAsyncDisposable
             .Subject;
         size.Value.Should().Be(ResponseText(response).Length);
         size.Tags.Should()
-            .Contain(ToolTelemetry.ToolName, NavigateTool.Name)
-            .And.Contain(ToolTelemetry.Action, References)
-            .And.NotContainKey(BridgeTelemetry.ErrorType);
+            .Contain(ToolTelemetry.TOOL_NAME, NavigateTool.Name)
+            .And.Contain(ToolTelemetry.ACTION, REFERENCES)
+            .And.NotContainKey(BridgeTelemetry.ERROR_TYPE);
         var call = _recorder.Span(_toolSpan);
-        var request = _recorder.Span(LspMethods.TextDocumentReferences);
+        var request = _recorder.Span(LspMethods.TEXT_DOCUMENT_REFERENCES);
         request.TraceId.Should().Be(call.TraceId);
         request.ParentSpanId.Should().Be(call.SpanId);
     }
 
-    [Fact(Timeout = TimeoutMilliseconds)]
+    [Fact(Timeout = TIMEOUT_MILLISECONDS)]
     public async Task RecordsARejectedCallWithoutItsUnknownActionAsync()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
@@ -69,17 +69,17 @@ public sealed class ToolTelemetryTests : IAsyncDisposable
             cancellationToken: cancellationToken
         );
 
-        response.Should().BeError(ErrorCodes.InvalidRequest);
+        response.Should().BeError(ErrorCodes.INVALID_REQUEST);
         _recorder
             .Measurements(BridgeTelemetry.ToolDuration)
             .Should()
             .ContainSingle()
             .Which.Tags.Should()
-            .Contain(BridgeTelemetry.ErrorType, ErrorCodes.InvalidRequest)
-            .And.NotContainKey(ToolTelemetry.Action);
+            .Contain(BridgeTelemetry.ERROR_TYPE, ErrorCodes.INVALID_REQUEST)
+            .And.NotContainKey(ToolTelemetry.ACTION);
     }
 
-    [Fact(Timeout = TimeoutMilliseconds)]
+    [Fact(Timeout = TIMEOUT_MILLISECONDS)]
     public async Task RecordsAFailedRoslynRequestOnTheCallAndOnTheRequestAsync()
     {
         var response = await CallReferencesAsync(
@@ -87,16 +87,16 @@ public sealed class ToolTelemetryTests : IAsyncDisposable
             TestContext.Current.CancellationToken
         );
 
-        response.Should().BeError(ErrorCodes.Lsp);
+        response.Should().BeError(ErrorCodes.LSP);
         _recorder
             .Measurements(BridgeTelemetry.ToolDuration)
             .Should()
             .ContainSingle()
             .Which.Tags.Should()
-            .Contain(BridgeTelemetry.ErrorType, ErrorCodes.Lsp);
-        var request = _recorder.Span(LspMethods.TextDocumentReferences);
+            .Contain(BridgeTelemetry.ERROR_TYPE, ErrorCodes.LSP);
+        var request = _recorder.Span(LspMethods.TEXT_DOCUMENT_REFERENCES);
         request.Status.Should().Be(ActivityStatusCode.Error);
-        request.GetTagItem(BridgeTelemetry.ErrorType).Should().Be(ErrorCodes.Lsp);
+        request.GetTagItem(BridgeTelemetry.ERROR_TYPE).Should().Be(ErrorCodes.LSP);
     }
 
     public async ValueTask DisposeAsync()
@@ -113,14 +113,14 @@ public sealed class ToolTelemetryTests : IAsyncDisposable
         CancellationToken cancellationToken
     )
     {
-        await WriteFileAsync(_root, SourceFile, "class A {}\n");
+        await WriteFileAsync(_root, SOURCE_FILE, "class A {}\n");
         await using var server = await StartServerAsync(failRoslyn, cancellationToken);
         return await server.Client.CallToolAsync(
             NavigateTool.Name,
             new Dictionary<string, object?>(StringComparer.Ordinal)
             {
-                ["action"] = References,
-                ["file"] = SourceFile,
+                ["action"] = REFERENCES,
+                ["file"] = SOURCE_FILE,
                 ["line"] = 1,
                 ["character"] = 1,
             },
@@ -137,7 +137,7 @@ public sealed class ToolTelemetryTests : IAsyncDisposable
                 if (failRoslyn)
                 {
                     server.Handle = (method, _) =>
-                        method is LspMethods.TextDocumentReferences
+                        method is LspMethods.TEXT_DOCUMENT_REFERENCES
                             ? throw new LocalRpcException("Roslyn failed.")
                             : Task.FromResult<JsonNode?>(null);
                 }

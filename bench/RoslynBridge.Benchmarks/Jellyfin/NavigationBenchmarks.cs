@@ -8,7 +8,7 @@ namespace RoslynBridge.Benchmarks.Jellyfin;
 
 public class NavigationBenchmarks : JellyfinBenchmarks
 {
-    private const int Limit = 250;
+    private const int LIMIT = 250;
 
     private static readonly Dictionary<string, object?>[] _bulkQueries =
     [
@@ -18,7 +18,7 @@ public class NavigationBenchmarks : JellyfinBenchmarks
         >(StringComparer.Ordinal)
         {
             ["action"] = action,
-            ["symbol"] = GetItemById,
+            ["symbol"] = GET_ITEM_BY_ID,
         }),
     ];
 
@@ -27,45 +27,45 @@ public class NavigationBenchmarks : JellyfinBenchmarks
         Session.CallAsync(
             "navigate",
             ("action", "definition"),
-            ("file", GetItemByIdFile),
-            ("line", GetItemByIdLine),
-            ("character", GetItemByIdCharacter)
+            ("file", GET_ITEM_BY_ID_FILE),
+            ("line", GET_ITEM_BY_ID_LINE),
+            ("character", GET_ITEM_BY_ID_CHARACTER)
         );
 
     [Benchmark]
-    public Task<string> Definition() => Navigate("definition", GetItemById);
+    public Task<string> Definition() => Navigate("definition", GET_ITEM_BY_ID);
 
     [Benchmark]
-    public Task<string> References() => Navigate("references", GetItemById);
+    public Task<string> References() => Navigate("references", GET_ITEM_BY_ID);
 
     [Benchmark]
-    public Task<string> Callers() => Navigate("callers", GetItemById);
+    public Task<string> Callers() => Navigate("callers", GET_ITEM_BY_ID);
 
     [Benchmark]
-    public Task<string> Reads() => Navigate("reads", BaseItemId);
+    public Task<string> Reads() => Navigate("reads", BASE_ITEM_ID);
 
     [Benchmark]
-    public Task<string> Writes() => Navigate("writes", BaseItemId);
+    public Task<string> Writes() => Navigate("writes", BASE_ITEM_ID);
 
     [Benchmark]
-    public Task<string> Callees() => Navigate("callees", DeleteItem);
+    public Task<string> Callees() => Navigate("callees", DELETE_ITEM);
 
     [Benchmark]
-    public Task<string> Source() => Navigate("source", DeleteItem);
+    public Task<string> Source() => Navigate("source", DELETE_ITEM);
 
     [Benchmark]
-    public Task<string> Members() => Navigate("members", BaseItem);
+    public Task<string> Members() => Navigate("members", BASE_ITEM);
 
     [Benchmark]
-    public Task<string> Subtypes() => Navigate("subtypes", BaseItem);
+    public Task<string> Subtypes() => Navigate("subtypes", BASE_ITEM);
 
     [Benchmark]
-    public Task<string> Impact() => Navigate("impact", GetItemById);
+    public Task<string> Impact() => Navigate("impact", GET_ITEM_BY_ID);
 
     [Benchmark]
     public Task<string> Bulk() =>
-        Session.CallAsync("bulk_navigate", ("queries", _bulkQueries), ("limit", Limit));
+        Session.CallAsync("bulk_navigate", ("queries", _bulkQueries), ("limit", LIMIT));
 
     private Task<string> Navigate(string action, string symbol) =>
-        Session.CallAsync("navigate", ("action", action), ("symbol", symbol), ("limit", Limit));
+        Session.CallAsync("navigate", ("action", action), ("symbol", symbol), ("limit", LIMIT));
 }

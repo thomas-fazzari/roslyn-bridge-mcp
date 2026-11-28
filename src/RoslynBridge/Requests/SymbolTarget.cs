@@ -8,11 +8,11 @@ namespace RoslynBridge.Requests;
 /// </summary>
 internal closed record SymbolTarget
 {
-    internal const string SymbolDescription =
+    internal const string SYMBOL_DESCRIPTION =
         "C# symbol name, such as Namespace.Type.Member, Type.Member or Type.Method(int). Replaces line and character. Add file to pick between same-named declarations. A constructor needs its parameter list.";
-    internal const string FileDescription = "Workspace-relative file path.";
-    internal const string LineDescription = "One-based line number.";
-    internal const string CharacterDescription = "One-based UTF-16 character in the line.";
+    internal const string FILE_DESCRIPTION = "Workspace-relative file path.";
+    internal const string LINE_DESCRIPTION = "One-based line number.";
+    internal const string CHARACTER_DESCRIPTION = "One-based UTF-16 character in the line.";
 
     /// <summary>
     /// A <see cref="NamedSymbol"/> or a <see cref="SymbolAt"/>.

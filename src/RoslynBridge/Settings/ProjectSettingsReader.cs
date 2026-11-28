@@ -19,7 +19,7 @@ internal static class ProjectSettingsReader
     /// <exception cref="InvalidSettingsException">The file is unreadable, has an unknown key or a faulty setting.</exception>
     public static ProjectSettings Read(string root)
     {
-        var path = Path.Combine(root, ProjectSettings.FileName);
+        var path = Path.Combine(root, ProjectSettings.FILE_NAME);
         if (!File.Exists(path))
             return new ProjectSettings();
 

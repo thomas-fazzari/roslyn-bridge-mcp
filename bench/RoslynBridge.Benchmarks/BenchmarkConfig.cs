@@ -15,15 +15,15 @@ namespace RoslynBridge.Benchmarks;
 
 internal static class BenchmarkConfig
 {
-    internal const string BaselineVariable = "ROSLYN_BRIDGE_BENCH_BASELINE";
+    internal const string BASELINE_VARIABLE = "ROSLYN_BRIDGE_BENCH_BASELINE";
 
     // Each launch reloads the workspace (launch-to-launch variance)
-    private const int Launches = 3;
-    private const int Warmups = 3;
-    private const int Iterations = 20;
+    private const int LAUNCHES = 3;
+    private const int WARMUPS = 3;
+    private const int ITERATIONS = 20;
 
     // Finer thresholds claim a precision runs lack (identical builds differed by up to 16% in median)
-    private const string SignificantChange = "10%";
+    private const string SIGNIFICANT_CHANGE = "10%";
 
     /// <summary>
     /// Monitoring job with one timed call per iteration.
@@ -36,9 +36,9 @@ internal static class BenchmarkConfig
     {
         var job = Job
             .Default.WithStrategy(RunStrategy.Monitoring)
-            .WithLaunchCount(Launches)
-            .WithWarmupCount(Warmups)
-            .WithIterationCount(Iterations);
+            .WithLaunchCount(LAUNCHES)
+            .WithWarmupCount(WARMUPS)
+            .WithIterationCount(ITERATIONS);
 
         var config = ManualConfig
             .CreateEmpty()
@@ -54,20 +54,20 @@ internal static class BenchmarkConfig
             // Joined tables share one unit, which defaults to the smallest one (μs)
             .WithSummaryStyle(SummaryStyle.Default.WithTimeUnit(TimeUnit.Millisecond));
 
-        if (Environment.GetEnvironmentVariable(BaselineVariable) is not { Length: > 0 } baseline)
+        if (Environment.GetEnvironmentVariable(BASELINE_VARIABLE) is not { Length: > 0 } baseline)
         {
             return config.AddJob(job.AsDefault());
         }
 
-        var head = BridgeSession.RequiredVariable(BridgeSession.ExecutableVariable);
+        var head = BridgeSession.RequiredVariable(BridgeSession.EXECUTABLE_VARIABLE);
         return config
             .AddJob(
-                job.WithEnvironmentVariable(BridgeSession.ExecutableVariable, baseline)
+                job.WithEnvironmentVariable(BridgeSession.EXECUTABLE_VARIABLE, baseline)
                     .WithId("base")
                     .AsBaseline(),
-                job.WithEnvironmentVariable(BridgeSession.ExecutableVariable, head).WithId("head")
+                job.WithEnvironmentVariable(BridgeSession.EXECUTABLE_VARIABLE, head).WithId("head")
             )
-            .AddColumn(MedianRatioColumn.Instance, StatisticalTestColumn.Create(SignificantChange))
+            .AddColumn(MedianRatioColumn.Instance, StatisticalTestColumn.Create(SIGNIFICANT_CHANGE))
             .HideColumns(Column.EnvironmentVariables, Column.Ratio, Column.RatioSD);
     }
 }

@@ -12,7 +12,7 @@ public sealed class ClientCallbacksTests : TempWorkspaceTests
     [Fact]
     public async Task ApplyEditOutsideAToolCallIsNotAppliedAsync()
     {
-        var source = await WriteFileAsync(Root, SourceFile, "class Before {}");
+        var source = await WriteFileAsync(Root, SOURCE_FILE, "class Before {}");
         var callbacks = new ClientCallbacks(new WorkspacePaths(Root), NullLogger.Instance);
 
         var response = await callbacks.ApplyEditAsync(

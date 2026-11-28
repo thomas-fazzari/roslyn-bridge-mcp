@@ -7,14 +7,14 @@ namespace RoslynBridge.Tests.Fakes;
 
 internal static class LspSymbolJson
 {
-    public const int LspClassKind = (int)LspSymbolKind.Class;
-    public const int MethodLine = 2;
-    public const int MethodCharacter = 11;
+    public const int LSP_CLASS_KIND = (int)LspSymbolKind.Class;
+    public const int METHOD_LINE = 2;
+    public const int METHOD_CHARACTER = 11;
 
     public static JsonObject WorkspaceSymbol(
         string name,
         string path,
-        int kind = LspClassKind,
+        int kind = LSP_CLASS_KIND,
         int line = 0,
         int character = 6
     ) =>
@@ -29,7 +29,7 @@ internal static class LspSymbolJson
         new()
         {
             ["name"] = name,
-            ["kind"] = LspClassKind,
+            ["kind"] = LSP_CLASS_KIND,
             ["range"] = new JsonObject
             {
                 ["start"] = new JsonObject { ["line"] = 0, ["character"] = 0 },
@@ -57,22 +57,22 @@ internal static class LspSymbolJson
             ["kind"] = (int)LspSymbolKind.Method,
             ["range"] = new JsonObject
             {
-                ["start"] = new JsonObject { ["line"] = MethodLine, ["character"] = 4 },
-                ["end"] = new JsonObject { ["line"] = MethodLine, ["character"] = 30 },
+                ["start"] = new JsonObject { ["line"] = METHOD_LINE, ["character"] = 4 },
+                ["end"] = new JsonObject { ["line"] = METHOD_LINE, ["character"] = 30 },
             },
             ["selectionRange"] = new JsonObject
             {
                 ["start"] = new JsonObject
                 {
-                    ["line"] = MethodLine,
-                    ["character"] = MethodCharacter,
+                    ["line"] = METHOD_LINE,
+                    ["character"] = METHOD_CHARACTER,
                 },
-                ["end"] = new JsonObject { ["line"] = MethodLine, ["character"] = 20 },
+                ["end"] = new JsonObject { ["line"] = METHOD_LINE, ["character"] = 20 },
             },
         };
 
     public static JsonObject MethodSymbol(string name, string path) =>
-        WorkspaceSymbol(name, path, (int)LspSymbolKind.Method, MethodLine, MethodCharacter);
+        WorkspaceSymbol(name, path, (int)LspSymbolKind.Method, METHOD_LINE, METHOD_CHARACTER);
 
     public static JsonObject DocumentSymbol(
         string name,

@@ -31,10 +31,10 @@ internal sealed class EditTool(
 
     public Task<CallToolResult> EditAsync(
         [Description("Edit to preview or apply.")] EditAction action,
-        [Description(SymbolTarget.SymbolDescription)] string? symbol = null,
-        [Description(SymbolTarget.FileDescription)] string? file = null,
-        [Description(SymbolTarget.LineDescription)] int? line = null,
-        [Description(SymbolTarget.CharacterDescription)] int? character = null,
+        [Description(SymbolTarget.SYMBOL_DESCRIPTION)] string? symbol = null,
+        [Description(SymbolTarget.FILE_DESCRIPTION)] string? file = null,
+        [Description(SymbolTarget.LINE_DESCRIPTION)] int? line = null,
+        [Description(SymbolTarget.CHARACTER_DESCRIPTION)] int? character = null,
         [Description("Optional one-based end line for a code action selection.")]
             int? endLine = null,
         [Description("Optional one-based UTF-16 end character for a code action selection.")]
@@ -52,9 +52,9 @@ internal sealed class EditTool(
         [Description("Apply the proposal. Without it, the call only returns a preview.")]
             bool apply = false,
         [Description("Also list suppress or configure code actions.")] bool all = false,
-        [Description(Paging.LimitDescription)]
-        [Range(1, Paging.MaximumLimit)]
-            int limit = Paging.DefaultLimit,
+        [Description(Paging.LIMIT_DESCRIPTION)]
+        [Range(1, Paging.MAXIMUM_LIMIT)]
+            int limit = Paging.DEFAULT_LIMIT,
         CancellationToken cancellationToken = default
     )
     {

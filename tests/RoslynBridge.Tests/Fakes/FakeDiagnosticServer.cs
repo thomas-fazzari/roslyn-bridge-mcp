@@ -11,7 +11,7 @@ namespace RoslynBridge.Tests.Fakes;
 /// </summary>
 internal static class FakeDiagnosticServer
 {
-    internal const string ResultId = "report-1";
+    internal const string RESULT_ID = "report-1";
 
     /// <param name="sent">Receives the previous result id of each pull, or null when a pull sends none.</param>
     public static RoslynLauncher WithResultIds(string code, ConcurrentQueue<string?> sent) =>
@@ -20,14 +20,14 @@ internal static class FakeDiagnosticServer
             {
                 Handle = (method, parameters) =>
                 {
-                    if (method is not LspMethods.TextDocumentDiagnostic)
+                    if (method is not LspMethods.TEXT_DOCUMENT_DIAGNOSTIC)
                         return Task.FromResult<JsonNode?>(null);
 
                     var previous = parameters?["previousResultId"]?.GetValue<string>();
                     sent.Enqueue(previous);
                     return Task.FromResult<JsonNode?>(
-                        previous is ResultId
-                            ? new JsonObject { ["kind"] = "unchanged", ["resultId"] = ResultId }
+                        previous is RESULT_ID
+                            ? new JsonObject { ["kind"] = "unchanged", ["resultId"] = RESULT_ID }
                             : Report(code)
                     );
                 },
@@ -40,7 +40,7 @@ internal static class FakeDiagnosticServer
         new()
         {
             ["kind"] = "full",
-            ["resultId"] = ResultId,
+            ["resultId"] = RESULT_ID,
             ["items"] = new JsonArray(
                 new JsonObject
                 {

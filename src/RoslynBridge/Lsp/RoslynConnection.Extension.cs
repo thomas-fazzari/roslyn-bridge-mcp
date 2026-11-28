@@ -8,13 +8,13 @@ namespace RoslynBridge.Lsp;
 
 internal sealed partial class RoslynConnection
 {
-    internal const string ReferencesMessage = "RoslynBridge.Extension.ReferencesHandler";
-    internal const string CallersMessage = "RoslynBridge.Extension.CallersHandler";
-    internal const string CalleesMessage = "RoslynBridge.Extension.CalleesHandler";
-    internal const string ExpressionMessage = "RoslynBridge.Extension.ExpressionHandler";
-    internal const string UnusedMessage = "RoslynBridge.Extension.UnusedHandler";
-    internal const int RequestCancelledCode = -32800;
-    internal const int ServerCancelledCode = -32802;
+    internal const string REFERENCES_MESSAGE = "RoslynBridge.Extension.ReferencesHandler";
+    internal const string CALLERS_MESSAGE = "RoslynBridge.Extension.CallersHandler";
+    internal const string CALLEES_MESSAGE = "RoslynBridge.Extension.CalleesHandler";
+    internal const string EXPRESSION_MESSAGE = "RoslynBridge.Extension.ExpressionHandler";
+    internal const string UNUSED_MESSAGE = "RoslynBridge.Extension.UnusedHandler";
+    internal const int REQUEST_CANCELLED_CODE = -32800;
+    internal const int SERVER_CANCELLED_CODE = -32802;
 
     private static readonly string _extensionPath = Path.Combine(
         AppContext.BaseDirectory,
@@ -24,12 +24,12 @@ internal sealed partial class RoslynConnection
 
     private static readonly string[] _documentMessages =
     [
-        ReferencesMessage,
-        CallersMessage,
-        CalleesMessage,
-        ExpressionMessage,
+        REFERENCES_MESSAGE,
+        CALLERS_MESSAGE,
+        CALLEES_MESSAGE,
+        EXPRESSION_MESSAGE,
     ];
-    private static readonly string[] _workspaceMessages = [UnusedMessage];
+    private static readonly string[] _workspaceMessages = [UNUSED_MESSAGE];
 
     // A failing handler leaves the others active, and bulk_navigate dispatches concurrently
     private readonly ConcurrentDictionary<string, byte> _activeDocumentMessages = new(
@@ -45,7 +45,7 @@ internal sealed partial class RoslynConnection
         CancellationToken cancellationToken
     ) =>
         DispatchWithFallbackAsync<ExtensionReferences>(
-            ReferencesMessage,
+            REFERENCES_MESSAGE,
             position,
             cancellationToken
         );
@@ -56,7 +56,7 @@ internal sealed partial class RoslynConnection
     public Task<Result<ExtensionCalls>> FindCallersAsync(
         DocumentPosition position,
         CancellationToken cancellationToken
-    ) => DispatchWithFallbackAsync<ExtensionCalls>(CallersMessage, position, cancellationToken);
+    ) => DispatchWithFallbackAsync<ExtensionCalls>(CALLERS_MESSAGE, position, cancellationToken);
 
     /// <summary>
     /// Finds callees inside Roslyn, with the calls that the compiler inserts without call syntax.
@@ -64,7 +64,7 @@ internal sealed partial class RoslynConnection
     public Task<Result<ExtensionCalls>> FindCalleesAsync(
         DocumentPosition position,
         CancellationToken cancellationToken
-    ) => DispatchWithFallbackAsync<ExtensionCalls>(CalleesMessage, position, cancellationToken);
+    ) => DispatchWithFallbackAsync<ExtensionCalls>(CALLEES_MESSAGE, position, cancellationToken);
 
     /// <summary>
     /// Reads the compiler facts of the expression or declared name at a position. It has no LSP fallback.
@@ -75,7 +75,7 @@ internal sealed partial class RoslynConnection
     )
     {
         var described = await DispatchDocumentMessageAsync<ExtensionExpression>(
-            ExpressionMessage,
+            EXPRESSION_MESSAGE,
             position,
             disableOnFailure: false,
             cancellationToken
@@ -105,10 +105,10 @@ internal sealed partial class RoslynConnection
 
         // A failure of this long search says nothing about the other handlers, so they stay active
         var searched = await RequestAsync(
-            LspMethods.WorkspaceDispatchExtensionMessage,
+            LspMethods.WORKSPACE_DISPATCH_EXTENSION_MESSAGE,
             new JsonObject
             {
-                ["messageName"] = UnusedMessage,
+                ["messageName"] = UNUSED_MESSAGE,
                 ["message"] = new JsonObject
                 {
                     ["files"] = new JsonArray([
@@ -125,7 +125,7 @@ internal sealed partial class RoslynConnection
                 _ when IsCancelled(error) => ToolError.InvalidLspData(
                     "Roslyn cancelled the search for unused symbols. Retry the call."
                 ),
-                { Code: ErrorCodes.Lsp } => UnusedFailure(error.Message),
+                { Code: ErrorCodes.LSP } => UnusedFailure(error.Message),
                 _ => error,
             };
         }
@@ -147,7 +147,7 @@ internal sealed partial class RoslynConnection
 
     // Roslyn cancels a request when the workspace changes, which says nothing about the extension
     private static bool IsCancelled(ToolError error) =>
-        error.RpcCode is RequestCancelledCode or ServerCancelledCode;
+        error.RpcCode is REQUEST_CANCELLED_CODE or SERVER_CANCELLED_CODE;
 
     // A failed or cancelled dispatch answers not found, which sends the caller to the LSP request
     private async Task<Result<T>> DispatchWithFallbackAsync<T>(
@@ -163,7 +163,7 @@ internal sealed partial class RoslynConnection
             disableOnFailure: true,
             cancellationToken
         );
-        return dispatched is ToolError { Code: ErrorCodes.Lsp } ? T.NotFound : dispatched;
+        return dispatched is ToolError { Code: ErrorCodes.LSP } ? T.NotFound : dispatched;
     }
 
     /// <summary>
@@ -186,7 +186,7 @@ internal sealed partial class RoslynConnection
 
         var parameters = LspParameters.At(position);
         var dispatched = await RequestAsync(
-            LspMethods.TextDocumentDispatchExtensionMessage,
+            LspMethods.TEXT_DOCUMENT_DISPATCH_EXTENSION_MESSAGE,
             new JsonObject
             {
                 ["messageName"] = messageName,
@@ -197,7 +197,7 @@ internal sealed partial class RoslynConnection
         );
         if (dispatched.IsError(out var error, out var result))
         {
-            return error is { Code: ErrorCodes.Lsp } && !IsCancelled(error)
+            return error is { Code: ErrorCodes.LSP } && !IsCancelled(error)
                 ? DocumentMessageFailure(messageName, error.Message, disableOnFailure)
                 : error;
         }
@@ -222,14 +222,14 @@ internal sealed partial class RoslynConnection
         }
 
         var activated = await RequestAsync(
-            LspMethods.ServerActivateExtension,
+            LspMethods.SERVER_ACTIVATE_EXTENSION,
             new JsonObject { ["assemblyFilePath"] = _extensionPath },
             cancellationToken
         );
         if (activated.IsError(out var error, out var result))
         {
             // A server without the extension handlers reports an unknown method
-            if (error is not { Code: ErrorCodes.Lsp })
+            if (error is not { Code: ErrorCodes.LSP })
                 return error;
 
             LogExtensionUnavailable(logger, error.Message);
@@ -296,11 +296,11 @@ internal sealed partial class RoslynConnection
     private static string Consequence(string messageName) =>
         messageName switch
         {
-            ReferencesMessage => "references (uses the LSP request)",
-            CallersMessage => "callers (uses the LSP request)",
-            CalleesMessage => "callees (uses the LSP request)",
-            ExpressionMessage => "expression (unavailable)",
-            UnusedMessage => "unused (unavailable)",
+            REFERENCES_MESSAGE => "references (uses the LSP request)",
+            CALLERS_MESSAGE => "callers (uses the LSP request)",
+            CALLEES_MESSAGE => "callees (uses the LSP request)",
+            EXPRESSION_MESSAGE => "expression (unavailable)",
+            UNUSED_MESSAGE => "unused (unavailable)",
             _ => throw new ArgumentOutOfRangeException(
                 nameof(messageName),
                 messageName,

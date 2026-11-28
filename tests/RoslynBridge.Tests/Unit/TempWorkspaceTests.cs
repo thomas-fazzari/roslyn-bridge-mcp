@@ -5,8 +5,8 @@ namespace RoslynBridge.Tests.Unit;
 
 public abstract class TempWorkspaceTests : IDisposable
 {
-    protected const string SourceFile = "Source.cs";
-    protected const string RenamedFile = "Renamed.cs";
+    protected const string SOURCE_FILE = "Source.cs";
+    protected const string RENAMED_FILE = "Renamed.cs";
 
     protected string Root { get; } =
         Directory.CreateTempSubdirectory("roslyn-bridge-tests-").FullName;

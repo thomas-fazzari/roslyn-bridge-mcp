@@ -8,7 +8,7 @@ namespace RoslynBridge.Common;
 
 internal sealed partial class ToolPipeline
 {
-    private const int MaximumListedFiles = 20;
+    private const int MAXIMUM_LISTED_FILES = 20;
 
     private static readonly SearchValues<char> _globCharacters = SearchValues.Create("*?[{");
 
@@ -80,10 +80,10 @@ internal sealed partial class ToolPipeline
 
     private static ToolError AmbiguousFile(string name, List<string> matches) =>
         new(
-            ErrorCodes.AmbiguousFile,
+            ErrorCodes.AMBIGUOUS_FILE,
             $"'{name}' matches {matches.Count} files. Send more of the path. Matches: "
-                + string.Join(", ", matches.Take(MaximumListedFiles))
-                + (matches.Count > MaximumListedFiles ? ", ..." : string.Empty)
+                + string.Join(", ", matches.Take(MAXIMUM_LISTED_FILES))
+                + (matches.Count > MAXIMUM_LISTED_FILES ? ", ..." : string.Empty)
         );
 
     private readonly record struct ResolvedRequest(

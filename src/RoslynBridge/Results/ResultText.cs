@@ -10,15 +10,15 @@ namespace RoslynBridge.Results;
 /// </summary>
 internal static class ResultText
 {
-    internal const int MaximumResponseCharacters = 32_000;
-    internal const string ResolvedFilePrefix = "resolved file: ";
-    internal const string ErrorPrefix = "error ";
-    internal const string Indent = "  ";
+    internal const int MAXIMUM_RESPONSE_CHARACTERS = 32_000;
+    internal const string RESOLVED_FILE_PREFIX = "resolved file: ";
+    internal const string ERROR_PREFIX = "error ";
+    internal const string INDENT = "  ";
 
-    private const int MaximumFailureMessageCharacters = 2_000;
+    private const int MAXIMUM_FAILURE_MESSAGE_CHARACTERS = 2_000;
 
     // Room for the lines that close a preview or receipt after its files
-    private const int ClosingReserve = 200;
+    private const int CLOSING_RESERVE = 200;
 
     private static readonly JsonWriterOptions _jsonOptions = new()
     {
@@ -26,18 +26,20 @@ internal static class ResultText
     };
 
     internal static string ResolvedFiles(IEnumerable<string> files) =>
-        string.Concat(files.Select(file => $"{ResolvedFilePrefix}{file}\n"));
+        string.Concat(files.Select(file => $"{RESOLVED_FILE_PREFIX}{file}\n"));
 
     internal static string Error(ToolError error)
     {
-        var text = new StringBuilder(ErrorPrefix).Append(error.Code);
+        var text = new StringBuilder(ERROR_PREFIX).Append(error.Code);
         if (error.RpcCode is { } code)
             text.Append(CultureInfo.InvariantCulture, $" (LSP {code})");
 
         // A failed edit caps its message to leave room for the receipt
         var message =
             error is EditFailure
-                ? error.Message[..Math.Min(error.Message.Length, MaximumFailureMessageCharacters)]
+                ? error.Message[
+                    ..Math.Min(error.Message.Length, MAXIMUM_FAILURE_MESSAGE_CHARACTERS)
+                ]
                 : error.Message;
         text.Append(": ").Append(OneLine(message)).Append('\n');
         foreach (var candidate in error.Candidates ?? [])
@@ -53,10 +55,10 @@ internal static class ResultText
 
     internal static string? ErrorCode(string text)
     {
-        if (!text.StartsWith(ErrorPrefix, StringComparison.Ordinal))
+        if (!text.StartsWith(ERROR_PREFIX, StringComparison.Ordinal))
             return null;
 
-        var code = text.AsSpan(ErrorPrefix.Length);
+        var code = text.AsSpan(ERROR_PREFIX.Length);
         var end = code.IndexOfAny(' ', ':');
         return (end < 0 ? code : code[..end]).ToString();
     }
@@ -82,7 +84,7 @@ internal static class ResultText
     {
         AppendSymbol(text, symbol, indent);
         if (symbol.Through is { } through)
-            text.Append(Indent).Append("through ").Append(through).Append('\n');
+            text.Append(INDENT).Append("through ").Append(through).Append('\n');
 
         if (symbol.Lines is { } lines)
         {
@@ -90,7 +92,7 @@ internal static class ResultText
         }
         else if (symbol.Calls.Count > 0)
         {
-            text.Append(Indent)
+            text.Append(INDENT)
                 .Append("calls ")
                 .AppendJoin(' ', symbol.Calls.Select(Position))
                 .Append('\n');
@@ -98,7 +100,7 @@ internal static class ResultText
 
         foreach (var child in symbol.Children)
         {
-            AppendSymbolTree(text, child, indent + Indent);
+            AppendSymbolTree(text, child, indent + INDENT);
         }
     }
 
@@ -110,7 +112,7 @@ internal static class ResultText
     {
         foreach (var position in positions)
         {
-            text.Append(Indent).Append(Position(position));
+            text.Append(INDENT).Append(Position(position));
             if (lines.TryGetValue(position.Line, out var source) && source.Length > 0)
                 text.Append(' ').Append(source);
 
@@ -226,7 +228,7 @@ internal static class ResultText
         var shown = 0;
         foreach (var block in blocks)
         {
-            if (text.Length + block.Length > budget - ClosingReserve)
+            if (text.Length + block.Length > budget - CLOSING_RESERVE)
                 break;
 
             text.Append(block);
@@ -250,7 +252,7 @@ internal static class ResultText
         if (failure.FailedOperation is { } operation)
             text.Append(", operation ").Append(operation.Name);
 
-        text.Append('\n').Append(failure.Receipt.Render(MaximumResponseCharacters - text.Length));
+        text.Append('\n').Append(failure.Receipt.Render(MAXIMUM_RESPONSE_CHARACTERS - text.Length));
     }
 
     private static IEnumerable<SourcePosition> LinePositions(SymbolItem symbol)

@@ -10,8 +10,8 @@ namespace RoslynBridge.Tests.Unit.Lsp;
 
 public sealed class SessionDocumentTests : TempWorkspaceTests
 {
-    private const string ChangedText = "class B {}";
-    private const int FileDeleted = 3;
+    private const string CHANGED_TEXT = "class B {}";
+    private const int FILE_DELETED = 3;
 
     [Fact]
     public async Task ConcurrentOpensOfOneFileSendOneDidOpenAsync()
@@ -29,7 +29,7 @@ public sealed class SessionDocumentTests : TempWorkspaceTests
 
         opened.Should().AllSatisfy(result => result.ErrorCode().Should().BeNull());
 
-        (await ReceivedAsync(session, servers[0], LspMethods.TextDocumentDidOpen))
+        (await ReceivedAsync(session, servers[0], LspMethods.TEXT_DOCUMENT_DID_OPEN))
             .Should()
             .ContainSingle();
     }
@@ -50,10 +50,10 @@ public sealed class SessionDocumentTests : TempWorkspaceTests
         (await session.OpenDocumentAsync(Resolved(Root, path), TestCt)).Succeeded();
         (await session.SynchronizeWorkspaceAsync(TestCt)).Succeeded();
 
-        (await ReceivedAsync(session, servers[0], LspMethods.TextDocumentDidOpen))
+        (await ReceivedAsync(session, servers[0], LspMethods.TEXT_DOCUMENT_DID_OPEN))
             .Should()
             .ContainSingle();
-        (await ReceivedAsync(session, servers[0], LspMethods.WorkspaceDidChangeWatchedFiles))
+        (await ReceivedAsync(session, servers[0], LspMethods.WORKSPACE_DID_CHANGE_WATCHED_FILES))
             .Should()
             .BeEmpty();
     }
@@ -70,17 +70,17 @@ public sealed class SessionDocumentTests : TempWorkspaceTests
 
         File.SetLastWriteTimeUtc(path, written.AddSeconds(1));
         (await session.SynchronizeAsync(TestCt)).ErrorCode().Should().BeNull();
-        (await ReceivedAsync(session, servers[0], LspMethods.TextDocumentDidChange))
+        (await ReceivedAsync(session, servers[0], LspMethods.TEXT_DOCUMENT_DID_CHANGE))
             .Should()
             .BeEmpty();
 
-        await File.WriteAllTextAsync(path, ChangedText, TestCt);
+        await File.WriteAllTextAsync(path, CHANGED_TEXT, TestCt);
         File.SetLastWriteTimeUtc(path, written.AddSeconds(2));
         (await session.SynchronizeAsync(TestCt)).ErrorCode().Should().BeNull();
 
-        var changes = await ReceivedAsync(session, servers[0], LspMethods.TextDocumentDidChange);
+        var changes = await ReceivedAsync(session, servers[0], LspMethods.TEXT_DOCUMENT_DID_CHANGE);
         var change = changes.Should().ContainSingle().Subject;
-        change!["contentChanges"]![0]!["text"]!.GetValue<string>().Should().Be(ChangedText);
+        change!["contentChanges"]![0]!["text"]!.GetValue<string>().Should().Be(CHANGED_TEXT);
     }
 
     [Fact]
@@ -97,7 +97,7 @@ public sealed class SessionDocumentTests : TempWorkspaceTests
         (await session.SynchronizeWorkspaceAsync(TestCt)).Succeeded();
 
         var uri = new Uri(path).AbsoluteUri;
-        var closed = await ReceivedAsync(session, servers[0], LspMethods.TextDocumentDidClose);
+        var closed = await ReceivedAsync(session, servers[0], LspMethods.TEXT_DOCUMENT_DID_CLOSE);
         closed
             .Select(parameters => parameters!["textDocument"]!["uri"]!.GetValue<string>())
             .Should()
@@ -105,7 +105,7 @@ public sealed class SessionDocumentTests : TempWorkspaceTests
         var watched = await ReceivedAsync(
             session,
             servers[0],
-            LspMethods.WorkspaceDidChangeWatchedFiles
+            LspMethods.WORKSPACE_DID_CHANGE_WATCHED_FILES
         );
         watched
             .SelectMany(parameters => parameters!["changes"]!.AsArray())
@@ -113,7 +113,7 @@ public sealed class SessionDocumentTests : TempWorkspaceTests
                 (Uri: change!["uri"]!.GetValue<string>(), Type: change["type"]!.GetValue<int>())
             )
             .Should()
-            .Contain((uri, FileDeleted));
+            .Contain((uri, FILE_DELETED));
     }
 
     [Fact]
@@ -132,21 +132,21 @@ public sealed class SessionDocumentTests : TempWorkspaceTests
             .Should()
             .BeNull();
 
-        (await ReceivedAsync(session, servers[1], LspMethods.WorkspaceDidChangeWatchedFiles))
+        (await ReceivedAsync(session, servers[1], LspMethods.WORKSPACE_DID_CHANGE_WATCHED_FILES))
             .Should()
             .BeEmpty();
     }
 
     private static Task<JsonNode?> RegisterWatchedFilesAsync(FakeRoslynServer server) =>
         server.RequestClientAsync(
-            LspMethods.ClientRegisterCapability,
+            LspMethods.CLIENT_REGISTER_CAPABILITY,
             new JsonObject
             {
                 ["registrations"] = new JsonArray(
                     new JsonObject
                     {
                         ["id"] = "watched-files",
-                        ["method"] = LspMethods.WorkspaceDidChangeWatchedFiles,
+                        ["method"] = LspMethods.WORKSPACE_DID_CHANGE_WATCHED_FILES,
                     }
                 ),
             },
@@ -161,7 +161,7 @@ public sealed class SessionDocumentTests : TempWorkspaceTests
     {
         // Roslyn answers a request after the notifications that precede it
         await session.RequestAsync(
-            LspMethods.WorkspaceSymbol,
+            LspMethods.WORKSPACE_SYMBOL,
             new JsonObject { ["query"] = string.Empty },
             TestCt
         );

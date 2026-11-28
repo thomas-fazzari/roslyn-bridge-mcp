@@ -10,7 +10,7 @@ public sealed class TextPreviewTests
     [Fact]
     public void LateChangeOnALongLineAppearsWithItsActualPosition()
     {
-        var prefix = new string('a', EditedDocument.MaximumPreviewCharacters + 100);
+        var prefix = new string('a', EditedDocument.MAXIMUM_PREVIEW_CHARACTERS + 100);
 
         var preview = TextPreview.Create(prefix + "OldName", prefix + "NewName");
 
@@ -59,7 +59,7 @@ public sealed class TextPreviewTests
     public void DistantChangesPastTheDiffLimitsHaveSeparateRanges()
     {
         var lines = Enumerable
-            .Range(1, TextPreview.MaximumDiffLines + 500)
+            .Range(1, TextPreview.MAXIMUM_DIFF_LINES + 500)
             .Select(index => string.Create(CultureInfo.InvariantCulture, $"line {index}"))
             .ToArray();
         var before = string.Join('\n', lines);
@@ -118,10 +118,10 @@ public sealed class TextPreviewTests
     [Fact]
     public void RemainingBudgetDoesNotProduceEmptySurrogateRanges()
     {
-        const int length = EditedDocument.MaximumPreviewCharacters - 2;
+        const int LENGTH = EditedDocument.MAXIMUM_PREVIEW_CHARACTERS - 2;
         var preview = TextPreview.Create(
-            new string('a', length) + "\nkeep\n😀old\nend\n😀last",
-            new string('b', length) + "\nkeep\n😁new\nend\n😁tail"
+            new string('a', LENGTH) + "\nkeep\n😀old\nend\n😀last",
+            new string('b', LENGTH) + "\nkeep\n😁new\nend\n😁tail"
         );
 
         preview.Truncated.Should().BeTrue();
@@ -133,8 +133,8 @@ public sealed class TextPreviewTests
     public void OversizedComparisonReportsAnIncompletePreview()
     {
         var preview = TextPreview.Create(
-            new string('a', TextPreview.MaximumDiffCharacters),
-            new string('b', TextPreview.MaximumDiffCharacters)
+            new string('a', TextPreview.MAXIMUM_DIFF_CHARACTERS),
+            new string('b', TextPreview.MAXIMUM_DIFF_CHARACTERS)
         );
 
         preview.Truncated.Should().BeTrue();

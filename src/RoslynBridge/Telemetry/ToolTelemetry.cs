@@ -9,17 +9,17 @@ namespace RoslynBridge.Telemetry;
 
 internal static class ToolTelemetry
 {
-    internal const string ToolName = "gen_ai.tool.name";
-    internal const string Action = "roslyn_bridge.action";
+    internal const string TOOL_NAME = "gen_ai.tool.name";
+    internal const string ACTION = "roslyn_bridge.action";
 
     // OpenTelemetry's placeholder for a value outside a bounded set
-    private const string OtherTool = "_OTHER";
-    private const string ResultCharacters = "roslyn_bridge.result.characters";
-    private const string OperationName = "gen_ai.operation.name";
-    private const string ExecuteTool = "execute_tool";
-    private const string QueryCount = "roslyn_bridge.bulk.queries";
-    private const string ActionArgument = "action";
-    private const string QueriesArgument = "queries";
+    private const string OTHER_TOOL = "_OTHER";
+    private const string RESULT_CHARACTERS = "roslyn_bridge.result.characters";
+    private const string OPERATION_NAME = "gen_ai.operation.name";
+    private const string EXECUTE_TOOL = "execute_tool";
+    private const string QUERY_COUNT = "roslyn_bridge.bulk.queries";
+    private const string ACTION_ARGUMENT = "action";
+    private const string QUERIES_ARGUMENT = "queries";
 
     public static McpRequestHandler<CallToolRequestParams, CallToolResult> Measure(
         McpRequestHandler<CallToolRequestParams, CallToolResult> next
@@ -27,10 +27,10 @@ internal static class ToolTelemetry
         async (context, cancellationToken) =>
         {
             var tool = (context.MatchedPrimitive as McpServerTool)?.ProtocolTool;
-            var name = tool?.Name ?? OtherTool;
-            using var activity = BridgeTelemetry.Source.StartActivity($"{ExecuteTool} {name}");
-            activity?.SetTag(OperationName, ExecuteTool);
-            var tags = new TagList { { ToolName, name } };
+            var name = tool?.Name ?? OTHER_TOOL;
+            using var activity = BridgeTelemetry.Source.StartActivity($"{EXECUTE_TOOL} {name}");
+            activity?.SetTag(OPERATION_NAME, EXECUTE_TOOL);
+            var tags = new TagList { { TOOL_NAME, name } };
             var started = Stopwatch.GetTimestamp();
             try
             {
@@ -38,24 +38,24 @@ internal static class ToolTelemetry
                 // The argument check rewrites a JSON string into an array, so the arguments are read after it ran
                 var arguments = context.Params?.Arguments;
                 if (tool is not null && ActionOf(tool, arguments) is { } action)
-                    tags.Add(Action, action);
+                    tags.Add(ACTION, action);
 
                 if (QueriesOf(arguments) is { } queries)
-                    activity?.SetTag(QueryCount, queries);
+                    activity?.SetTag(QUERY_COUNT, queries);
 
                 if (result.IsError is true && ErrorCodeOf(result) is { } code)
-                    tags.Add(BridgeTelemetry.ErrorType, code);
+                    tags.Add(BridgeTelemetry.ERROR_TYPE, code);
 
                 var characters = result
                     .Content.OfType<TextContentBlock>()
                     .Sum(static block => block.Text.Length);
-                activity?.SetTag(ResultCharacters, characters);
+                activity?.SetTag(RESULT_CHARACTERS, characters);
                 BridgeTelemetry.ResultSize.Record(characters, tags);
                 return result;
             }
             catch (Exception exception)
             {
-                tags.Add(BridgeTelemetry.ErrorType, BridgeTelemetry.ErrorTypeOf(exception));
+                tags.Add(BridgeTelemetry.ERROR_TYPE, BridgeTelemetry.ErrorTypeOf(exception));
                 throw;
             }
             finally
@@ -67,10 +67,10 @@ internal static class ToolTelemetry
     private static string? ActionOf(Tool tool, IDictionary<string, JsonElement>? arguments)
     {
         if (
-            arguments?.TryGetValue(ActionArgument, out var action) != true
+            arguments?.TryGetValue(ACTION_ARGUMENT, out var action) != true
             || action.ValueKind is not JsonValueKind.String
             || !tool.InputSchema.TryGetProperty("properties", out var properties)
-            || !properties.TryGetProperty(ActionArgument, out var property)
+            || !properties.TryGetProperty(ACTION_ARGUMENT, out var property)
             || !property.TryGetProperty("enum", out var values)
         )
         {
@@ -83,7 +83,7 @@ internal static class ToolTelemetry
     }
 
     private static int? QueriesOf(IDictionary<string, JsonElement>? arguments) =>
-        arguments?.TryGetValue(QueriesArgument, out var queries) == true
+        arguments?.TryGetValue(QUERIES_ARGUMENT, out var queries) == true
         && queries.ValueKind is JsonValueKind.Array
             ? queries.GetArrayLength()
             : null;

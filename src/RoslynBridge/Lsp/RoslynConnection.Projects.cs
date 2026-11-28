@@ -99,7 +99,7 @@ internal sealed partial class RoslynConnection
     )
     {
         var response = await RequestAsync(
-            LspMethods.TextDocumentGetProjectContexts,
+            LspMethods.TEXT_DOCUMENT_GET_PROJECT_CONTEXTS,
             new JsonObject { ["_vs_textDocument"] = new JsonObject { ["uri"] = uri } },
             cancellationToken
         );

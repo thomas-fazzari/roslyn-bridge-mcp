@@ -16,10 +16,10 @@ internal sealed class BulkNavigateTool(
     IToolHandler<BulkNavigateRequest, ToolResult> handler
 ) : IRoslynTool
 {
-    internal const string ActionDescription = "Navigation to perform.";
-    private const string ContextDescription =
+    internal const string ACTION_DESCRIPTION = "Navigation to perform.";
+    private const string CONTEXT_DESCRIPTION =
         "Show the trimmed source line of each result position. Uses more tokens.";
-    internal const string InheritedDescription =
+    internal const string INHERITED_DESCRIPTION =
         "For members, also list the members that base classes in the workspace pass on, after the type's own.";
 
     public static string Name => "bulk_navigate";
@@ -32,11 +32,11 @@ internal sealed class BulkNavigateTool(
     public Task<CallToolResult> BulkNavigateAsync(
         [Description("Independent navigate queries, each with its own action and target.")]
             BulkQuery[] queries,
-        [Description(ContextDescription)] bool context = false,
-        [Description(Paging.LimitDescription)]
-        [Range(1, Paging.MaximumLimit)]
-            int limit = Paging.DefaultLimit,
-        [Description(Paging.OffsetDescription)] [Range(0, int.MaxValue)] int offset = 0,
+        [Description(CONTEXT_DESCRIPTION)] bool context = false,
+        [Description(Paging.LIMIT_DESCRIPTION)]
+        [Range(1, Paging.MAXIMUM_LIMIT)]
+            int limit = Paging.DEFAULT_LIMIT,
+        [Description(Paging.OFFSET_DESCRIPTION)] [Range(0, int.MaxValue)] int offset = 0,
         CancellationToken cancellationToken = default
     ) =>
         pipeline.RunAsync(
@@ -49,22 +49,22 @@ internal sealed class BulkNavigateTool(
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 internal sealed record BulkQuery
 {
-    [Description(BulkNavigateTool.ActionDescription)]
+    [Description(BulkNavigateTool.ACTION_DESCRIPTION)]
     public required NavigationAction Action { get; init; }
 
-    [Description(SymbolTarget.SymbolDescription)]
+    [Description(SymbolTarget.SYMBOL_DESCRIPTION)]
     public string? Symbol { get; init; }
 
-    [Description(SymbolTarget.FileDescription)]
+    [Description(SymbolTarget.FILE_DESCRIPTION)]
     public string? File { get; init; }
 
-    [Description(SymbolTarget.LineDescription)]
+    [Description(SymbolTarget.LINE_DESCRIPTION)]
     public int? Line { get; init; }
 
-    [Description(SymbolTarget.CharacterDescription)]
+    [Description(SymbolTarget.CHARACTER_DESCRIPTION)]
     public int? Character { get; init; }
 
-    [Description(BulkNavigateTool.InheritedDescription)]
+    [Description(BulkNavigateTool.INHERITED_DESCRIPTION)]
     public bool Inherited { get; init; }
 
     public Result<NavigateRequest> ToRequest(bool context, Paging page) =>

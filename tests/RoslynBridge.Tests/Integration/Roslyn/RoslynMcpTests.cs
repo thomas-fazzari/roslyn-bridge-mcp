@@ -12,36 +12,36 @@ namespace RoslynBridge.Tests.Integration.Roslyn;
 
 public sealed partial class RoslynMcpTests
 {
-    private const int TestTimeoutMilliseconds = 300_000;
+    private const int TEST_TIMEOUT_MILLISECONDS = 300_000;
 
-    private const string ApplyFromPreview = "preview";
-    private const string ApplyFromListing = "listing";
-    private const string ApplyWithoutProposal = "direct";
-    private const string LoadingLine = "loading: true";
-    private const string IdleLine = "loading: false";
-    private const string ProgressLine = "progress:";
+    private const string APPLY_FROM_PREVIEW = "preview";
+    private const string APPLY_FROM_LISTING = "listing";
+    private const string APPLY_WITHOUT_PROPOSAL = "direct";
+    private const string LOADING_LINE = "loading: true";
+    private const string IDLE_LINE = "loading: false";
+    private const string PROGRESS_LINE = "progress:";
 
-    private const string ContractTestProject = "Contracts/Contracts.csproj";
-    private const string ContractTestFile = "Contracts/IGreeter.cs";
-    private const string ImplementationTestFile = "Application/Greeter.cs";
-    private const string ConsumerTestFile = "Application/Consumer.cs";
-    private const string OtherGreeterTestFile = "Application/OtherGreeter.cs";
-    private const string ProblemsTestFile = "Application/Problems.cs";
-    private const string ApplicationProgramTestFile = "Application/Program.cs";
-    private const string ContractsProgramTestFile = "Contracts/Program.cs";
-    private const string ProgramFileName = "Program.cs";
-    private const string TotalTestSymbol = "Counter.Total";
-    private const string StepTestSymbol = "Counter.Step";
-    private const string UnusedFixture = "Unused";
-    private const string UnusedKeptFixture = "UnusedKept";
-    private const string MultiTargetFixture = "MultiTarget";
-    private const string BrokenProjectFixture = "BrokenProject";
-    private const string BrokenTestProject = "Broken/Broken.csproj";
-    private const string LeftoversTestFile = "Application/Leftovers.cs";
-    private const string LeftoverChecksTestFile = "Checks/LeftoverChecks.cs";
-    private const string KeptTestFile = "Application/Kept.cs";
-    private const string ExpressionsTestFile = "Application/Expressions.cs";
-    private const string ExpressionsSource = """
+    private const string CONTRACT_TEST_PROJECT = "Contracts/Contracts.csproj";
+    private const string CONTRACT_TEST_FILE = "Contracts/IGreeter.cs";
+    private const string IMPLEMENTATION_TEST_FILE = "Application/Greeter.cs";
+    private const string CONSUMER_TEST_FILE = "Application/Consumer.cs";
+    private const string OTHER_GREETER_TEST_FILE = "Application/OtherGreeter.cs";
+    private const string PROBLEMS_TEST_FILE = "Application/Problems.cs";
+    private const string APPLICATION_PROGRAM_TEST_FILE = "Application/Program.cs";
+    private const string CONTRACTS_PROGRAM_TEST_FILE = "Contracts/Program.cs";
+    private const string PROGRAM_FILE_NAME = "Program.cs";
+    private const string TOTAL_TEST_SYMBOL = "Counter.Total";
+    private const string STEP_TEST_SYMBOL = "Counter.Step";
+    private const string UNUSED_FIXTURE = "Unused";
+    private const string UNUSED_KEPT_FIXTURE = "UnusedKept";
+    private const string MULTI_TARGET_FIXTURE = "MultiTarget";
+    private const string BROKEN_PROJECT_FIXTURE = "BrokenProject";
+    private const string BROKEN_TEST_PROJECT = "Broken/Broken.csproj";
+    private const string LEFTOVERS_TEST_FILE = "Application/Leftovers.cs";
+    private const string LEFTOVER_CHECKS_TEST_FILE = "Checks/LeftoverChecks.cs";
+    private const string KEPT_TEST_FILE = "Application/Kept.cs";
+    private const string EXPRESSIONS_TEST_FILE = "Application/Expressions.cs";
+    private const string EXPRESSIONS_SOURCE = """
         namespace Sample.Application;
 
         public static class Formatter
@@ -70,8 +70,8 @@ public sealed partial class RoslynMcpTests
             public static int Echoed() => Echo(7);
         }
         """;
-    private const string ImplicitCallsTestFile = "Application/ImplicitCalls.cs";
-    private const string ImplicitCallsSource = """
+    private const string IMPLICIT_CALLS_TEST_FILE = "Application/ImplicitCalls.cs";
+    private const string IMPLICIT_CALLS_SOURCE = """
         using System;
         using System.Runtime.CompilerServices;
         using System.Threading.Tasks;
@@ -165,8 +165,8 @@ public sealed partial class RoslynMcpTests
             private static Amount Identity(Amount amount) => amount;
         }
         """;
-    private const string JsonContextTestFile = "Application/JsonContext.cs";
-    private const string JsonContextSource = """
+    private const string JSON_CONTEXT_TEST_FILE = "Application/JsonContext.cs";
+    private const string JSON_CONTEXT_SOURCE = """
         using System.Text.Json;
         using System.Text.Json.Serialization;
 
@@ -191,7 +191,7 @@ public sealed partial class RoslynMcpTests
         }
         """;
 
-    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    [Fact(Explicit = true, Timeout = TEST_TIMEOUT_MILLISECONDS)]
     public async Task ReportsFreshDiagnosticsAndNavigatesAcrossProjectsAsync()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
@@ -208,18 +208,18 @@ public sealed partial class RoslynMcpTests
 
         var definitionRequest = await workspace.AtAsync(
             LspAction.Definition,
-            ConsumerTestFile,
+            CONSUMER_TEST_FILE,
             "Greet("
         );
         var definition = await workspace.CallAsync(definitionRequest);
-        definition.Should().HaveSingleLocation(ContractTestFile);
-        var target = await workspace.AtAsync(LspAction.Definition, ContractTestFile, "Greet(");
+        definition.Should().HaveSingleLocation(CONTRACT_TEST_FILE);
+        var target = await workspace.AtAsync(LspAction.Definition, CONTRACT_TEST_FILE, "Greet(");
         definition
             .Should()
             .Be(
                 string.Create(
                     CultureInfo.InvariantCulture,
-                    $"{ContractTestFile} {target.Line}:{target.Character}"
+                    $"{CONTRACT_TEST_FILE} {target.Line}:{target.Character}"
                 )
             );
         var raw = JsonNode.Parse(
@@ -227,12 +227,12 @@ public sealed partial class RoslynMcpTests
                 new LspRequest
                 {
                     Action = LspAction.Request,
-                    Method = LspMethods.TextDocumentDefinition,
+                    Method = LspMethods.TEXT_DOCUMENT_DEFINITION,
                     Parameters = new JsonObject
                     {
                         ["textDocument"] = new JsonObject
                         {
-                            ["uri"] = new Uri(workspace.FilePath(ConsumerTestFile)).AbsoluteUri,
+                            ["uri"] = new Uri(workspace.FilePath(CONSUMER_TEST_FILE)).AbsoluteUri,
                         },
                         ["position"] = new JsonObject
                         {
@@ -248,46 +248,46 @@ public sealed partial class RoslynMcpTests
         new WorkspacePaths(workspace.FilePath("."))
             .TryGetWorkspaceFile(rawUri)!
             .FullPath.Should()
-            .Be(Path.GetFullPath(workspace.FilePath(ContractTestFile)));
+            .Be(Path.GetFullPath(workspace.FilePath(CONTRACT_TEST_FILE)));
         var rawStart = (rawLocation["range"] ?? rawLocation["targetSelectionRange"])!["start"]!;
         rawStart["line"]!.GetValue<int>().Should().Be(target.Line - 1);
         rawStart["character"]!.GetValue<int>().Should().Be(target.Character - 1);
 
         var typeDefinition = await workspace.CallAsync(
-            await workspace.AtAsync(LspAction.TypeDefinition, ConsumerTestFile, "greeter.Greet")
+            await workspace.AtAsync(LspAction.TypeDefinition, CONSUMER_TEST_FILE, "greeter.Greet")
         );
-        typeDefinition.Should().HaveSingleLocation(ContractTestFile);
+        typeDefinition.Should().HaveSingleLocation(CONTRACT_TEST_FILE);
 
         var implementation = await workspace.CallAsync(
-            await workspace.AtAsync(LspAction.Implementation, ContractTestFile, "Greet(")
+            await workspace.AtAsync(LspAction.Implementation, CONTRACT_TEST_FILE, "Greet(")
         );
-        implementation.Should().HaveSingleLocation(ImplementationTestFile);
+        implementation.Should().HaveSingleLocation(IMPLEMENTATION_TEST_FILE);
 
         var references = await workspace.CallAsync(
-            await workspace.AtAsync(LspAction.References, ContractTestFile, "Greet(")
+            await workspace.AtAsync(LspAction.References, CONTRACT_TEST_FILE, "Greet(")
         );
-        Locations(references).Should().Contain(ConsumerTestFile);
-        Locations(references).Should().NotContain(OtherGreeterTestFile);
+        Locations(references).Should().Contain(CONSUMER_TEST_FILE);
+        Locations(references).Should().NotContain(OTHER_GREETER_TEST_FILE);
 
         var hover = await workspace.CallAsync(
-            await workspace.AtAsync(LspAction.Hover, ConsumerTestFile, "Greet(")
+            await workspace.AtAsync(LspAction.Hover, CONSUMER_TEST_FILE, "Greet(")
         );
         hover.Should().Contain("Greet").And.NotContain("```");
 
         var callers = Lines(
             await workspace.CallAsync(
-                await workspace.AtAsync(LspAction.Callers, ContractTestFile, "Greet(")
+                await workspace.AtAsync(LspAction.Callers, CONTRACT_TEST_FILE, "Greet(")
             )
         );
         callers.Should().HaveCount(2);
-        callers[0].Should().StartWith(ConsumerTestFile + ":");
+        callers[0].Should().StartWith(CONSUMER_TEST_FILE + ":");
         callers[1].Should().MatchRegex(@"^  calls \d+:\d+$");
 
         // A returned symbol name resolves back to its declaration
         var resolved = await workspace.CallAsync(
             new LspRequest { Action = LspAction.Definition, Symbol = SymbolName(callers[0]) }
         );
-        resolved.Should().HaveSingleLocation(ConsumerTestFile);
+        resolved.Should().HaveSingleLocation(CONSUMER_TEST_FILE);
 
         var withContext = Lines(
             await workspace.CallAsync(
@@ -299,14 +299,14 @@ public sealed partial class RoslynMcpTests
                 }
             )
         );
-        var consumer = Array.IndexOf(withContext, ConsumerTestFile);
+        var consumer = Array.IndexOf(withContext, CONSUMER_TEST_FILE);
         consumer.Should().BeGreaterThanOrEqualTo(0);
         withContext[consumer + 1].Should().Contain("greeter.Greet(");
 
         var subtypes = await workspace.CallAsync(
-            await workspace.AtAsync(LspAction.Subtypes, ContractTestFile, "IGreeter")
+            await workspace.AtAsync(LspAction.Subtypes, CONTRACT_TEST_FILE, "IGreeter")
         );
-        Lines(subtypes).Select(FileOf).Should().Equal(ImplementationTestFile);
+        Lines(subtypes).Select(FileOf).Should().Equal(IMPLEMENTATION_TEST_FILE);
 
         var symbols = await workspace.CallAsync(
             new LspRequest { Action = LspAction.Symbols, Query = "IGreeter" }
@@ -315,7 +315,7 @@ public sealed partial class RoslynMcpTests
 
         var documentSymbols = Lines(
                 await workspace.CallAsync(
-                    new LspRequest { Action = LspAction.Symbols, File = ContractTestFile }
+                    new LspRequest { Action = LspAction.Symbols, File = CONTRACT_TEST_FILE }
                 )
             )
             .Select(SymbolName)
@@ -325,9 +325,9 @@ public sealed partial class RoslynMcpTests
             .Should()
             .Contain(name => name.StartsWith("Greet(", StringComparison.Ordinal));
 
-        var text = await workspace.ReadFileAsync(ProblemsTestFile);
+        var text = await workspace.ReadFileAsync(PROBLEMS_TEST_FILE);
         await workspace.WriteFileAsync(
-            ProblemsTestFile,
+            PROBLEMS_TEST_FILE,
             "using System.Collections.Generic;\n" + text
         );
 
@@ -338,17 +338,17 @@ public sealed partial class RoslynMcpTests
         (await workspace.StopAsync()).Should().Be(0);
     }
 
-    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    [Fact(Explicit = true, Timeout = TEST_TIMEOUT_MILLISECONDS)]
     public async Task DiagnosticsOmitCleanFilesAndKeepCountsWhenTruncatedAsync()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
 
         await using var workspace = await RoslynTestWorkspace.CreateAsync(cancellationToken);
 
-        const string cleanFile = "Contracts/Clean.cs";
-        await workspace.WriteFileAsync(cleanFile, string.Empty);
+        const string CLEAN_FILE = "Contracts/Clean.cs";
+        await workspace.WriteFileAsync(CLEAN_FILE, string.Empty);
         var clean = await workspace.CallAsync(
-            new LspRequest { Action = LspAction.Diagnostics, File = cleanFile }
+            new LspRequest { Action = LspAction.Diagnostics, File = CLEAN_FILE }
         );
         clean.Should().Be("1 file checked, no diagnostics");
 
@@ -356,7 +356,7 @@ public sealed partial class RoslynMcpTests
         {
             Action = LspAction.Diagnostics,
             File = "Application/*.cs",
-            Limit = Paging.MaximumLimit,
+            Limit = Paging.MAXIMUM_LIMIT,
         };
         var full = await workspace.CallAsync(request);
         var limited = await workspace.CallAsync(request with { Limit = 1 });
@@ -383,36 +383,36 @@ public sealed partial class RoslynMcpTests
         Diagnostics(limited).Should().ContainSingle();
     }
 
-    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    [Fact(Explicit = true, Timeout = TEST_TIMEOUT_MILLISECONDS)]
     public async Task ImmediatelyReportsSemanticDiagnosticsForANewFileAsync()
     {
-        const string newFile = "Application/NewFile.cs";
+        const string NEW_FILE = "Application/NewFile.cs";
         var cancellationToken = TestContext.Current.CancellationToken;
         await using var workspace = await RoslynTestWorkspace.CreateAsync(cancellationToken);
         await StartRoslynAsync(workspace);
 
         // Roslyn first treats a new file as a miscellaneous file, without semantic diagnostics
         await workspace.WriteFileAsync(
-            newFile,
+            NEW_FILE,
             "namespace Sample.Application;\n\npublic static class NewFile\n{\n    public static int Wrong() => \"text\";\n}\n"
         );
         var result = await workspace.CallAsync(
-            new LspRequest { Action = LspAction.Diagnostics, File = newFile }
+            new LspRequest { Action = LspAction.Diagnostics, File = NEW_FILE }
         );
 
         result.Should().NotContain("incomplete:");
         Diagnostics(result).Should().Contain(item => item.Code == "CS0029");
     }
 
-    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    [Fact(Explicit = true, Timeout = TEST_TIMEOUT_MILLISECONDS)]
     public async Task WaitsOnlyOnceForANewFileOutsideEveryProjectAsync()
     {
-        const string looseFile = "Loose.cs";
+        const string LOOSE_FILE = "Loose.cs";
         var cancellationToken = TestContext.Current.CancellationToken;
         await using var workspace = await RoslynTestWorkspace.CreateAsync(cancellationToken);
         await StartRoslynAsync(workspace);
-        await workspace.WriteFileAsync(looseFile, "internal static class Loose\n{\n}\n");
-        var request = new LspRequest { Action = LspAction.Diagnostics, File = looseFile };
+        await workspace.WriteFileAsync(LOOSE_FILE, "internal static class Loose\n{\n}\n");
+        var request = new LspRequest { Action = LspAction.Diagnostics, File = LOOSE_FILE };
         await workspace.CallAsync(request);
 
         var started = Stopwatch.GetTimestamp();
@@ -425,71 +425,71 @@ public sealed partial class RoslynMcpTests
         again.Should().Contain("incomplete:");
     }
 
-    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    [Fact(Explicit = true, Timeout = TEST_TIMEOUT_MILLISECONDS)]
     public async Task SkipsOversizedDocumentsDuringSynchronizationAsync()
     {
-        const string bigFile = "Application/Big.cs";
+        const string BIG_FILE = "Application/Big.cs";
         var cancellationToken = TestContext.Current.CancellationToken;
         await using var workspace = await RoslynTestWorkspace.CreateAsync(cancellationToken);
-        var rename = await workspace.AtAsync(LspAction.Rename, ContractTestFile, "Greet(");
+        var rename = await workspace.AtAsync(LspAction.Rename, CONTRACT_TEST_FILE, "Greet(");
         await StartRoslynAsync(workspace);
 
         // The watcher reports the file, so synchronization tries to open it
         await workspace.WriteFileAsync(
-            bigFile,
+            BIG_FILE,
             "// " + new string('x', 1_100_000) + "\nnamespace Sample.Application;\n"
         );
 
         var preview = await workspace.CallAsync(rename with { NewName = "Welcome" });
-        PreviewFiles(preview).Should().Contain(ConsumerTestFile);
+        PreviewFiles(preview).Should().Contain(CONSUMER_TEST_FILE);
 
         var diagnostics = await workspace.CallAsync(
-            new LspRequest { Action = LspAction.Diagnostics, File = ConsumerTestFile }
+            new LspRequest { Action = LspAction.Diagnostics, File = CONSUMER_TEST_FILE }
         );
         diagnostics.Should().NotContain("incomplete:");
     }
 
-    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    [Fact(Explicit = true, Timeout = TEST_TIMEOUT_MILLISECONDS)]
     public async Task ResolvesSymbolsInFilesDeclaringComparisonOperatorsAsync()
     {
-        const string moneyFile = "Application/Money.cs";
+        const string MONEY_FILE = "Application/Money.cs";
         var cancellationToken = TestContext.Current.CancellationToken;
         await using var workspace = await RoslynTestWorkspace.CreateAsync(cancellationToken);
         await StartRoslynAsync(workspace);
         await workspace.WriteFileAsync(
-            moneyFile,
+            MONEY_FILE,
             "namespace Sample.Application;\n\npublic readonly record struct Money(decimal Amount)\n{\n"
                 + "    public Money Add(Money other) => new(Amount + other.Amount);\n"
                 + "    public static bool operator <(Money left, Money right) => left.Amount < right.Amount;\n"
                 + "    public static bool operator >(Money left, Money right) => left.Amount > right.Amount;\n}\n"
         );
         await workspace.CallAsync(
-            new LspRequest { Action = LspAction.Diagnostics, File = moneyFile }
+            new LspRequest { Action = LspAction.Diagnostics, File = MONEY_FILE }
         );
 
         var definition = await workspace.CallAsync(
             new LspRequest { Action = LspAction.Definition, Symbol = "Money.Add" }
         );
 
-        Locations(definition).Should().Equal(moneyFile);
+        Locations(definition).Should().Equal(MONEY_FILE);
     }
 
-    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    [Fact(Explicit = true, Timeout = TEST_TIMEOUT_MILLISECONDS)]
     public async Task ListsReferencesOfAnOverrideWithoutItsSiblingsAsync()
     {
-        const string circleFile = "Application/Circle.cs";
+        const string CIRCLE_FILE = "Application/Circle.cs";
         var cancellationToken = TestContext.Current.CancellationToken;
         await using var workspace = await RoslynTestWorkspace.CreateAsync(cancellationToken);
         await StartRoslynAsync(workspace);
         await workspace.WriteFileAsync(
-            circleFile,
+            CIRCLE_FILE,
             "namespace Sample.Application;\n\npublic sealed class Circle() : Shape(\"circle\")\n{\n"
                 + "    public override double Area() => 3;\n}\n\npublic static class Areas\n{\n"
                 + "    public static double OfSquare(Square square) => square.Area();\n\n"
                 + "    public static double OfCircle(Circle circle) => circle.Area();\n}\n"
         );
         await workspace.CallAsync(
-            new LspRequest { Action = LspAction.Diagnostics, File = circleFile }
+            new LspRequest { Action = LspAction.Diagnostics, File = CIRCLE_FILE }
         );
 
         var references = Lines(
@@ -512,7 +512,7 @@ public sealed partial class RoslynMcpTests
             .NotContain(line => line.Contains("circle.Area()", StringComparison.Ordinal));
     }
 
-    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    [Fact(Explicit = true, Timeout = TEST_TIMEOUT_MILLISECONDS)]
     public async Task ListsCallersOfAnImplementationThroughItsInterfaceAsync()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
@@ -527,22 +527,22 @@ public sealed partial class RoslynMcpTests
             .Should()
             .Be(
                 $"""
-                {ConsumerTestFile}:7:26 method Sample.Application.Consumer.Run(IGreeter)
+                {CONSUMER_TEST_FILE}:7:26 method Sample.Application.Consumer.Run(IGreeter)
                   through IGreeter.Greet(string)
                   calls 7:59
                 """
             );
     }
 
-    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    [Fact(Explicit = true, Timeout = TEST_TIMEOUT_MILLISECONDS)]
     public async Task KeepsOnlyTheCallsThroughABaseMemberWhoseReceiverCanHoldTheTypeAsync()
     {
-        const string leasesFile = "Application/Leases.cs";
+        const string LEASES_FILE = "Application/Leases.cs";
         var cancellationToken = TestContext.Current.CancellationToken;
         await using var workspace = await RoslynTestWorkspace.CreateAsync(cancellationToken);
         await StartRoslynAsync(workspace);
         await workspace.WriteFileAsync(
-            leasesFile,
+            LEASES_FILE,
             "namespace Sample.Application;\n\npublic interface IHandle : System.IDisposable { }\n\n"
                 + "public sealed class Lease : System.IDisposable\n{\n    public void Dispose() { }\n}\n\n"
                 + "public static class Leases\n{\n    public static IHandle Open() => null!;\n\n"
@@ -551,7 +551,7 @@ public sealed partial class RoslynMcpTests
                 + "    public static void Keep()\n    {\n        var handle = Open();\n    }\n}\n"
         );
         await workspace.CallAsync(
-            new LspRequest { Action = LspAction.Diagnostics, File = leasesFile }
+            new LspRequest { Action = LspAction.Diagnostics, File = LEASES_FILE }
         );
 
         var callers = await workspace.CallAsync(
@@ -563,14 +563,14 @@ public sealed partial class RoslynMcpTests
             .Should()
             .Be(
                 $"""
-                {leasesFile}:14:24 method Sample.Application.Leases.Release(IDisposable)
+                {LEASES_FILE}:14:24 method Sample.Application.Leases.Release(IDisposable)
                   through IDisposable.Dispose()
                   calls 14:67
                 """
             );
     }
 
-    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    [Fact(Explicit = true, Timeout = TEST_TIMEOUT_MILLISECONDS)]
     public async Task ReportsTheCompilerFactsOfExpressionsAndDeclaredNamesAsync()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
@@ -597,7 +597,7 @@ public sealed partial class RoslynMcpTests
                 kind InvocationExpression
                 type string
                 nullability NotAnnotated/NotNull
-                {ExpressionsTestFile}:8:26 method Sample.Application.Formatter.Format(int)
+                {EXPRESSIONS_TEST_FILE}:8:26 method Sample.Application.Formatter.Format(int)
                   doc Formats an Int32 value.
                 """
             );
@@ -612,7 +612,7 @@ public sealed partial class RoslynMcpTests
                 nullability NotAnnotated/NotNull
                 conversion implicit numeric
                 constant 40
-                {ExpressionsTestFile}:5:23 constant Sample.Application.Formatter.Step
+                {EXPRESSIONS_TEST_FILE}:5:23 constant Sample.Application.Formatter.Step
                 """
             );
         beforePunctuation.Should().Be(constant);
@@ -625,7 +625,7 @@ public sealed partial class RoslynMcpTests
                 kind IdentifierName
                 type string?
                 nullability Annotated/MaybeNull
-                {ExpressionsTestFile}:12:43 variable text
+                {EXPRESSIONS_TEST_FILE}:12:43 variable text
                 """
             );
         afterCheck
@@ -636,7 +636,7 @@ public sealed partial class RoslynMcpTests
                 kind IdentifierName
                 type string
                 nullability NotAnnotated/NotNull
-                {ExpressionsTestFile}:12:43 variable text
+                {EXPRESSIONS_TEST_FILE}:12:43 variable text
                 """
             );
         inferred
@@ -647,7 +647,7 @@ public sealed partial class RoslynMcpTests
                 kind VariableDeclarator
                 type int
                 nullability NotAnnotated/NotNull
-                {ExpressionsTestFile}:14:13 variable length
+                {EXPRESSIONS_TEST_FILE}:14:13 variable length
                 """
             );
         declared
@@ -659,7 +659,7 @@ public sealed partial class RoslynMcpTests
                 type int
                 nullability NotAnnotated/NotNull
                 constant 40
-                {ExpressionsTestFile}:5:23 constant Sample.Application.Formatter.Step
+                {EXPRESSIONS_TEST_FILE}:5:23 constant Sample.Application.Formatter.Step
                 """
             );
         instantiated
@@ -670,7 +670,7 @@ public sealed partial class RoslynMcpTests
                 kind InvocationExpression
                 type int
                 nullability NotAnnotated/NotNull
-                {ExpressionsTestFile}:24:21 method Sample.Application.Formatter.Echo<T>(T)
+                {EXPRESSIONS_TEST_FILE}:24:21 method Sample.Application.Formatter.Echo<T>(T)
                   instantiation Sample.Application.Formatter.Echo<int>(int)
                 """
             );
@@ -678,18 +678,22 @@ public sealed partial class RoslynMcpTests
         Lines(metadata).Should().Contain("method int.ToString()");
     }
 
-    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    [Fact(Explicit = true, Timeout = TEST_TIMEOUT_MILLISECONDS)]
     public async Task GivesASourceGeneratedSymbolNoPositionAsync()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         await using var workspace = await RoslynTestWorkspace.CreateAsync(cancellationToken);
         await StartRoslynAsync(workspace);
-        await workspace.WriteFileAsync(JsonContextTestFile, JsonContextSource);
+        await workspace.WriteFileAsync(JSON_CONTEXT_TEST_FILE, JSON_CONTEXT_SOURCE);
         await workspace.CallAsync(
-            new LspRequest { Action = LspAction.Diagnostics, File = JsonContextTestFile }
+            new LspRequest { Action = LspAction.Diagnostics, File = JSON_CONTEXT_TEST_FILE }
         );
 
-        var generated = await ExpressionAtAsync(workspace, "Default;", file: JsonContextTestFile);
+        var generated = await ExpressionAtAsync(
+            workspace,
+            "Default;",
+            file: JSON_CONTEXT_TEST_FILE
+        );
 
         // The generated declaration is in a path relative to its generator, so it has no position
         Lines(generated)
@@ -698,15 +702,15 @@ public sealed partial class RoslynMcpTests
             .And.NotContain(line => line.Contains(".cs:", StringComparison.Ordinal));
     }
 
-    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    [Fact(Explicit = true, Timeout = TEST_TIMEOUT_MILLISECONDS)]
     public async Task ListsASourceGeneratedCalleeWithoutAPositionAsync()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         await using var workspace = await RoslynTestWorkspace.CreateAsync(cancellationToken);
         await StartRoslynAsync(workspace);
-        await workspace.WriteFileAsync(JsonContextTestFile, JsonContextSource);
+        await workspace.WriteFileAsync(JSON_CONTEXT_TEST_FILE, JSON_CONTEXT_SOURCE);
         await workspace.CallAsync(
-            new LspRequest { Action = LspAction.Diagnostics, File = JsonContextTestFile }
+            new LspRequest { Action = LspAction.Diagnostics, File = JSON_CONTEXT_TEST_FILE }
         );
 
         var callees = await workspace.CallAsync(
@@ -724,15 +728,15 @@ public sealed partial class RoslynMcpTests
             );
     }
 
-    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    [Fact(Explicit = true, Timeout = TEST_TIMEOUT_MILLISECONDS)]
     public async Task DoesNotCountTheImplicitObjectConstructorCallAsync()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         await using var workspace = await RoslynTestWorkspace.CreateAsync(cancellationToken);
         await StartRoslynAsync(workspace);
-        await workspace.WriteFileAsync(JsonContextTestFile, JsonContextSource);
+        await workspace.WriteFileAsync(JSON_CONTEXT_TEST_FILE, JSON_CONTEXT_SOURCE);
         await workspace.CallAsync(
-            new LspRequest { Action = LspAction.Diagnostics, File = JsonContextTestFile }
+            new LspRequest { Action = LspAction.Diagnostics, File = JSON_CONTEXT_TEST_FILE }
         );
 
         var callees = await workspace.CallAsync(
@@ -743,7 +747,7 @@ public sealed partial class RoslynMcpTests
         callees.Should().Be("no callees\n1 callees outside the workspace omitted");
     }
 
-    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    [Fact(Explicit = true, Timeout = TEST_TIMEOUT_MILLISECONDS)]
     public async Task ListsTheCandidatesOfAnUnresolvableOverloadAsync()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
@@ -761,29 +765,29 @@ public sealed partial class RoslynMcpTests
                 type string
                 nullability NotAnnotated/NotNull
                 no symbol: OverloadResolutionFailure
-                  {ExpressionsTestFile}:8:26 method Sample.Application.Formatter.Format(int)
-                  {ExpressionsTestFile}:10:26 method Sample.Application.Formatter.Format(string)
+                  {EXPRESSIONS_TEST_FILE}:8:26 method Sample.Application.Formatter.Format(int)
+                  {EXPRESSIONS_TEST_FILE}:10:26 method Sample.Application.Formatter.Format(string)
                 """
             );
     }
 
-    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    [Fact(Explicit = true, Timeout = TEST_TIMEOUT_MILLISECONDS)]
     public async Task ListsEachCallerOnceInAMultiTargetedProjectAsync()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         await using var workspace = await RoslynTestWorkspace.CreateAsync(
             cancellationToken,
-            overlay: MultiTargetFixture
+            overlay: MULTI_TARGET_FIXTURE
         );
 
         var callers = await workspace.CallAsync(
             new LspRequest { Action = LspAction.Callers, Symbol = "Greeter.Greet" }
         );
 
-        callers.Should().HaveSingleLocation(ConsumerTestFile);
+        callers.Should().HaveSingleLocation(CONSUMER_TEST_FILE);
     }
 
-    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    [Fact(Explicit = true, Timeout = TEST_TIMEOUT_MILLISECONDS)]
     public async Task ListsTheCompilerInsertedCallersOfAnEnumeratorAndAnAwaiterAsync()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
@@ -802,9 +806,9 @@ public sealed partial class RoslynMcpTests
             .Should()
             .Be(
                 $"""
-                {ImplicitCallsTestFile}:63:24 method Sample.Application.Uses.Loop(Numbers)
+                {IMPLICIT_CALLS_TEST_FILE}:63:24 method Sample.Application.Uses.Loop(Numbers)
                   calls 65:9
-                {ImplicitCallsTestFile}:78:38 method Sample.Application.Uses.EverythingAsync(Numbers, Later, Amount)
+                {IMPLICIT_CALLS_TEST_FILE}:78:38 method Sample.Application.Uses.EverythingAsync(Numbers, Later, Amount)
                   calls 84:9
                 """
             );
@@ -812,15 +816,15 @@ public sealed partial class RoslynMcpTests
             .Should()
             .Be(
                 $"""
-                {ImplicitCallsTestFile}:68:30 method Sample.Application.Uses.WaitAsync(Later)
+                {IMPLICIT_CALLS_TEST_FILE}:68:30 method Sample.Application.Uses.WaitAsync(Later)
                   calls 70:9
-                {ImplicitCallsTestFile}:78:38 method Sample.Application.Uses.EverythingAsync(Numbers, Later, Amount)
+                {IMPLICIT_CALLS_TEST_FILE}:78:38 method Sample.Application.Uses.EverythingAsync(Numbers, Later, Amount)
                   calls 86:9
                 """
             );
     }
 
-    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    [Fact(Explicit = true, Timeout = TEST_TIMEOUT_MILLISECONDS)]
     public async Task ListsTheCompilerInsertedCallersOfAPatternAndAQueryAsync()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
@@ -842,7 +846,7 @@ public sealed partial class RoslynMcpTests
             .Should()
             .Be(
                 $"""
-                {ImplicitCallsTestFile}:73:24 method Sample.Application.Uses.Match(object)
+                {IMPLICIT_CALLS_TEST_FILE}:73:24 method Sample.Application.Uses.Match(object)
                   calls 73:56
                 """
             );
@@ -850,7 +854,7 @@ public sealed partial class RoslynMcpTests
             .Should()
             .Be(
                 $"""
-                {ImplicitCallsTestFile}:75:25 method Sample.Application.Uses.Query(Items)
+                {IMPLICIT_CALLS_TEST_FILE}:75:25 method Sample.Application.Uses.Query(Items)
                   calls 76:28
                 """
             );
@@ -858,13 +862,13 @@ public sealed partial class RoslynMcpTests
             .Should()
             .Be(
                 $"""
-                {ImplicitCallsTestFile}:75:25 method Sample.Application.Uses.Query(Items)
+                {IMPLICIT_CALLS_TEST_FILE}:75:25 method Sample.Application.Uses.Query(Items)
                   calls 76:43
                 """
             );
     }
 
-    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    [Fact(Explicit = true, Timeout = TEST_TIMEOUT_MILLISECONDS)]
     public async Task ListsTheCompilerInsertedCalleesOfAMethodAsync()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
@@ -880,38 +884,38 @@ public sealed partial class RoslynMcpTests
             .Should()
             .Be(
                 $"""
-                {ImplicitCallsTestFile}:9:23 method Sample.Application.Numbers.GetEnumerator()
+                {IMPLICIT_CALLS_TEST_FILE}:9:23 method Sample.Application.Numbers.GetEnumerator()
                   calls 84:9
-                {ImplicitCallsTestFile}:15:21 method Sample.Application.Numbers.Enumerator.MoveNext()
+                {IMPLICIT_CALLS_TEST_FILE}:15:21 method Sample.Application.Numbers.Enumerator.MoveNext()
                   calls 84:9
-                {ImplicitCallsTestFile}:17:21 method Sample.Application.Numbers.Enumerator.Dispose()
+                {IMPLICIT_CALLS_TEST_FILE}:17:21 method Sample.Application.Numbers.Enumerator.Dispose()
                   calls 84:9
-                {ImplicitCallsTestFile}:23:20 method Sample.Application.Later.GetAwaiter()
+                {IMPLICIT_CALLS_TEST_FILE}:23:20 method Sample.Application.Later.GetAwaiter()
                   calls 86:9
-                {ImplicitCallsTestFile}:29:20 method Sample.Application.Later.Awaiter.GetResult()
+                {IMPLICIT_CALLS_TEST_FILE}:29:20 method Sample.Application.Later.Awaiter.GetResult()
                   calls 86:9
-                {ImplicitCallsTestFile}:51:21 constructor Sample.Application.Resource
+                {IMPLICIT_CALLS_TEST_FILE}:51:21 constructor Sample.Application.Resource
                   calls 87:30
-                {ImplicitCallsTestFile}:53:17 method Sample.Application.Resource.Dispose()
+                {IMPLICIT_CALLS_TEST_FILE}:53:17 method Sample.Application.Resource.Dispose()
                   calls 87:9
-                {ImplicitCallsTestFile}:58:35 operator Sample.Application.Amount.operator +(Amount, Amount)
+                {IMPLICIT_CALLS_TEST_FILE}:58:35 operator Sample.Application.Amount.operator +(Amount, Amount)
                   calls 88:23
-                {ImplicitCallsTestFile}:91:27 method Sample.Application.Uses.Identity(Amount)
+                {IMPLICIT_CALLS_TEST_FILE}:91:27 method Sample.Application.Uses.Identity(Amount)
                   calls 88:25
                 2 property, field or constant accesses omitted
                 """
             );
     }
 
-    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    [Fact(Explicit = true, Timeout = TEST_TIMEOUT_MILLISECONDS)]
     public async Task CountsGeneratedPartsOfImplementationsWithoutListingThemAsync()
     {
-        const string matcherFile = "Application/Matcher.cs";
+        const string MATCHER_FILE = "Application/Matcher.cs";
         var cancellationToken = TestContext.Current.CancellationToken;
         await using var workspace = await RoslynTestWorkspace.CreateAsync(cancellationToken);
         await StartRoslynAsync(workspace);
         await workspace.WriteFileAsync(
-            matcherFile,
+            MATCHER_FILE,
             "using System.Text.RegularExpressions;\nusing Sample.Contracts;\n\n"
                 + "namespace Sample.Application;\n\n"
                 + "public sealed partial class Matcher : IGreeter\n{\n"
@@ -919,7 +923,7 @@ public sealed partial class RoslynMcpTests
                 + "    [GeneratedRegex(\"a\")]\n    private static partial Regex Pattern();\n}\n"
         );
         await workspace.CallAsync(
-            new LspRequest { Action = LspAction.Diagnostics, File = matcherFile }
+            new LspRequest { Action = LspAction.Diagnostics, File = MATCHER_FILE }
         );
 
         var implementations = await workspace.CallAsync(
@@ -931,22 +935,22 @@ public sealed partial class RoslynMcpTests
             .Should()
             .Be(
                 $"""
-                {ImplementationTestFile} 5:21
-                {matcherFile} 6:29
+                {IMPLEMENTATION_TEST_FILE} 5:21
+                {MATCHER_FILE} 6:29
                 generated code: 1 more omitted. Use lsp request to list them.
                 """
             );
     }
 
-    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    [Fact(Explicit = true, Timeout = TEST_TIMEOUT_MILLISECONDS)]
     public async Task ListsReadsThroughAnInterfaceAndTheBaseInOneFileAsync()
     {
-        const string boxFile = "Application/Box.cs";
+        const string BOX_FILE = "Application/Box.cs";
         var cancellationToken = TestContext.Current.CancellationToken;
         await using var workspace = await RoslynTestWorkspace.CreateAsync(cancellationToken);
         await StartRoslynAsync(workspace);
         await workspace.WriteFileAsync(
-            boxFile,
+            BOX_FILE,
             "namespace Sample.Application;\n\npublic interface ISized\n{\n    int Size { get; }\n}\n\n"
                 + "public class Box\n{\n    public int Size { get; set; }\n}\n\n"
                 + "public sealed class Crate : Box, ISized { }\n\n"
@@ -955,7 +959,7 @@ public sealed partial class RoslynMcpTests
                 + "    public static int OfBox(Box box) => box.Size;\n}\n"
         );
         await workspace.CallAsync(
-            new LspRequest { Action = LspAction.Diagnostics, File = boxFile }
+            new LspRequest { Action = LspAction.Diagnostics, File = BOX_FILE }
         );
 
         var references = await workspace.CallAsync(
@@ -967,26 +971,26 @@ public sealed partial class RoslynMcpTests
 
         // Box.Size implements ISized.Size for Crate. A highlight from the file's first reference,
         // which goes through ISized, would miss box.Size
-        references.Should().Be($"{boxFile} 17:54 19:45");
-        reads.Should().Be($"{boxFile} 17:54 19:45");
+        references.Should().Be($"{BOX_FILE} 17:54 19:45");
+        reads.Should().Be($"{BOX_FILE} 17:54 19:45");
     }
 
-    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    [Fact(Explicit = true, Timeout = TEST_TIMEOUT_MILLISECONDS)]
     public async Task ReadsSourceAndMembersAcrossPartialDeclarationsAsync()
     {
-        const string ledgerFile = "Application/Ledger.cs";
-        const string totalsFile = "Application/Ledger.Totals.cs";
+        const string LEDGER_FILE = "Application/Ledger.cs";
+        const string TOTALS_FILE = "Application/Ledger.Totals.cs";
         var cancellationToken = TestContext.Current.CancellationToken;
         await using var workspace = await RoslynTestWorkspace.CreateAsync(cancellationToken);
         await StartRoslynAsync(workspace);
         await workspace.WriteFileAsync(
-            ledgerFile,
+            LEDGER_FILE,
             "namespace Sample.Application;\n\npublic partial class Ledger\n{\n"
                 + "    /// <summary>Adds an amount.</summary>\n"
                 + "    public void Add(decimal amount) => Total += amount;\n}\n"
         );
         await workspace.WriteFileAsync(
-            totalsFile,
+            TOTALS_FILE,
             "namespace Sample.Application;\n\npublic partial class Ledger\n{\n"
                 + "    public decimal Total { get; private set; }\n}\n"
         );
@@ -1000,7 +1004,7 @@ public sealed partial class RoslynMcpTests
             )
         );
         members[0].Should().Be("class Sample.Application.Ledger");
-        members.Should().Contain([ledgerFile, totalsFile]);
+        members.Should().Contain([LEDGER_FILE, TOTALS_FILE]);
         members
             .Should()
             .Contain(line =>
@@ -1015,7 +1019,7 @@ public sealed partial class RoslynMcpTests
         );
         Lines(source)[0]
             .Should()
-            .Be($"{ledgerFile}:5-6 method Sample.Application.Ledger.Add(decimal)");
+            .Be($"{LEDGER_FILE}:5-6 method Sample.Application.Ledger.Add(decimal)");
         source
             .Should()
             .Contain("/// <summary>Adds an amount.</summary>")
@@ -1030,25 +1034,25 @@ public sealed partial class RoslynMcpTests
             )
             .Select(line => line[..line.IndexOf(':', StringComparison.Ordinal)])
             .Should()
-            .BeEquivalentTo([ledgerFile, totalsFile]);
+            .BeEquivalentTo([LEDGER_FILE, TOTALS_FILE]);
 
         var enclosing = await workspace.CallAsync(
             new LspRequest
             {
                 Action = LspAction.Source,
-                File = ConsumerTestFile,
+                File = CONSUMER_TEST_FILE,
                 Line = 7,
             }
         );
         Lines(enclosing)[0]
             .Should()
-            .StartWith($"{ConsumerTestFile}:7-7 method Sample.Application.Consumer.Run(");
+            .StartWith($"{CONSUMER_TEST_FILE}:7-7 method Sample.Application.Consumer.Run(");
     }
 
-    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    [Fact(Explicit = true, Timeout = TEST_TIMEOUT_MILLISECONDS)]
     public async Task ListsWhatBaseClassesPassOnAfterTheOwnMembersAsync()
     {
-        const string shapesFile = "Application/Shapes.cs";
+        const string SHAPES_FILE = "Application/Shapes.cs";
         var cancellationToken = TestContext.Current.CancellationToken;
         await using var workspace = await RoslynTestWorkspace.CreateAsync(cancellationToken);
 
@@ -1067,15 +1071,15 @@ public sealed partial class RoslynMcpTests
             .Be(
                 $"""
                 class Sample.Application.Square
-                {shapesFile}
+                {SHAPES_FILE}
                   30:12 constructor Square(double)
                   33:19 property Side : double
                   35:28 method Area() : double
                 inherited from Sample.Application.Polygon
-                {shapesFile}
+                {SHAPES_FILE}
                   23:16 property Sides : int
                 inherited from Sample.Application.Shape
-                {shapesFile}
+                {SHAPES_FILE}
                   11:19 property Name : string
                   15:20 method Touch() : void
                 """
@@ -1085,17 +1089,17 @@ public sealed partial class RoslynMcpTests
                 $"""
                 class Sample.Application.Square
                 inherited from Sample.Application.Polygon
-                {shapesFile}
+                {SHAPES_FILE}
                   23:16 property Sides : int
                 inherited from Sample.Application.Shape
-                {shapesFile}
+                {SHAPES_FILE}
                   11:19 property Name : string
                 truncated: 6 members in total, next offset: 5. Raise limit or narrow the query.
                 """
             );
     }
 
-    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    [Fact(Explicit = true, Timeout = TEST_TIMEOUT_MILLISECONDS)]
     public async Task GathersTheImpactOfAMemberInOneCallAsync()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
@@ -1107,13 +1111,13 @@ public sealed partial class RoslynMcpTests
             )
         );
 
-        Section(impact, "references").Select(FileOf).Should().Contain(ConsumerTestFile);
+        Section(impact, "references").Select(FileOf).Should().Contain(CONSUMER_TEST_FILE);
         Section(impact, "callers")
             .Should()
             .ContainSingle(line =>
-                line.StartsWith(ConsumerTestFile + ":", StringComparison.Ordinal)
+                line.StartsWith(CONSUMER_TEST_FILE + ":", StringComparison.Ordinal)
             );
-        Section(impact, "implementation").Select(FileOf).Should().Contain(ImplementationTestFile);
+        Section(impact, "implementation").Select(FileOf).Should().Contain(IMPLEMENTATION_TEST_FILE);
         impact
             .Should()
             .NotContain(line => line.StartsWith("## subtypes", StringComparison.Ordinal));
@@ -1123,18 +1127,18 @@ public sealed partial class RoslynMcpTests
                 new LspRequest { Action = LspAction.Impact, Symbol = "IGreeter" }
             )
         );
-        Section(typeImpact, "subtypes").Select(FileOf).Should().Equal(ImplementationTestFile);
+        Section(typeImpact, "subtypes").Select(FileOf).Should().Equal(IMPLEMENTATION_TEST_FILE);
     }
 
-    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    [Fact(Explicit = true, Timeout = TEST_TIMEOUT_MILLISECONDS)]
     public async Task NavigatesAHierarchyFromAUsageLikeFromItsDeclarationAsync()
     {
         // greeter.Greet("world") in Consumer.cs, and Bump(ref Total) in Counter.cs
-        const int greetLine = 7;
-        const int greetCharacter = 59;
-        const string counterFile = "Application/Counter.cs";
-        const int bumpLine = 14;
-        const int bumpCharacter = 9;
+        const int GREET_LINE = 7;
+        const int GREET_CHARACTER = 59;
+        const string COUNTER_FILE = "Application/Counter.cs";
+        const int BUMP_LINE = 14;
+        const int BUMP_CHARACTER = 9;
         var cancellationToken = TestContext.Current.CancellationToken;
         await using var workspace = await RoslynTestWorkspace.CreateAsync(cancellationToken);
         var declaredCallers = await workspace.CallAsync(
@@ -1148,18 +1152,18 @@ public sealed partial class RoslynMcpTests
             new LspRequest
             {
                 Action = LspAction.Callers,
-                File = ConsumerTestFile,
-                Line = greetLine,
-                Character = greetCharacter,
+                File = CONSUMER_TEST_FILE,
+                Line = GREET_LINE,
+                Character = GREET_CHARACTER,
             }
         );
         var impact = await workspace.CallAsync(
             new LspRequest
             {
                 Action = LspAction.Impact,
-                File = counterFile,
-                Line = bumpLine,
-                Character = bumpCharacter,
+                File = COUNTER_FILE,
+                Line = BUMP_LINE,
+                Character = BUMP_CHARACTER,
             }
         );
 
@@ -1167,42 +1171,42 @@ public sealed partial class RoslynMcpTests
         impact.Should().Be(declaredImpact);
     }
 
-    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    [Fact(Explicit = true, Timeout = TEST_TIMEOUT_MILLISECONDS)]
     public async Task ListsTheReadsAndWritesOfAFieldAndAPropertyAcrossFilesAsync()
     {
-        const string counterFile = "Application/Counter.cs";
-        const string readerFile = "Application/CounterReader.cs";
+        const string COUNTER_FILE = "Application/Counter.cs";
+        const string READER_FILE = "Application/CounterReader.cs";
         var cancellationToken = TestContext.Current.CancellationToken;
         await using var workspace = await RoslynTestWorkspace.CreateAsync(cancellationToken);
 
         var totalReads = await workspace.CallAsync(
-            new LspRequest { Action = LspAction.Reads, Symbol = TotalTestSymbol }
+            new LspRequest { Action = LspAction.Reads, Symbol = TOTAL_TEST_SYMBOL }
         );
         var totalWrites = await workspace.CallAsync(
-            new LspRequest { Action = LspAction.Writes, Symbol = TotalTestSymbol }
+            new LspRequest { Action = LspAction.Writes, Symbol = TOTAL_TEST_SYMBOL }
         );
         var stepReads = await workspace.CallAsync(
-            new LspRequest { Action = LspAction.Reads, Symbol = StepTestSymbol }
+            new LspRequest { Action = LspAction.Reads, Symbol = STEP_TEST_SYMBOL }
         );
         var stepWrites = await workspace.CallAsync(
-            new LspRequest { Action = LspAction.Writes, Symbol = StepTestSymbol }
+            new LspRequest { Action = LspAction.Writes, Symbol = STEP_TEST_SYMBOL }
         );
 
         totalWrites
             .Should()
-            .Be($"{counterFile} 11:9 12:9 13:9 14:18 15:18 19:51\n{readerFile} 7:58");
-        totalReads.Should().Be($"{counterFile} 14:18 16:24 18:55 19:51\n{readerFile} 5:56");
-        stepReads.Should().Be($"{counterFile} 12:18");
-        stepWrites.Should().Be($"{counterFile} 17:9");
+            .Be($"{COUNTER_FILE} 11:9 12:9 13:9 14:18 15:18 19:51\n{READER_FILE} 7:58");
+        totalReads.Should().Be($"{COUNTER_FILE} 14:18 16:24 18:55 19:51\n{READER_FILE} 5:56");
+        stepReads.Should().Be($"{COUNTER_FILE} 12:18");
+        stepWrites.Should().Be($"{COUNTER_FILE} 17:9");
 
         var status = await workspace.CallAsync(new LspRequest { Action = LspAction.Status });
-        status.Should().Contain(IdleLine).And.NotContain(ProgressLine);
+        status.Should().Contain(IDLE_LINE).And.NotContain(PROGRESS_LINE);
     }
 
-    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    [Fact(Explicit = true, Timeout = TEST_TIMEOUT_MILLISECONDS)]
     public async Task RunsSeveralNavigationsOfOneSymbolInOneBulkCallAsync()
     {
-        const string symbol = "IGreeter.Greet";
+        const string SYMBOL = "IGreeter.Greet";
         var cancellationToken = TestContext.Current.CancellationToken;
         await using var workspace = await RoslynTestWorkspace.CreateAsync(cancellationToken);
 
@@ -1213,10 +1217,10 @@ public sealed partial class RoslynMcpTests
                     Action = LspAction.Bulk,
                     Queries =
                     [
-                        new LspRequest { Action = LspAction.Source, Symbol = symbol },
-                        new LspRequest { Action = LspAction.References, Symbol = symbol },
-                        new LspRequest { Action = LspAction.Callers, Symbol = symbol },
-                        new LspRequest { Action = LspAction.Impact, Symbol = symbol },
+                        new LspRequest { Action = LspAction.Source, Symbol = SYMBOL },
+                        new LspRequest { Action = LspAction.References, Symbol = SYMBOL },
+                        new LspRequest { Action = LspAction.Callers, Symbol = SYMBOL },
+                        new LspRequest { Action = LspAction.Impact, Symbol = SYMBOL },
                     ],
                 }
             )
@@ -1225,23 +1229,23 @@ public sealed partial class RoslynMcpTests
         bulk.Where(line => line.StartsWith("## ", StringComparison.Ordinal))
             .Should()
             .Equal(
-                $"## 1 source {symbol}",
-                $"## 2 references {symbol}",
-                $"## 3 callers {symbol}",
-                $"## 4 impact {symbol}"
+                $"## 1 source {SYMBOL}",
+                $"## 2 references {SYMBOL}",
+                $"## 3 callers {SYMBOL}",
+                $"## 4 impact {SYMBOL}"
             );
         bulk.Should().NotContain(line => line.StartsWith("error ", StringComparison.Ordinal));
-        Section(bulk, $"1 source {symbol}").Should().Contain(line => line.Contains("string Greet"));
-        Section(bulk, $"2 references {symbol}").Select(FileOf).Should().Contain(ConsumerTestFile);
-        Section(bulk, $"3 callers {symbol}")
+        Section(bulk, $"1 source {SYMBOL}").Should().Contain(line => line.Contains("string Greet"));
+        Section(bulk, $"2 references {SYMBOL}").Select(FileOf).Should().Contain(CONSUMER_TEST_FILE);
+        Section(bulk, $"3 callers {SYMBOL}")
             .Should()
             .ContainSingle(line =>
-                line.StartsWith(ConsumerTestFile + ":", StringComparison.Ordinal)
+                line.StartsWith(CONSUMER_TEST_FILE + ":", StringComparison.Ordinal)
             );
         bulk.Should().Contain("### references").And.Contain("### callers");
     }
 
-    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    [Fact(Explicit = true, Timeout = TEST_TIMEOUT_MILLISECONDS)]
     public async Task StatusReportsTheLoadProgressWhileAReloadRunsAsync()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
@@ -1257,38 +1261,40 @@ public sealed partial class RoslynMcpTests
 
         await reload;
         var loading = statuses.Where(status =>
-            status.Contains(LoadingLine, StringComparison.Ordinal)
+            status.Contains(LOADING_LINE, StringComparison.Ordinal)
         );
         loading.Should().NotBeEmpty("a status call during the reload sees the load");
-        loading.Should().Contain(status => status.Contains(ProgressLine, StringComparison.Ordinal));
+        loading
+            .Should()
+            .Contain(status => status.Contains(PROGRESS_LINE, StringComparison.Ordinal));
         var after = await workspace.CallAsync(new LspRequest { Action = LspAction.Status });
-        after.Should().Contain(IdleLine).And.NotContain(ProgressLine);
+        after.Should().Contain(IDLE_LINE).And.NotContain(PROGRESS_LINE);
     }
 
-    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    [Fact(Explicit = true, Timeout = TEST_TIMEOUT_MILLISECONDS)]
     public async Task LoadsOnlyTheProjectsOfTheSettingsFileAsync()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         await using var workspace = await RoslynTestWorkspace.CreateAsync(
             cancellationToken,
-            settings: $$"""{ "projects": ["{{ContractTestProject}}"] }"""
+            settings: $$"""{ "projects": ["{{CONTRACT_TEST_PROJECT}}"] }"""
         );
 
         var symbols = await workspace.CallAsync(
             new LspRequest { Action = LspAction.Symbols, Query = "Greeter" }
         );
 
-        symbols.Should().Contain(ContractTestFile).And.NotContain(ImplementationTestFile);
+        symbols.Should().Contain(CONTRACT_TEST_FILE).And.NotContain(IMPLEMENTATION_TEST_FILE);
     }
 
-    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    [Fact(Explicit = true, Timeout = TEST_TIMEOUT_MILLISECONDS)]
     public async Task StatusListsAProjectThatFailedToLoadAsync()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         await using var workspace = await RoslynTestWorkspace.CreateAsync(
             cancellationToken,
-            settings: $$"""{ "projects": ["{{ContractTestProject}}", "{{BrokenTestProject}}"] }""",
-            overlay: BrokenProjectFixture
+            settings: $$"""{ "projects": ["{{CONTRACT_TEST_PROJECT}}", "{{BROKEN_TEST_PROJECT}}"] }""",
+            overlay: BROKEN_PROJECT_FIXTURE
         );
         await workspace.CallAsync(new LspRequest { Action = LspAction.Symbols, Query = "Greeter" });
 
@@ -1296,11 +1302,11 @@ public sealed partial class RoslynMcpTests
 
         status
             .Should()
-            .Contain($"\nproject not loaded: {BrokenTestProject}: ")
-            .And.NotContain($"project not loaded: {ContractTestProject}");
+            .Contain($"\nproject not loaded: {BROKEN_TEST_PROJECT}: ")
+            .And.NotContain($"project not loaded: {CONTRACT_TEST_PROJECT}");
     }
 
-    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    [Fact(Explicit = true, Timeout = TEST_TIMEOUT_MILLISECONDS)]
     public async Task RejectsFilesAndLinesItCannotAnalyzeAsync()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
@@ -1317,24 +1323,24 @@ public sealed partial class RoslynMcpTests
             new LspRequest
             {
                 Action = LspAction.Hover,
-                File = ConsumerTestFile,
+                File = CONSUMER_TEST_FILE,
                 Line = 9_999,
                 Character = 1,
             }
         );
 
-        markdown.Should().BeError(ErrorCodes.InvalidRequest);
-        missing.Should().BeError(ErrorCodes.InvalidRequest);
-        pastTheEnd.Should().BeError(ErrorCodes.InvalidRequest);
+        markdown.Should().BeError(ErrorCodes.INVALID_REQUEST);
+        missing.Should().BeError(ErrorCodes.INVALID_REQUEST);
+        pastTheEnd.Should().BeError(ErrorCodes.INVALID_REQUEST);
     }
 
-    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    [Fact(Explicit = true, Timeout = TEST_TIMEOUT_MILLISECONDS)]
     public async Task ReportsAPositionBesideANameInsteadOfAnEmptyResultAsync()
     {
         // In `    string Greet(string name);`, 25 is on name and 30 on the semicolon
-        const int greetLine = 5;
-        const int nameCharacter = 25;
-        const int semicolonCharacter = 30;
+        const int GREET_LINE = 5;
+        const int NAME_CHARACTER = 25;
+        const int SEMICOLON_CHARACTER = 30;
         var cancellationToken = TestContext.Current.CancellationToken;
         await using var workspace = await RoslynTestWorkspace.CreateAsync(cancellationToken);
 
@@ -1342,42 +1348,42 @@ public sealed partial class RoslynMcpTests
             new LspRequest
             {
                 Action = LspAction.References,
-                File = ContractTestFile,
-                Line = greetLine,
-                Character = semicolonCharacter,
+                File = CONTRACT_TEST_FILE,
+                Line = GREET_LINE,
+                Character = SEMICOLON_CHARACTER,
             }
         );
         var unused = await workspace.CallRawAsync(
             new LspRequest
             {
                 Action = LspAction.References,
-                File = ContractTestFile,
-                Line = greetLine,
-                Character = nameCharacter,
+                File = CONTRACT_TEST_FILE,
+                Line = GREET_LINE,
+                Character = NAME_CHARACTER,
             }
         );
 
-        beside.Should().BeError(ErrorCodes.SymbolNotFound);
+        beside.Should().BeError(ErrorCodes.SYMBOL_NOT_FOUND);
         unused.Should().BeSuccessful();
     }
 
-    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    [Fact(Explicit = true, Timeout = TEST_TIMEOUT_MILLISECONDS)]
     public async Task ReportsNoSymbolForACharacterPastTheEndOfTheLineAsync()
     {
         // Counter.cs line 6 is empty, character 17 falls on Step of line 7, and the file ends on line 25
-        const string counterFile = "Application/Counter.cs";
-        const int emptyLine = 6;
-        const int nextLineCharacter = 17;
-        const int lastLine = 25;
-        const int pastTheLastLine = 500;
+        const string COUNTER_FILE = "Application/Counter.cs";
+        const int EMPTY_LINE = 6;
+        const int NEXT_LINE_CHARACTER = 17;
+        const int LAST_LINE = 25;
+        const int PAST_THE_LAST_LINE = 500;
         var cancellationToken = TestContext.Current.CancellationToken;
         await using var workspace = await RoslynTestWorkspace.CreateAsync(cancellationToken);
         var pastTheLineEnd = new LspRequest
         {
             Action = LspAction.References,
-            File = counterFile,
-            Line = emptyLine,
-            Character = nextLineCharacter,
+            File = COUNTER_FILE,
+            Line = EMPTY_LINE,
+            Character = NEXT_LINE_CHARACTER,
         };
 
         var references = await workspace.CallRawAsync(pastTheLineEnd);
@@ -1391,23 +1397,23 @@ public sealed partial class RoslynMcpTests
         var pastTheFileEnd = await workspace.CallRawAsync(
             pastTheLineEnd with
             {
-                Line = lastLine,
-                Character = pastTheLastLine,
+                Line = LAST_LINE,
+                Character = PAST_THE_LAST_LINE,
             }
         );
 
-        references.Should().BeError(ErrorCodes.SymbolNotFound);
-        reads.Should().BeError(ErrorCodes.SymbolNotFound);
-        writes.Should().BeError(ErrorCodes.SymbolNotFound);
-        pastTheFileEnd.Should().BeError(ErrorCodes.SymbolNotFound);
+        references.Should().BeError(ErrorCodes.SYMBOL_NOT_FOUND);
+        reads.Should().BeError(ErrorCodes.SYMBOL_NOT_FOUND);
+        writes.Should().BeError(ErrorCodes.SYMBOL_NOT_FOUND);
+        pastTheFileEnd.Should().BeError(ErrorCodes.SYMBOL_NOT_FOUND);
     }
 
-    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    [Fact(Explicit = true, Timeout = TEST_TIMEOUT_MILLISECONDS)]
     public async Task TellsAMissedSymbolFromARejectedNameOnRenameAsync()
     {
         // In `namespace Sample.Contracts;`, 18 is on Contracts and 28 past the semicolon
-        const int namespaceCharacter = 18;
-        const int lineEndCharacter = 28;
+        const int NAMESPACE_CHARACTER = 18;
+        const int LINE_END_CHARACTER = 28;
         var cancellationToken = TestContext.Current.CancellationToken;
         await using var workspace = await RoslynTestWorkspace.CreateAsync(cancellationToken);
 
@@ -1415,9 +1421,9 @@ public sealed partial class RoslynMcpTests
             new LspRequest
             {
                 Action = LspAction.Rename,
-                File = ContractTestFile,
+                File = CONTRACT_TEST_FILE,
                 Line = 1,
-                Character = lineEndCharacter,
+                Character = LINE_END_CHARACTER,
                 NewName = "Other",
             }
         );
@@ -1425,32 +1431,32 @@ public sealed partial class RoslynMcpTests
             new LspRequest
             {
                 Action = LspAction.Rename,
-                File = ContractTestFile,
+                File = CONTRACT_TEST_FILE,
                 Line = 1,
-                Character = namespaceCharacter,
+                Character = NAMESPACE_CHARACTER,
                 NewName = "Other.Contracts",
             }
         );
 
-        beside.Should().BeError(ErrorCodes.SymbolNotFound);
-        dotted.Should().BeError(ErrorCodes.InvalidRequest);
+        beside.Should().BeError(ErrorCodes.SYMBOL_NOT_FOUND);
+        dotted.Should().BeError(ErrorCodes.INVALID_REQUEST);
     }
 
-    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    [Fact(Explicit = true, Timeout = TEST_TIMEOUT_MILLISECONDS)]
     public async Task ListsUnusedCodeWithTheUnusedCodeThatUsesItAsync()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         // Checks references an xunit assembly, so it is a test project
         await using var workspace = await RoslynTestWorkspace.CreateAsync(
             cancellationToken,
-            overlay: UnusedFixture
+            overlay: UNUSED_FIXTURE
         );
 
         var unused = await workspace.CallAsync(
             new LspRequest
             {
                 Action = LspAction.Symbols,
-                File = $"{{{LeftoversTestFile},{LeftoverChecksTestFile}}}",
+                File = $"{{{LEFTOVERS_TEST_FILE},{LEFTOVER_CHECKS_TEST_FILE}}}",
                 Unused = true,
             }
         );
@@ -1460,32 +1466,32 @@ public sealed partial class RoslynMcpTests
             .Should()
             .Be(
                 $"""
-                {LeftoversTestFile}:5:23 method Sample.Application.Leftovers.Entry()
-                {LeftoversTestFile}:7:23 method Sample.Application.Leftovers.Live()
+                {LEFTOVERS_TEST_FILE}:5:23 method Sample.Application.Leftovers.Entry()
+                {LEFTOVERS_TEST_FILE}:7:23 method Sample.Application.Leftovers.Live()
                   via Sample.Application.Leftovers.Entry()
-                {LeftoversTestFile}:11:23 method Sample.Application.Leftovers.Tested()
+                {LEFTOVERS_TEST_FILE}:11:23 method Sample.Application.Leftovers.Tested()
                   tests only
-                {LeftoversTestFile}:17:21 class Sample.Application.Orphan
+                {LEFTOVERS_TEST_FILE}:17:21 class Sample.Application.Orphan
                 2 files checked, 4 unused symbols, 4 skipped as framework code
                 reflection or code outside the workspace may still use a public symbol
                 """
             );
     }
 
-    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    [Fact(Explicit = true, Timeout = TEST_TIMEOUT_MILLISECONDS)]
     public async Task PagesUnusedCodeWithTheNamesOfUsersOnOtherPagesAsync()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         await using var workspace = await RoslynTestWorkspace.CreateAsync(
             cancellationToken,
-            overlay: UnusedFixture
+            overlay: UNUSED_FIXTURE
         );
 
         var page = await workspace.CallAsync(
             new LspRequest
             {
                 Action = LspAction.Symbols,
-                File = Path.GetFileName(LeftoversTestFile),
+                File = Path.GetFileName(LEFTOVERS_TEST_FILE),
                 Unused = true,
                 Limit = 1,
                 Offset = 1,
@@ -1495,8 +1501,8 @@ public sealed partial class RoslynMcpTests
         page.Should()
             .Be(
                 $"""
-                resolved file: {LeftoversTestFile}
-                {LeftoversTestFile}:7:23 method Sample.Application.Leftovers.Live()
+                resolved file: {LEFTOVERS_TEST_FILE}
+                {LEFTOVERS_TEST_FILE}:7:23 method Sample.Application.Leftovers.Live()
                   via Sample.Application.Leftovers.Entry()
                 1 file checked, 4 unused symbols, 2 skipped as framework code
                 truncated: 4 unused symbols in total, next offset: 2. Raise limit or narrow the query.
@@ -1505,20 +1511,20 @@ public sealed partial class RoslynMcpTests
             );
     }
 
-    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    [Fact(Explicit = true, Timeout = TEST_TIMEOUT_MILLISECONDS)]
     public async Task KeepsTheMembersThatADebuggerDisplayOrAFixedLayoutReachesAsync()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         await using var workspace = await RoslynTestWorkspace.CreateAsync(
             cancellationToken,
-            overlay: UnusedKeptFixture
+            overlay: UNUSED_KEPT_FIXTURE
         );
 
         var unused = await workspace.CallAsync(
             new LspRequest
             {
                 Action = LspAction.Symbols,
-                File = KeptTestFile,
+                File = KEPT_TEST_FILE,
                 Unused = true,
             }
         );
@@ -1529,38 +1535,38 @@ public sealed partial class RoslynMcpTests
             .Should()
             .Be(
                 $"""
-                {KeptTestFile}:33:26 method Sample.Application.Tracing.Dump()
+                {KEPT_TEST_FILE}:33:26 method Sample.Application.Tracing.Dump()
                 1 file checked, 1 unused symbol
                 reflection or code outside the workspace may still use a public symbol
                 """
             );
     }
 
-    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    [Fact(Explicit = true, Timeout = TEST_TIMEOUT_MILLISECONDS)]
     public async Task ResolvesExtensionBlockMembersByTheirClassAsync()
     {
-        const string extensionsFile = "Application/GreetingExtensions.cs";
+        const string EXTENSIONS_FILE = "Application/GreetingExtensions.cs";
         var cancellationToken = TestContext.Current.CancellationToken;
         await using var workspace = await RoslynTestWorkspace.CreateAsync(cancellationToken);
         await StartRoslynAsync(workspace);
         await workspace.WriteFileAsync(
-            extensionsFile,
+            EXTENSIONS_FILE,
             "namespace Sample.Application;\n\npublic static class GreetingExtensions\n{\n"
                 + "    extension(string name)\n    {\n"
                 + "        public string Shout() => name.ToUpperInvariant();\n    }\n}\n"
         );
         await workspace.CallAsync(
-            new LspRequest { Action = LspAction.Diagnostics, File = extensionsFile }
+            new LspRequest { Action = LspAction.Diagnostics, File = EXTENSIONS_FILE }
         );
 
         var definition = await workspace.CallAsync(
             new LspRequest { Action = LspAction.Definition, Symbol = "GreetingExtensions.Shout" }
         );
 
-        Locations(definition).Should().Equal(extensionsFile);
+        Locations(definition).Should().Equal(EXTENSIONS_FILE);
     }
 
-    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    [Fact(Explicit = true, Timeout = TEST_TIMEOUT_MILLISECONDS)]
     public async Task ReloadGetsTheStartupBudgetAsync()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
@@ -1577,17 +1583,17 @@ public sealed partial class RoslynMcpTests
         reload.Should().StartWith("running: true\nloading: false");
     }
 
-    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    [Fact(Explicit = true, Timeout = TEST_TIMEOUT_MILLISECONDS)]
     public async Task ListsSameNamedTypesOfDifferentProjectsAsCandidatesAsync()
     {
-        const string source =
+        const string SOURCE =
             "namespace Sample.Application;\n\ninternal static class Program\n{\n    public static void Run() { }\n}\n";
         var cancellationToken = TestContext.Current.CancellationToken;
         await using var workspace = await RoslynTestWorkspace.CreateAsync(cancellationToken);
         await StartRoslynAsync(workspace);
-        await workspace.WriteFileAsync(ApplicationProgramTestFile, source);
-        await workspace.WriteFileAsync(ContractsProgramTestFile, source);
-        foreach (var file in new[] { ApplicationProgramTestFile, ContractsProgramTestFile })
+        await workspace.WriteFileAsync(APPLICATION_PROGRAM_TEST_FILE, SOURCE);
+        await workspace.WriteFileAsync(CONTRACTS_PROGRAM_TEST_FILE, SOURCE);
+        foreach (var file in new[] { APPLICATION_PROGRAM_TEST_FILE, CONTRACTS_PROGRAM_TEST_FILE })
         {
             await workspace.CallAsync(
                 new LspRequest { Action = LspAction.Diagnostics, File = file }
@@ -1597,27 +1603,27 @@ public sealed partial class RoslynMcpTests
         var ambiguous = await workspace.CallRawAsync(
             new LspRequest { Action = LspAction.Definition, Symbol = "Program.Run" }
         );
-        ambiguous.Should().BeError(ErrorCodes.AmbiguousSymbol);
+        ambiguous.Should().BeError(ErrorCodes.AMBIGUOUS_SYMBOL);
         Candidates(ambiguous)
             .Select(FileOf)
             .Should()
-            .BeEquivalentTo([ApplicationProgramTestFile, ContractsProgramTestFile]);
+            .BeEquivalentTo([APPLICATION_PROGRAM_TEST_FILE, CONTRACTS_PROGRAM_TEST_FILE]);
 
         var resolved = await workspace.CallAsync(
             new LspRequest
             {
                 Action = LspAction.Definition,
                 Symbol = "Program.Run",
-                File = ContractsProgramTestFile,
+                File = CONTRACTS_PROGRAM_TEST_FILE,
             }
         );
-        resolved.Should().HaveSingleLocation(ContractsProgramTestFile);
+        resolved.Should().HaveSingleLocation(CONTRACTS_PROGRAM_TEST_FILE);
     }
 
-    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    [Fact(Explicit = true, Timeout = TEST_TIMEOUT_MILLISECONDS)]
     public async Task ListsAnExplicitImplementationBesideItsSameNamedMemberAsCandidatesAsync()
     {
-        const string bagFile = "Application/Bag.cs";
+        const string BAG_FILE = "Application/Bag.cs";
         var cancellationToken = TestContext.Current.CancellationToken;
         await using var workspace = await RoslynTestWorkspace.CreateAsync(cancellationToken);
 
@@ -1628,15 +1634,15 @@ public sealed partial class RoslynMcpTests
             new LspRequest { Action = LspAction.Definition, Symbol = "Bag.Hook" }
         );
 
-        dispose.Should().BeError(ErrorCodes.AmbiguousSymbol);
+        dispose.Should().BeError(ErrorCodes.AMBIGUOUS_SYMBOL);
         Candidates(dispose)
             .Select(line => line.Split(' ')[0])
             .Should()
-            .Equal($"{bagFile}:7:17", $"{bagFile}:9:22");
+            .Equal($"{BAG_FILE}:7:17", $"{BAG_FILE}:9:22");
         hook.Should().BeSuccessful();
     }
 
-    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    [Fact(Explicit = true, Timeout = TEST_TIMEOUT_MILLISECONDS)]
     public async Task NavigatesAndRenamesBySymbolNameAsync()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
@@ -1647,20 +1653,20 @@ public sealed partial class RoslynMcpTests
         );
         Locations(references)
             .Should()
-            .Contain(ConsumerTestFile)
-            .And.NotContain(OtherGreeterTestFile);
+            .Contain(CONSUMER_TEST_FILE)
+            .And.NotContain(OTHER_GREETER_TEST_FILE);
 
         var ambiguous = await workspace.CallRawAsync(
             new LspRequest { Action = LspAction.Definition, Symbol = "Greet" }
         );
-        ambiguous.Should().BeError(ErrorCodes.AmbiguousSymbol);
+        ambiguous.Should().BeError(ErrorCodes.AMBIGUOUS_SYMBOL);
         var candidates = Candidates(ambiguous).Select(SymbolName).ToArray();
         candidates.Should().HaveCount(3);
         var contract = candidates.Should().ContainSingle(name => name.Contains("IGreeter")).Which;
         var resolved = await workspace.CallAsync(
             new LspRequest { Action = LspAction.Definition, Symbol = contract }
         );
-        resolved.Should().HaveSingleLocation(ContractTestFile);
+        resolved.Should().HaveSingleLocation(CONTRACT_TEST_FILE);
 
         var preview = await workspace.CallAsync(
             new LspRequest
@@ -1670,10 +1676,10 @@ public sealed partial class RoslynMcpTests
                 NewName = "Execute",
             }
         );
-        PreviewFiles(preview).Should().Equal(ConsumerTestFile);
+        PreviewFiles(preview).Should().Equal(CONSUMER_TEST_FILE);
     }
 
-    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    [Fact(Explicit = true, Timeout = TEST_TIMEOUT_MILLISECONDS)]
     public async Task MisspelledSymbolListsACandidateThatResolvesAsync()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
@@ -1683,7 +1689,7 @@ public sealed partial class RoslynMcpTests
             new LspRequest { Action = LspAction.Definition, Symbol = "Greter" }
         );
 
-        unknown.Should().BeError(ErrorCodes.SymbolNotFound);
+        unknown.Should().BeError(ErrorCodes.SYMBOL_NOT_FOUND);
         var candidate = Candidates(unknown)
             .Select(SymbolName)
             .Should()
@@ -1692,10 +1698,10 @@ public sealed partial class RoslynMcpTests
         var resolved = await workspace.CallAsync(
             new LspRequest { Action = LspAction.Definition, Symbol = candidate }
         );
-        resolved.Should().HaveSingleLocation(ImplementationTestFile);
+        resolved.Should().HaveSingleLocation(IMPLEMENTATION_TEST_FILE);
     }
 
-    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    [Fact(Explicit = true, Timeout = TEST_TIMEOUT_MILLISECONDS)]
     public async Task UnknownMemberOfAKnownTypeListsOnlyThatTypesMembersAsync()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
@@ -1708,26 +1714,26 @@ public sealed partial class RoslynMcpTests
             new LspRequest { Action = LspAction.References, Symbol = "Counter.Nothing" }
         );
 
-        misspelled.Should().BeError(ErrorCodes.SymbolNotFound);
+        misspelled.Should().BeError(ErrorCodes.SYMBOL_NOT_FOUND);
         Candidates(misspelled)
             .Select(SymbolName)
             .Should()
             .Contain(name => name.EndsWith(".Counter.Total", StringComparison.Ordinal))
             .And.OnlyContain(name => name.Contains(".Counter.", StringComparison.Ordinal));
-        unrelated.Should().BeError(ErrorCodes.SymbolNotFound);
+        unrelated.Should().BeError(ErrorCodes.SYMBOL_NOT_FOUND);
         Candidates(unrelated).Should().BeEmpty();
     }
 
-    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    [Fact(Explicit = true, Timeout = TEST_TIMEOUT_MILLISECONDS)]
     public async Task PagesTheReferencesOfAFieldWithoutOverlapAsync()
     {
-        const int pageSize = 3;
+        const int PAGE_SIZE = 3;
         var cancellationToken = TestContext.Current.CancellationToken;
         await using var workspace = await RoslynTestWorkspace.CreateAsync(cancellationToken);
 
         var all = ReferenceLocations(
             await workspace.CallAsync(
-                new LspRequest { Action = LspAction.References, Symbol = TotalTestSymbol }
+                new LspRequest { Action = LspAction.References, Symbol = TOTAL_TEST_SYMBOL }
             )
         );
         var paged = new List<string>();
@@ -1739,8 +1745,8 @@ public sealed partial class RoslynMcpTests
                     new LspRequest
                     {
                         Action = LspAction.References,
-                        Symbol = TotalTestSymbol,
-                        Limit = pageSize,
+                        Symbol = TOTAL_TEST_SYMBOL,
+                        Limit = PAGE_SIZE,
                         Offset = offset,
                     }
                 )
@@ -1753,16 +1759,16 @@ public sealed partial class RoslynMcpTests
         paged.Should().OnlyHaveUniqueItems().And.Equal(all);
     }
 
-    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    [Fact(Explicit = true, Timeout = TEST_TIMEOUT_MILLISECONDS)]
     public async Task BulkReportsAnAmbiguousFileOnlyInTheSectionThatNamesItAsync()
     {
-        const string source = "namespace Sample;\n\ninternal static class Program\n{\n}\n";
+        const string SOURCE = "namespace Sample;\n\ninternal static class Program\n{\n}\n";
         var cancellationToken = TestContext.Current.CancellationToken;
         await using var workspace = await RoslynTestWorkspace.CreateAsync(cancellationToken);
         await StartRoslynAsync(workspace);
-        foreach (var file in new[] { ApplicationProgramTestFile, ContractsProgramTestFile })
+        foreach (var file in new[] { APPLICATION_PROGRAM_TEST_FILE, CONTRACTS_PROGRAM_TEST_FILE })
         {
-            await workspace.WriteFileAsync(file, source);
+            await workspace.WriteFileAsync(file, SOURCE);
             await workspace.CallAsync(
                 new LspRequest { Action = LspAction.Diagnostics, File = file }
             );
@@ -1774,12 +1780,12 @@ public sealed partial class RoslynMcpTests
                 Action = LspAction.Bulk,
                 Queries =
                 [
-                    new LspRequest { Action = LspAction.Writes, Symbol = TotalTestSymbol },
-                    new LspRequest { Action = LspAction.Reads, Symbol = TotalTestSymbol },
+                    new LspRequest { Action = LspAction.Writes, Symbol = TOTAL_TEST_SYMBOL },
+                    new LspRequest { Action = LspAction.Reads, Symbol = TOTAL_TEST_SYMBOL },
                     new LspRequest
                     {
                         Action = LspAction.References,
-                        File = ProgramFileName,
+                        File = PROGRAM_FILE_NAME,
                         Line = 3,
                         Character = 24,
                     },
@@ -1791,31 +1797,31 @@ public sealed partial class RoslynMcpTests
         var sections = response.Split("\n## ");
         sections.Should().HaveCount(4);
         sections
-            .Where(section => section.Contains(ErrorCodes.AmbiguousFile, StringComparison.Ordinal))
+            .Where(section => section.Contains(ErrorCodes.AMBIGUOUS_FILE, StringComparison.Ordinal))
             .Should()
             .ContainSingle(response)
             .Which.Should()
-            .Contain($"references {ProgramFileName}");
+            .Contain($"references {PROGRAM_FILE_NAME}");
         sections
             .Where(section => section.Contains("error ", StringComparison.Ordinal))
             .Should()
             .ContainSingle();
     }
 
-    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    [Fact(Explicit = true, Timeout = TEST_TIMEOUT_MILLISECONDS)]
     public async Task RenamesFilesOnlyWhenRoslynAdvertisesSupportAsync()
     {
-        const string destination = "Application/RenamedGreeter.cs";
+        const string DESTINATION = "Application/RenamedGreeter.cs";
         var cancellationToken = TestContext.Current.CancellationToken;
         await using var workspace = await RoslynTestWorkspace.CreateAsync(cancellationToken);
         await workspace.CallAsync(
-            new LspRequest { Action = LspAction.Symbols, File = ImplementationTestFile }
+            new LspRequest { Action = LspAction.Symbols, File = IMPLEMENTATION_TEST_FILE }
         );
         var request = new LspRequest
         {
             Action = LspAction.RenameFile,
-            File = ImplementationTestFile,
-            NewName = destination,
+            File = IMPLEMENTATION_TEST_FILE,
+            NewName = DESTINATION,
         };
 
         var capabilities = JsonNode.Parse(
@@ -1823,11 +1829,11 @@ public sealed partial class RoslynMcpTests
         );
         if (capabilities?["workspace"]?["fileOperations"]?["willRename"] is null)
         {
-            var original = await workspace.ReadFileAsync(ImplementationTestFile);
+            var original = await workspace.ReadFileAsync(IMPLEMENTATION_TEST_FILE);
             var rejected = await workspace.CallRawAsync(request);
-            rejected.Should().BeError(ErrorCodes.InvalidRequest);
-            (await workspace.ReadFileAsync(ImplementationTestFile)).Should().Be(original);
-            File.Exists(workspace.FilePath(destination)).Should().BeFalse();
+            rejected.Should().BeError(ErrorCodes.INVALID_REQUEST);
+            (await workspace.ReadFileAsync(IMPLEMENTATION_TEST_FILE)).Should().Be(original);
+            File.Exists(workspace.FilePath(DESTINATION)).Should().BeFalse();
             TestContext.Current.TestOutputHelper!.WriteLine(
                 "Roslyn did not advertise file rename support. Refusal preserved the source."
             );
@@ -1835,34 +1841,34 @@ public sealed partial class RoslynMcpTests
         }
 
         var preview = await workspace.CallAsync(request);
-        File.Exists(workspace.FilePath(ImplementationTestFile)).Should().BeTrue();
-        File.Exists(workspace.FilePath(destination)).Should().BeFalse();
+        File.Exists(workspace.FilePath(IMPLEMENTATION_TEST_FILE)).Should().BeTrue();
+        File.Exists(workspace.FilePath(DESTINATION)).Should().BeFalse();
 
         var applied = await workspace.CallAsync(ApplyProposal(LspAction.RenameFile, preview));
         applied.Should().BeApplied();
-        File.Exists(workspace.FilePath(ImplementationTestFile)).Should().BeFalse();
-        File.Exists(workspace.FilePath(destination)).Should().BeTrue();
+        File.Exists(workspace.FilePath(IMPLEMENTATION_TEST_FILE)).Should().BeFalse();
+        File.Exists(workspace.FilePath(DESTINATION)).Should().BeTrue();
 
         var implementation = await workspace.CallAsync(
-            await workspace.AtAsync(LspAction.Implementation, ContractTestFile, "Greet(")
+            await workspace.AtAsync(LspAction.Implementation, CONTRACT_TEST_FILE, "Greet(")
         );
-        implementation.Should().HaveSingleLocation(destination);
+        implementation.Should().HaveSingleLocation(DESTINATION);
         TestContext.Current.TestOutputHelper!.WriteLine(
             "Roslyn advertised file rename support. Preview, apply and navigation to the new path passed."
         );
     }
 
-    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    [Fact(Explicit = true, Timeout = TEST_TIMEOUT_MILLISECONDS)]
     public async Task AppliesRenameAcrossProjectsWithoutRenamingAHomonymAsync()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         await using var workspace = await RoslynTestWorkspace.CreateAsync(cancellationToken);
-        var unrelatedBefore = await workspace.ReadFileAsync(OtherGreeterTestFile);
-        var request = await workspace.AtAsync(LspAction.Rename, ContractTestFile, "Greet(");
+        var unrelatedBefore = await workspace.ReadFileAsync(OTHER_GREETER_TEST_FILE);
+        var request = await workspace.AtAsync(LspAction.Rename, CONTRACT_TEST_FILE, "Greet(");
         request = request with { NewName = "Welcome" };
 
         var preview = await workspace.CallAsync(request);
-        var original = await workspace.ReadFileAsync(ContractTestFile);
+        var original = await workspace.ReadFileAsync(CONTRACT_TEST_FILE);
         original.Should().Contain("Greet(");
         original.Should().NotContain("Welcome(");
         var hunks = Hunks(preview);
@@ -1878,39 +1884,41 @@ public sealed partial class RoslynMcpTests
         var applied = await workspace.CallAsync(ApplyProposal(LspAction.Rename, preview));
         applied.Should().BeApplied();
 
-        foreach (var file in new[] { ContractTestFile, ImplementationTestFile, ConsumerTestFile })
+        foreach (
+            var file in new[] { CONTRACT_TEST_FILE, IMPLEMENTATION_TEST_FILE, CONSUMER_TEST_FILE }
+        )
         {
             var content = await workspace.ReadFileAsync(file);
             content.Should().Contain("Welcome(");
             content.Should().NotContain("Greet(");
         }
 
-        var unrelatedAfter = await workspace.ReadFileAsync(OtherGreeterTestFile);
+        var unrelatedAfter = await workspace.ReadFileAsync(OTHER_GREETER_TEST_FILE);
         unrelatedAfter.Should().Be(unrelatedBefore);
     }
 
-    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    [Fact(Explicit = true, Timeout = TEST_TIMEOUT_MILLISECONDS)]
     public async Task RejectsRenamePreviewAfterAnExternalEditAsync()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         await using var workspace = await RoslynTestWorkspace.CreateAsync(cancellationToken);
-        var request = await workspace.AtAsync(LspAction.Rename, ContractTestFile, "Greet(");
+        var request = await workspace.AtAsync(LspAction.Rename, CONTRACT_TEST_FILE, "Greet(");
         request = request with { NewName = "Welcome" };
 
         var preview = await workspace.CallAsync(request);
-        var original = await workspace.ReadFileAsync(ConsumerTestFile);
+        var original = await workspace.ReadFileAsync(CONSUMER_TEST_FILE);
         var changed = original.Replace("world", "friend", StringComparison.Ordinal);
-        await workspace.WriteFileAsync(ConsumerTestFile, changed);
+        await workspace.WriteFileAsync(CONSUMER_TEST_FILE, changed);
 
         var rejected = await workspace.CallRawAsync(ApplyProposal(LspAction.Rename, preview));
-        rejected.Should().BeError(ErrorCodes.StaleEdit);
-        (await workspace.ReadFileAsync(ConsumerTestFile)).Should().Be(changed);
-        var contract = await workspace.ReadFileAsync(ContractTestFile);
+        rejected.Should().BeError(ErrorCodes.STALE_EDIT);
+        (await workspace.ReadFileAsync(CONSUMER_TEST_FILE)).Should().Be(changed);
+        var contract = await workspace.ReadFileAsync(CONTRACT_TEST_FILE);
         contract.Should().Contain("Greet(");
         contract.Should().NotContain("Welcome(");
     }
 
-    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    [Fact(Explicit = true, Timeout = TEST_TIMEOUT_MILLISECONDS)]
     public async Task AppliesARenameWithoutAPreviewAsync()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
@@ -1927,31 +1935,33 @@ public sealed partial class RoslynMcpTests
         );
 
         applied.Should().BeApplied();
-        foreach (var file in new[] { ContractTestFile, ImplementationTestFile, ConsumerTestFile })
+        foreach (
+            var file in new[] { CONTRACT_TEST_FILE, IMPLEMENTATION_TEST_FILE, CONSUMER_TEST_FILE }
+        )
         {
             (await workspace.ReadFileAsync(file)).Should().Contain("Welcome(");
         }
     }
 
-    [Theory(Explicit = true, Timeout = TestTimeoutMilliseconds)]
-    [InlineData(ApplyFromPreview)]
-    [InlineData(ApplyFromListing)]
-    [InlineData(ApplyWithoutProposal)]
+    [Theory(Explicit = true, Timeout = TEST_TIMEOUT_MILLISECONDS)]
+    [InlineData(APPLY_FROM_PREVIEW)]
+    [InlineData(APPLY_FROM_LISTING)]
+    [InlineData(APPLY_WITHOUT_PROPOSAL)]
     public async Task ResolvesAndAppliesRoslynCodeActionAsync(string mode)
     {
-        const string title = "using System.Collections.Generic;";
+        const string TITLE = "using System.Collections.Generic;";
         var cancellationToken = TestContext.Current.CancellationToken;
         await using var workspace = await RoslynTestWorkspace.CreateAsync(cancellationToken);
         var request = await workspace.AtAsync(
             LspAction.CodeActions,
-            ProblemsTestFile,
+            PROBLEMS_TEST_FILE,
             "List<string>"
         );
         var listing = await workspace.CallAsync(request);
         request = request with
         {
             ActionIndex = ActionIndex(listing, line =>
-                line.EndsWith(" " + title, StringComparison.Ordinal)
+                line.EndsWith(" " + TITLE, StringComparison.Ordinal)
             ),
         };
 
@@ -1960,11 +1970,11 @@ public sealed partial class RoslynMcpTests
 
         var applyRequest = mode switch
         {
-            ApplyFromListing => ApplyProposal(LspAction.CodeActions, listing) with
+            APPLY_FROM_LISTING => ApplyProposal(LspAction.CodeActions, listing) with
             {
                 ActionIndex = request.ActionIndex,
             },
-            ApplyFromPreview => ApplyProposal(LspAction.CodeActions, preview),
+            APPLY_FROM_PREVIEW => ApplyProposal(LspAction.CodeActions, preview),
             _ => request with { Apply = true },
         };
         var applied = await workspace.CallAsync(applyRequest);
@@ -1973,22 +1983,22 @@ public sealed partial class RoslynMcpTests
         Diagnostics(applied).Should().Contain(item => item.Code == "CS8603");
         Diagnostics(applied).Should().NotContain(item => item.Code == "CS0246");
 
-        if (mode is not ApplyWithoutProposal)
+        if (mode is not APPLY_WITHOUT_PROPOSAL)
         {
             (await workspace.CallRawAsync(applyRequest))
                 .Should()
-                .BeError(ErrorCodes.InvalidRequest);
+                .BeError(ErrorCodes.INVALID_REQUEST);
         }
 
-        var text = await workspace.ReadFileAsync(ProblemsTestFile);
-        text.Should().Contain(title);
+        var text = await workspace.ReadFileAsync(PROBLEMS_TEST_FILE);
+        text.Should().Contain(TITLE);
 
         var diagnostics = await DiagnosticsAsync(workspace);
         diagnostics.Should().NotContain(item => item.Code == "CS0246");
         diagnostics.Should().Contain(item => item.Code == "CS8603");
     }
 
-    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    [Fact(Explicit = true, Timeout = TEST_TIMEOUT_MILLISECONDS)]
     public async Task ListsSuppressionsOnlyOnRequestAsync()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
@@ -1996,7 +2006,7 @@ public sealed partial class RoslynMcpTests
         var request = new LspRequest
         {
             Action = LspAction.CodeActions,
-            File = ProblemsTestFile,
+            File = PROBLEMS_TEST_FILE,
             Diagnostic = "CS0246",
         };
 
@@ -2004,7 +2014,7 @@ public sealed partial class RoslynMcpTests
         var all = Lines(await workspace.CallAsync(request with { All = true }));
 
         var suppressions = all.Where(line =>
-                line.Contains(CodeActionsHandler.SuppressionGroup, StringComparison.Ordinal)
+                line.Contains(CodeActionsHandler.SUPPRESSION_GROUP, StringComparison.Ordinal)
             )
             .ToArray();
         suppressions.Should().NotBeEmpty();
@@ -2016,20 +2026,20 @@ public sealed partial class RoslynMcpTests
         all.Should().Contain(hidden.Skip(1).SkipLast(1));
     }
 
-    [Fact(Explicit = true, Timeout = TestTimeoutMilliseconds)]
+    [Fact(Explicit = true, Timeout = TEST_TIMEOUT_MILLISECONDS)]
     public async Task FixesEveryOccurrenceOfADiagnosticInADocumentAsync()
     {
-        const string file = "Application/Usings.cs";
+        const string FILE = "Application/Usings.cs";
         var cancellationToken = TestContext.Current.CancellationToken;
         await using var workspace = await RoslynTestWorkspace.CreateAsync(cancellationToken);
         await workspace.WriteFileAsync(
-            file,
+            FILE,
             "using System.IO;\nusing System.Text;\n\nnamespace Sample.Application;\n\npublic static class Usings;\n"
         );
         var request = new LspRequest
         {
             Action = LspAction.CodeActions,
-            File = file,
+            File = FILE,
             Diagnostic = "IDE0005",
         };
 
@@ -2045,6 +2055,6 @@ public sealed partial class RoslynMcpTests
         );
 
         applied.Should().BeApplied();
-        (await workspace.ReadFileAsync(file)).Should().NotContain("using");
+        (await workspace.ReadFileAsync(FILE)).Should().NotContain("using");
     }
 }

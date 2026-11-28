@@ -27,7 +27,7 @@ internal sealed class ReloadHandler(
         }
         catch (InvalidSettingsException exception)
         {
-            return new ToolError(ErrorCodes.InvalidSettings, exception.Message);
+            return new ToolError(ErrorCodes.INVALID_SETTINGS, exception.Message);
         }
 
         paths.Exclude(reloaded.Exclude);

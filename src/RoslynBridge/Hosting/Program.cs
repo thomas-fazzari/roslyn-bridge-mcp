@@ -11,18 +11,18 @@ namespace RoslynBridge.Hosting;
 
 internal static class Program
 {
-    private const string Usage =
+    private const string USAGE =
         "roslyn-bridge-mcp [--workspace DIRECTORY] [--server EXECUTABLE] [--dotnet-root DIRECTORY] [--startup-timeout SECONDS] [--request-timeout SECONDS] [--exclude FOLDER]...\nroslyn-bridge-mcp setup";
 
     public static async Task Main(string[] args)
     {
         if (args is ["--help"] or ["-h"])
         {
-            await Console.Error.WriteLineAsync(Usage, CancellationToken.None);
+            await Console.Error.WriteLineAsync(USAGE, CancellationToken.None);
             return;
         }
 
-        if (args is [Setup.Command])
+        if (args is [Setup.COMMAND])
         {
             Environment.ExitCode = Setup.Run(Console.Out);
             return;
@@ -35,7 +35,7 @@ internal static class Program
         }
         catch (InvalidLaunchArgumentsException exception)
         {
-            await FailAsync($"{exception.Message}\n{Usage}");
+            await FailAsync($"{exception.Message}\n{USAGE}");
             return;
         }
 

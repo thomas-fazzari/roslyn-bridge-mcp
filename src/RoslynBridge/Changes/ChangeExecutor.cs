@@ -22,7 +22,7 @@ internal sealed partial class ChangeExecutor(
     ILogger<ChangeExecutor> logger
 )
 {
-    private const int MaximumCheckedFiles = 128;
+    private const int MAXIMUM_CHECKED_FILES = 128;
 
     /// <summary>
     /// Runs a command of a raw request. It adds no diagnostics.
@@ -195,7 +195,7 @@ internal sealed partial class ChangeExecutor(
                 .Distinct()
                 .Where(WorkspacePaths.IsExistingCSharpFile),
         ];
-        if (files.Length is 0 or > MaximumCheckedFiles)
+        if (files.Length is 0 or > MAXIMUM_CHECKED_FILES)
             return receipt;
 
         var checkedFiles = await diagnostics

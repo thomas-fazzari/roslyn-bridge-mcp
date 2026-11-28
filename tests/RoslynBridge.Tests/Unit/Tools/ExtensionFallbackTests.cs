@@ -12,11 +12,11 @@ namespace RoslynBridge.Tests.Unit.Tools;
 
 public sealed class ExtensionFallbackTests : TempWorkspaceTests
 {
-    private const string FoundFile = "Found.cs";
-    private const string ExtensionCallerFile = "ExtensionCaller.cs";
-    private const string HierarchyCallerFile = "HierarchyCaller.cs";
-    private const string CallerName = "Caller.Run()";
-    private const int HandlerFailureCode = -32603;
+    private const string FOUND_FILE = "Found.cs";
+    private const string EXTENSION_CALLER_FILE = "ExtensionCaller.cs";
+    private const string HIERARCHY_CALLER_FILE = "HierarchyCaller.cs";
+    private const string CALLER_NAME = "Caller.Run()";
+    private const int HANDLER_FAILURE_CODE = -32603;
 
     [Theory]
     [InlineData("")]
@@ -25,19 +25,19 @@ public sealed class ExtensionFallbackTests : TempWorkspaceTests
         string answer
     )
     {
-        await WriteFileAsync(Root, SourceFile, "class A {}\n");
-        var found = await WriteFileAsync(Root, FoundFile, "class B {}\n");
+        await WriteFileAsync(Root, SOURCE_FILE, "class A {}\n");
+        var found = await WriteFileAsync(Root, FOUND_FILE, "class B {}\n");
         await using var session = CreateSession(
             Root,
             Answering(
                 new(StringComparer.Ordinal)
                 {
-                    [LspMethods.ServerActivateExtension] = ActivatedHandlers(),
-                    [LspMethods.TextDocumentDispatchExtensionMessage] = new JsonObject
+                    [LspMethods.SERVER_ACTIVATE_EXTENSION] = ActivatedHandlers(),
+                    [LspMethods.TEXT_DOCUMENT_DISPATCH_EXTENSION_MESSAGE] = new JsonObject
                     {
                         ["response"] = answer,
                     },
-                    [LspMethods.TextDocumentReferences] = new JsonArray(Location(found)),
+                    [LspMethods.TEXT_DOCUMENT_REFERENCES] = new JsonArray(Location(found)),
                 }
             )
         );
@@ -45,24 +45,24 @@ public sealed class ExtensionFallbackTests : TempWorkspaceTests
 
         var response = await tool.ExecuteAsync(Request(LspAction.References), TestCt);
 
-        ResponseText(response).Should().Be($"{FoundFile} 1:1");
+        ResponseText(response).Should().Be($"{FOUND_FILE} 1:1");
     }
 
     [Theory]
-    [InlineData(RoslynConnection.RequestCancelledCode, 2)]
-    [InlineData(RoslynConnection.ServerCancelledCode, 2)]
-    [InlineData(HandlerFailureCode, 1)]
+    [InlineData(RoslynConnection.REQUEST_CANCELLED_CODE, 2)]
+    [InlineData(RoslynConnection.SERVER_CANCELLED_CODE, 2)]
+    [InlineData(HANDLER_FAILURE_CODE, 1)]
     public async Task DispatchFailureDisablesTheExtensionUnlessRoslynCancelledAsync(
         int errorCode,
         int expectedDispatches
     )
     {
-        await WriteFileAsync(Root, SourceFile, "class A {}\n");
-        var found = await WriteFileAsync(Root, FoundFile, "class B {}\n");
+        await WriteFileAsync(Root, SOURCE_FILE, "class A {}\n");
+        var found = await WriteFileAsync(Root, FOUND_FILE, "class B {}\n");
         var answers = new Dictionary<string, JsonNode>(StringComparer.Ordinal)
         {
-            [LspMethods.ServerActivateExtension] = ActivatedHandlers(),
-            [LspMethods.TextDocumentReferences] = new JsonArray(Location(found)),
+            [LspMethods.SERVER_ACTIVATE_EXTENSION] = ActivatedHandlers(),
+            [LspMethods.TEXT_DOCUMENT_REFERENCES] = new JsonArray(Location(found)),
         };
         var dispatches = 0;
         await using var session = CreateSession(
@@ -70,7 +70,7 @@ public sealed class ExtensionFallbackTests : TempWorkspaceTests
             FakeServer(server =>
                 server.Handle = (method, _) =>
                 {
-                    if (method is not LspMethods.TextDocumentDispatchExtensionMessage)
+                    if (method is not LspMethods.TEXT_DOCUMENT_DISPATCH_EXTENSION_MESSAGE)
                         return Task.FromResult(answers.GetValueOrDefault(method));
 
                     Interlocked.Increment(ref dispatches);
@@ -83,16 +83,16 @@ public sealed class ExtensionFallbackTests : TempWorkspaceTests
         var first = await tool.ExecuteAsync(Request(LspAction.References), TestCt);
         var second = await tool.ExecuteAsync(Request(LspAction.References), TestCt);
 
-        ResponseText(first).Should().Be($"{FoundFile} 1:1");
-        ResponseText(second).Should().Be($"{FoundFile} 1:1");
+        ResponseText(first).Should().Be($"{FOUND_FILE} 1:1");
+        ResponseText(second).Should().Be($"{FOUND_FILE} 1:1");
         dispatches.Should().Be(expectedDispatches);
     }
 
     [Fact]
     public async Task ExpressionFailureReturnsAnErrorAndDisablesNoHandlerAsync()
     {
-        await WriteFileAsync(Root, SourceFile, "class A {}\n");
-        var found = await WriteFileAsync(Root, FoundFile, "class B {}\n");
+        await WriteFileAsync(Root, SOURCE_FILE, "class A {}\n");
+        var found = await WriteFileAsync(Root, FOUND_FILE, "class B {}\n");
         var expressionDispatches = 0;
         await using var session = CreateSession(
             Root,
@@ -101,7 +101,7 @@ public sealed class ExtensionFallbackTests : TempWorkspaceTests
                 {
                     if (
                         parameters?["messageName"]?.GetValue<string>()
-                        is RoslynConnection.ExpressionMessage
+                        is RoslynConnection.EXPRESSION_MESSAGE
                     )
                     {
                         Interlocked.Increment(ref expressionDispatches);
@@ -109,10 +109,10 @@ public sealed class ExtensionFallbackTests : TempWorkspaceTests
 
                     return method switch
                     {
-                        LspMethods.ServerActivateExtension => Task.FromResult<JsonNode?>(
+                        LspMethods.SERVER_ACTIVATE_EXTENSION => Task.FromResult<JsonNode?>(
                             ActivatedHandlers()
                         ),
-                        LspMethods.TextDocumentDispatchExtensionMessage => DispatchAnswer(
+                        LspMethods.TEXT_DOCUMENT_DISPATCH_EXTENSION_MESSAGE => DispatchAnswer(
                             parameters,
                             found
                         ),
@@ -127,26 +127,26 @@ public sealed class ExtensionFallbackTests : TempWorkspaceTests
         var second = await tool.ExecuteAsync(Request(LspAction.Expression), TestCt);
         var references = await tool.ExecuteAsync(Request(LspAction.References), TestCt);
 
-        first.Should().BeError(ErrorCodes.Lsp);
-        second.Should().BeError(ErrorCodes.Lsp);
+        first.Should().BeError(ErrorCodes.LSP);
+        second.Should().BeError(ErrorCodes.LSP);
         expressionDispatches.Should().Be(2);
-        ResponseText(references).Should().Be($"{FoundFile} 1:1");
+        ResponseText(references).Should().Be($"{FOUND_FILE} 1:1");
     }
 
     [Theory]
-    [InlineData(true, ExtensionCallerFile)]
-    [InlineData(false, HierarchyCallerFile)]
+    [InlineData(true, EXTENSION_CALLER_FILE)]
+    [InlineData(false, HIERARCHY_CALLER_FILE)]
     public async Task CallersComeFromTheExtensionOnlyWhileItIsActiveAsync(
         bool activated,
         string expectedFile
     )
     {
-        await WriteFileAsync(Root, SourceFile, "class A {}\n");
-        var extensionCaller = await WriteFileAsync(Root, ExtensionCallerFile, "class B {}\n");
-        var hierarchyCaller = await WriteFileAsync(Root, HierarchyCallerFile, "class C {}\n");
+        await WriteFileAsync(Root, SOURCE_FILE, "class A {}\n");
+        var extensionCaller = await WriteFileAsync(Root, EXTENSION_CALLER_FILE, "class B {}\n");
+        var hierarchyCaller = await WriteFileAsync(Root, HIERARCHY_CALLER_FILE, "class C {}\n");
         var answers = new Dictionary<string, JsonNode>(StringComparer.Ordinal)
         {
-            [LspMethods.TextDocumentDispatchExtensionMessage] = new JsonObject
+            [LspMethods.TEXT_DOCUMENT_DISPATCH_EXTENSION_MESSAGE] = new JsonObject
             {
                 ["response"] = new JsonObject
                 {
@@ -154,20 +154,22 @@ public sealed class ExtensionFallbackTests : TempWorkspaceTests
                     ["calls"] = new JsonArray(IncomingCall(extensionCaller)),
                 }.ToJsonString(),
             },
-            [LspMethods.TextDocumentPrepareCallHierarchy] = new JsonArray(
-                new JsonObject { ["name"] = CallerName, ["kind"] = (int)LspSymbolKind.Method }
+            [LspMethods.TEXT_DOCUMENT_PREPARE_CALL_HIERARCHY] = new JsonArray(
+                new JsonObject { ["name"] = CALLER_NAME, ["kind"] = (int)LspSymbolKind.Method }
             ),
-            [LspMethods.CallHierarchyIncomingCalls] = new JsonArray(IncomingCall(hierarchyCaller)),
+            [LspMethods.CALL_HIERARCHY_INCOMING_CALLS] = new JsonArray(
+                IncomingCall(hierarchyCaller)
+            ),
         };
         if (activated)
-            answers[LspMethods.ServerActivateExtension] = ActivatedHandlers();
+            answers[LspMethods.SERVER_ACTIVATE_EXTENSION] = ActivatedHandlers();
 
         await using var session = CreateSession(Root, Answering(answers));
         using var tool = CreateTool(Root, session);
 
         var response = await tool.ExecuteAsync(Request(LspAction.Callers), TestCt);
 
-        var item = $"{expectedFile}:1:7 method {CallerName}";
+        var item = $"{expectedFile}:1:7 method {CALLER_NAME}";
         string[] expected = activated
             ? [item]
             :
@@ -181,24 +183,24 @@ public sealed class ExtensionFallbackTests : TempWorkspaceTests
     [Fact]
     public async Task CalleesFallBackToTheOutgoingCallsRequestWhenTheExtensionFailsAsync()
     {
-        await WriteFileAsync(Root, SourceFile, "class A {}\n");
-        var callee = await WriteFileAsync(Root, HierarchyCallerFile, "class C {}\n");
+        await WriteFileAsync(Root, SOURCE_FILE, "class A {}\n");
+        var callee = await WriteFileAsync(Root, HIERARCHY_CALLER_FILE, "class C {}\n");
         var answers = new Dictionary<string, JsonNode>(StringComparer.Ordinal)
         {
-            [LspMethods.ServerActivateExtension] = ActivatedHandlers(),
-            [LspMethods.TextDocumentPrepareCallHierarchy] = new JsonArray(
-                new JsonObject { ["name"] = CallerName, ["kind"] = (int)LspSymbolKind.Method }
+            [LspMethods.SERVER_ACTIVATE_EXTENSION] = ActivatedHandlers(),
+            [LspMethods.TEXT_DOCUMENT_PREPARE_CALL_HIERARCHY] = new JsonArray(
+                new JsonObject { ["name"] = CALLER_NAME, ["kind"] = (int)LspSymbolKind.Method }
             ),
-            [LspMethods.CallHierarchyOutgoingCalls] = new JsonArray(OutgoingCall(callee)),
+            [LspMethods.CALL_HIERARCHY_OUTGOING_CALLS] = new JsonArray(OutgoingCall(callee)),
         };
         await using var session = CreateSession(
             Root,
             FakeServer(server =>
                 server.Handle = (method, _) =>
-                    method is LspMethods.TextDocumentDispatchExtensionMessage
+                    method is LspMethods.TEXT_DOCUMENT_DISPATCH_EXTENSION_MESSAGE
                         ? throw new LocalRpcException("The extension failed.")
                         {
-                            ErrorCode = HandlerFailureCode,
+                            ErrorCode = HANDLER_FAILURE_CODE,
                         }
                         : Task.FromResult(answers.GetValueOrDefault(method))
             )
@@ -211,7 +213,7 @@ public sealed class ExtensionFallbackTests : TempWorkspaceTests
             .Lines(ResponseText(response))
             .Should()
             .Equal(
-                $"{HierarchyCallerFile}:1:7 method {CallerName}",
+                $"{HIERARCHY_CALLER_FILE}:1:7 method {CALLER_NAME}",
                 "compiler-inserted calls not included"
             );
     }
@@ -219,23 +221,23 @@ public sealed class ExtensionFallbackTests : TempWorkspaceTests
     [Fact]
     public async Task ImpactKeepsTheCompilerCallsMarkerOfAnEmptyCallersSectionAsync()
     {
-        await WriteFileAsync(Root, SourceFile, "class A {}\n");
+        await WriteFileAsync(Root, SOURCE_FILE, "class A {}\n");
         await using var session = CreateSession(
             Root,
             Answering(
                 new(StringComparer.Ordinal)
                 {
-                    [LspMethods.TextDocumentPrepareCallHierarchy] = new JsonArray(
+                    [LspMethods.TEXT_DOCUMENT_PREPARE_CALL_HIERARCHY] = new JsonArray(
                         new JsonObject
                         {
-                            ["name"] = CallerName,
+                            ["name"] = CALLER_NAME,
                             ["kind"] = (int)LspSymbolKind.Method,
                         }
                     ),
-                    [LspMethods.CallHierarchyIncomingCalls] = new JsonArray(),
-                    [LspMethods.TextDocumentDefinition] = new JsonArray(),
-                    [LspMethods.TextDocumentReferences] = new JsonArray(),
-                    [LspMethods.TextDocumentImplementation] = new JsonArray(),
+                    [LspMethods.CALL_HIERARCHY_INCOMING_CALLS] = new JsonArray(),
+                    [LspMethods.TEXT_DOCUMENT_DEFINITION] = new JsonArray(),
+                    [LspMethods.TEXT_DOCUMENT_REFERENCES] = new JsonArray(),
+                    [LspMethods.TEXT_DOCUMENT_IMPLEMENTATION] = new JsonArray(),
                 }
             )
         );
@@ -259,13 +261,13 @@ public sealed class ExtensionFallbackTests : TempWorkspaceTests
     [Fact]
     public async Task UnusedSymbolsFailWithoutTheWorkspaceHandlerAsync()
     {
-        await WriteFileAsync(Root, SourceFile, "class A {}\n");
+        await WriteFileAsync(Root, SOURCE_FILE, "class A {}\n");
         await using var session = CreateSession(
             Root,
             Answering(
                 new(StringComparer.Ordinal)
                 {
-                    [LspMethods.ServerActivateExtension] = ActivatedHandlers(),
+                    [LspMethods.SERVER_ACTIVATE_EXTENSION] = ActivatedHandlers(),
                 }
             )
         );
@@ -275,13 +277,13 @@ public sealed class ExtensionFallbackTests : TempWorkspaceTests
             new LspRequest
             {
                 Action = LspAction.Symbols,
-                File = SourceFile,
+                File = SOURCE_FILE,
                 Unused = true,
             },
             TestCt
         );
 
-        response.Should().BeError(ErrorCodes.Lsp);
+        response.Should().BeError(ErrorCodes.LSP);
     }
 
     /// <param name="answers">By LSP method. Other methods answer null.</param>
@@ -294,7 +296,7 @@ public sealed class ExtensionFallbackTests : TempWorkspaceTests
         new()
         {
             Action = action,
-            File = SourceFile,
+            File = SOURCE_FILE,
             Line = 1,
             Character = 1,
         };
@@ -304,7 +306,7 @@ public sealed class ExtensionFallbackTests : TempWorkspaceTests
         {
             ["from"] = new JsonObject
             {
-                ["name"] = CallerName,
+                ["name"] = CALLER_NAME,
                 ["kind"] = (int)LspSymbolKind.Method,
                 ["uri"] = new Uri(path).AbsoluteUri,
                 ["selectionRange"] = Range(0, 6),
@@ -317,7 +319,7 @@ public sealed class ExtensionFallbackTests : TempWorkspaceTests
         {
             ["to"] = new JsonObject
             {
-                ["name"] = CallerName,
+                ["name"] = CALLER_NAME,
                 ["kind"] = (int)LspSymbolKind.Method,
                 ["uri"] = new Uri(path).AbsoluteUri,
                 ["selectionRange"] = Range(0, 6),
@@ -327,10 +329,10 @@ public sealed class ExtensionFallbackTests : TempWorkspaceTests
 
     // The expression handler throws, and the references handler finds one location
     private static Task<JsonNode?> DispatchAnswer(JsonNode? parameters, string foundPath) =>
-        parameters?["messageName"]?.GetValue<string>() is RoslynConnection.ExpressionMessage
+        parameters?["messageName"]?.GetValue<string>() is RoslynConnection.EXPRESSION_MESSAGE
             ? throw new LocalRpcException("The extension failed.")
             {
-                ErrorCode = HandlerFailureCode,
+                ErrorCode = HANDLER_FAILURE_CODE,
             }
             : Task.FromResult<JsonNode?>(
                 new JsonObject
@@ -349,10 +351,10 @@ public sealed class ExtensionFallbackTests : TempWorkspaceTests
         new()
         {
             ["documentMessageHandlers"] = new JsonArray(
-                JsonValue.Create(RoslynConnection.ReferencesMessage),
-                JsonValue.Create(RoslynConnection.CallersMessage),
-                JsonValue.Create(RoslynConnection.CalleesMessage),
-                JsonValue.Create(RoslynConnection.ExpressionMessage)
+                JsonValue.Create(RoslynConnection.REFERENCES_MESSAGE),
+                JsonValue.Create(RoslynConnection.CALLERS_MESSAGE),
+                JsonValue.Create(RoslynConnection.CALLEES_MESSAGE),
+                JsonValue.Create(RoslynConnection.EXPRESSION_MESSAGE)
             ),
         };
 }

@@ -5,9 +5,9 @@ namespace RoslynBridge.Settings;
 
 internal sealed record ProjectSettings
 {
-    internal const string FileName = ".roslyn-bridge.json";
-    internal const int MinimumTimeoutSeconds = 1;
-    internal const int MaximumTimeoutSeconds = 600;
+    internal const string FILE_NAME = ".roslyn-bridge.json";
+    internal const int MINIMUM_TIMEOUT_SECONDS = 1;
+    internal const int MAXIMUM_TIMEOUT_SECONDS = 600;
 
     public string[]? Exclude { get; init; }
 

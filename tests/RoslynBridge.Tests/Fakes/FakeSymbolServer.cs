@@ -23,11 +23,11 @@ internal static class FakeSymbolServer
                     Task.FromResult<JsonNode?>(
                         method switch
                         {
-                            LspMethods.WorkspaceSymbol => SymbolsFor(
+                            LspMethods.WORKSPACE_SYMBOL => SymbolsFor(
                                 workspace,
                                 parameters!["query"]!.GetValue<string>()
                             ),
-                            LspMethods.TextDocumentDocumentSymbol => SymbolsFor(
+                            LspMethods.TEXT_DOCUMENT_DOCUMENT_SYMBOL => SymbolsFor(
                                 byFile,
                                 FileNameOf(parameters)
                             ),

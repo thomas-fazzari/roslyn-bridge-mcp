@@ -62,7 +62,7 @@ public sealed class WorkspacePathsTests : TempWorkspaceTests
     {
         Assert.SkipWhen(OperatingSystem.IsWindows(), "Unix permissions are required.");
 
-        var source = await WriteFileAsync(Root, SourceFile, "class Source {}");
+        var source = await WriteFileAsync(Root, SOURCE_FILE, "class Source {}");
         var locked = Path.GetDirectoryName(
             await WriteFileAsync(Root, Path.Combine("locked", "Hidden.cs"), "class Source {}")
         )!;
@@ -98,7 +98,7 @@ public sealed class WorkspacePathsTests : TempWorkspaceTests
     [Fact]
     public async Task ContainsProjectIgnoresSourcesExcludedDirectoriesAndDeepFoldersAsync()
     {
-        await WriteFileAsync(Root, SourceFile, "class Source {}");
+        await WriteFileAsync(Root, SOURCE_FILE, "class Source {}");
         await WriteFileAsync(Root, Path.Combine("bin", "App.csproj"), "<Project />");
         await WriteFileAsync(Root, Path.Combine("a", "b", "c", "App.csproj"), "<Project />");
 
@@ -137,7 +137,7 @@ public sealed class WorkspacePathsTests : TempWorkspaceTests
             .Resolve("src/A\0.cs")
             .ErrorCode()
             .Should()
-            .Be(ErrorCodes.InvalidRequest);
+            .Be(ErrorCodes.INVALID_REQUEST);
 
     [Theory]
     [InlineData(false)]
@@ -171,7 +171,7 @@ public sealed class WorkspacePathsTests : TempWorkspaceTests
         var paths = new WorkspacePaths(Root);
         var linked = linkDirectory ? Path.Combine("Linked", "Source.cs") : "Linked.cs";
 
-        paths.Resolve(linked).ErrorCode().Should().Be(ErrorCodes.InvalidRequest);
+        paths.Resolve(linked).ErrorCode().Should().Be(ErrorCodes.INVALID_REQUEST);
         paths
             .TryGetWorkspaceFile(new Uri(Path.Combine(Root, linked)).AbsoluteUri)
             .Should()
@@ -181,21 +181,21 @@ public sealed class WorkspacePathsTests : TempWorkspaceTests
     [Fact]
     public async Task ExcludedFoldersAreLeftOutAndReplacedByTheNextCallAsync()
     {
-        const string samples = "samples";
-        const string vendor = "vendor";
+        const string SAMPLES = "samples";
+        const string VENDOR = "vendor";
 
         var kept = await WriteFileAsync(Root, Path.Combine("src", "Source.cs"), "class Source {}");
         var inSamples = await WriteFileAsync(
             Root,
-            Path.Combine(samples, "Sample.cs"),
+            Path.Combine(SAMPLES, "Sample.cs"),
             "class S {}"
         );
-        var inVendor = await WriteFileAsync(Root, Path.Combine(vendor, "Vendor.cs"), "class V {}");
+        var inVendor = await WriteFileAsync(Root, Path.Combine(VENDOR, "Vendor.cs"), "class V {}");
         var paths = new WorkspacePaths(Root);
 
-        paths.Exclude([samples]);
+        paths.Exclude([SAMPLES]);
         var first = paths.EnumerateFiles(TestCt).Succeeded().ConvertAll(file => file.Path.FullPath);
-        paths.Exclude([vendor]);
+        paths.Exclude([VENDOR]);
         var second = paths
             .EnumerateFiles(TestCt)
             .Succeeded()
@@ -204,13 +204,13 @@ public sealed class WorkspacePathsTests : TempWorkspaceTests
         first.Should().BeEquivalentTo([kept, inVendor]);
         second.Should().BeEquivalentTo([kept, inSamples]);
         paths.IsExcluded(paths.Resolve(inVendor).Succeeded()).Should().BeTrue();
-        paths.IsExcludedDirectory(WorkspacePaths.IntermediateDirectoryName).Should().BeTrue();
+        paths.IsExcludedDirectory(WorkspacePaths.INTERMEDIATE_DIRECTORY_NAME).Should().BeTrue();
     }
 
     [Fact]
     public void IntermediateOutputRemainsWatchedForRestoreChanges() =>
         new WorkspacePaths(Root)
-            .IsWatchedDirectory(WorkspacePaths.IntermediateDirectoryName)
+            .IsWatchedDirectory(WorkspacePaths.INTERMEDIATE_DIRECTORY_NAME)
             .Should()
             .BeTrue();
 }

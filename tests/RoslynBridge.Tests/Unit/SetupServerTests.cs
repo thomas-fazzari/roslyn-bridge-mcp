@@ -8,21 +8,23 @@ namespace RoslynBridge.Tests.Unit;
 
 public sealed class SetupServerTests : TempWorkspaceTests
 {
-    private const string OlderVersion = "5.0.0-1.25000.1";
+    private const string OLDER_VERSION = "5.0.0-1.25000.1";
 
     private readonly Dictionary<string, string> _environment = [with(StringComparer.Ordinal)];
     private readonly List<ProcessStartInfo> _commands = [];
     private readonly StringWriter _output = new();
 
     private static string Server =>
-        OperatingSystem.IsWindows() ? $"{RoslynLocator.ServerName}.exe" : RoslynLocator.ServerName;
+        OperatingSystem.IsWindows()
+            ? $"{RoslynLocator.SERVER_NAME}.exe"
+            : RoslynLocator.SERVER_NAME;
 
     private string Tools => Path.Combine(Root, ".dotnet", "tools");
 
     [Fact]
     public void OlderGlobalToolIsUpdatedToThePinnedVersion()
     {
-        InstallGlobalTool(OlderVersion);
+        InstallGlobalTool(OLDER_VERSION);
 
         FindOrInstall();
 
@@ -30,7 +32,7 @@ public sealed class SetupServerTests : TempWorkspaceTests
             .Should()
             .ContainSingle()
             .Which.ArgumentList.Should()
-            .Contain(["update", "--global", RoslynLocator.ServerName, Setup.ServerVersion]);
+            .Contain(["update", "--global", RoslynLocator.SERVER_NAME, Setup.ServerVersion]);
     }
 
     [Fact]
@@ -47,7 +49,7 @@ public sealed class SetupServerTests : TempWorkspaceTests
     {
         var bin = Path.Combine(Root, "bin");
         var server = CreateFile(Path.Combine(bin, Server));
-        InstallGlobalTool(OlderVersion);
+        InstallGlobalTool(OLDER_VERSION);
         _environment["PATH"] = bin;
 
         FindOrInstall().Should().Be(server);
@@ -77,7 +79,9 @@ public sealed class SetupServerTests : TempWorkspaceTests
 
     private string InstallGlobalTool(string version)
     {
-        Directory.CreateDirectory(Path.Combine(Tools, ".store", RoslynLocator.ServerName, version));
+        Directory.CreateDirectory(
+            Path.Combine(Tools, ".store", RoslynLocator.SERVER_NAME, version)
+        );
         return CreateFile(Path.Combine(Tools, Server));
     }
 

@@ -7,7 +7,7 @@ namespace RoslynBridge.Tests.Assertions;
 
 internal static partial class ResultLines
 {
-    public const int RegexTimeoutMilliseconds = 1_000;
+    public const int REGEX_TIMEOUT_MILLISECONDS = 1_000;
 
     public static string[] Lines(string text) => text.Split('\n');
 
@@ -39,10 +39,10 @@ internal static partial class ResultLines
     [GeneratedRegex(
         @"^(?<checked>\d+) files? checked, (?:no diagnostics|(?<total>\d+) diagnostics? in (?<files>\d+) files?)(?:, (?<below>\d+) below the severity)?$",
         RegexOptions.None,
-        RegexTimeoutMilliseconds
+        REGEX_TIMEOUT_MILLISECONDS
     )]
     public static partial Regex SummaryPattern();
 
-    [GeneratedRegex(@":\d+:\d+$", RegexOptions.ExplicitCapture, RegexTimeoutMilliseconds)]
+    [GeneratedRegex(@":\d+:\d+$", RegexOptions.ExplicitCapture, REGEX_TIMEOUT_MILLISECONDS)]
     private static partial Regex PositionSuffixPattern();
 }

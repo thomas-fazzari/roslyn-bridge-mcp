@@ -10,7 +10,7 @@ namespace RoslynBridge.Workspace;
 /// </summary>
 internal sealed class SourceLines
 {
-    internal const int MaximumLineCharacters = 200;
+    internal const int MAXIMUM_LINE_CHARACTERS = 200;
 
     private readonly Dictionary<WorkspaceFilePath, FileLines?> _files = [];
 
@@ -72,8 +72,8 @@ internal sealed class SourceLines
     private static string Trim(string line)
     {
         var text = line.Trim();
-        return text.Length <= MaximumLineCharacters
+        return text.Length <= MAXIMUM_LINE_CHARACTERS
             ? text
-            : $"{text.AsSpan(0, MaximumLineCharacters)}…";
+            : $"{text.AsSpan(0, MAXIMUM_LINE_CHARACTERS)}…";
     }
 }

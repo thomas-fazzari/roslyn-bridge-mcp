@@ -139,7 +139,7 @@ internal sealed partial class RoslynSession(
             // Load may finish between the timeout and this check
             return startup.IsCompleted
                 ? await startup
-                : new ToolError(ErrorCodes.Loading, LoadingMessage(Progress));
+                : new ToolError(ErrorCodes.LOADING, LoadingMessage(Progress));
         }
     }
 
@@ -306,11 +306,11 @@ internal sealed partial class RoslynSession(
 
     private static string LoadingMessage(LoadProgress? progress)
     {
-        const string Loading = "Roslyn is still loading the workspace.";
-        const string Advice = "Retry the call, or use lsp status to follow the load.";
+        const string LOADING = "Roslyn is still loading the workspace.";
+        const string ADVICE = "Retry the call, or use lsp status to follow the load.";
         return progress is null
-            ? $"{Loading} {Advice}"
-            : $"{Loading} Progress: {progress.Text}. {Advice}";
+            ? $"{LOADING} {ADVICE}"
+            : $"{LOADING} Progress: {progress.Text}. {ADVICE}";
     }
 
     private void LogLoadFailure(Task<Result> load)

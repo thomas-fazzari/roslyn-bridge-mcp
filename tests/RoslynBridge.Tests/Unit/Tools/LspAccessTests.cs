@@ -10,9 +10,9 @@ namespace RoslynBridge.Tests.Unit.Tools;
 
 public sealed class LspAccessTests : TempWorkspaceTests
 {
-    private const int TextKind = 1;
-    private const int ReadKind = 2;
-    private const int WriteKind = 3;
+    private const int TEXT_KIND = 1;
+    private const int READ_KIND = 2;
+    private const int WRITE_KIND = 3;
 
     private static readonly string[] _referencedFiles = ["A.cs", "B.cs"];
 
@@ -24,8 +24,8 @@ public sealed class LspAccessTests : TempWorkspaceTests
         StringComparer.Ordinal
     )
     {
-        ["A.cs"] = [(0, WriteKind), (1, ReadKind), (2, WriteKind)],
-        ["B.cs"] = [(0, ReadKind), (1, ReadKind), (2, TextKind)],
+        ["A.cs"] = [(0, WRITE_KIND), (1, READ_KIND), (2, WRITE_KIND)],
+        ["B.cs"] = [(0, READ_KIND), (1, READ_KIND), (2, TEXT_KIND)],
     };
 
     [Theory]
@@ -70,7 +70,7 @@ public sealed class LspAccessTests : TempWorkspaceTests
     )
     {
         await WriteFilesAsync();
-        _highlights["A.cs"] = [(0, TextKind)];
+        _highlights["A.cs"] = [(0, TEXT_KIND)];
         _highlights["B.cs"] = [];
         await using var session = CreateSession(Root, HighlightServer());
         using var tool = CreateTool(Root, session);
@@ -127,7 +127,7 @@ public sealed class LspAccessTests : TempWorkspaceTests
 
     private async Task WriteFilesAsync()
     {
-        await WriteFileAsync(Root, SourceFile, "class S {}");
+        await WriteFileAsync(Root, SOURCE_FILE, "class S {}");
         await WriteFileAsync(
             Root,
             "A.cs",
@@ -156,7 +156,7 @@ public sealed class LspAccessTests : TempWorkspaceTests
         new()
         {
             Action = action,
-            File = SourceFile,
+            File = SOURCE_FILE,
             Line = 1,
             Character = 1,
         };
@@ -167,8 +167,8 @@ public sealed class LspAccessTests : TempWorkspaceTests
                 Task.FromResult<JsonNode?>(
                     method switch
                     {
-                        LspMethods.TextDocumentReferences => References(),
-                        LspMethods.TextDocumentDocumentHighlight => Highlights(parameters!),
+                        LspMethods.TEXT_DOCUMENT_REFERENCES => References(),
+                        LspMethods.TEXT_DOCUMENT_DOCUMENT_HIGHLIGHT => Highlights(parameters!),
                         _ => null,
                     }
                 )

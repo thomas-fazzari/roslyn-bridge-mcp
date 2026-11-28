@@ -18,9 +18,9 @@ internal sealed class CodeActionsHandler(
     ProposalStore proposals
 ) : IToolHandler<CodeActionsRequest, ToolResult>
 {
-    internal const string SuppressionGroup = "Suppress or configure issues";
+    internal const string SUPPRESSION_GROUP = "Suppress or configure issues";
 
-    private const string QuickFixKind = "quickfix";
+    private const string QUICK_FIX_KIND = "quickfix";
 
     public async Task<Result<ToolResult>> HandleAsync(
         CodeActionsRequest request,
@@ -43,7 +43,7 @@ internal sealed class CodeActionsHandler(
         if (request.Scope is DiagnosticFixes)
         {
             choices.RemoveAll(choice =>
-                !string.Equals(choice.Kind, QuickFixKind, StringComparison.Ordinal)
+                !string.Equals(choice.Kind, QUICK_FIX_KIND, StringComparison.Ordinal)
             );
         }
 
@@ -87,7 +87,7 @@ internal sealed class CodeActionsHandler(
 
     // Roslyn marks the suppression group only by its title, which is English because the bridge requests the en locale
     private static bool IsSuppression(LspCodeAction action) =>
-        string.Equals(action.Group, SuppressionGroup, StringComparison.Ordinal);
+        string.Equals(action.Group, SUPPRESSION_GROUP, StringComparison.Ordinal);
 
     private async Task<Result<DocumentRange>> RangeAsync(
         CodeActionScope scope,
