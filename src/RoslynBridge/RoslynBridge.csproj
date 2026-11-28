@@ -2,9 +2,10 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <InvariantGlobalization>true</InvariantGlobalization>
+    <Features>$(Features);runtime-async=on</Features>
     <RollForward>Major</RollForward>
     <PublishDocumentationFile>false</PublishDocumentationFile>
-    <Description>Lightweight MCP for C# diagnostics, navigation and refactoring, backed by the official Roslyn language server.</Description>
+    <Description>IDE grade C# code intelligence for coding agents (navigation, diagnostics, refactoring).</Description>
   </PropertyGroup>
 
   <PropertyGroup Label="Tool package">
