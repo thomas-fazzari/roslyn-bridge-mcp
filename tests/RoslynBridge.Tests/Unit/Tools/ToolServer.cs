@@ -44,7 +44,8 @@ internal sealed class ToolServer : IAsyncDisposable
         var collection = ToolClient.Services(
             root,
             session,
-            Monitor(new BridgeOptions { WorkspaceRoot = root })
+            Monitor(new BridgeOptions { WorkspaceRoot = root }),
+            TimeProvider.System
         );
         collection
             .AddMcpServer()

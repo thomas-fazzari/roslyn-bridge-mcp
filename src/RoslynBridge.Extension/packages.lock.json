@@ -8,6 +8,12 @@
         "resolved": "3.0.338",
         "contentHash": "r/Fewzmrhd8asC+IQquc/7X2ixt0MhHvK7ShQVJZlQVhchWKYqPV2HitQftYSBl1KZ50yF+iBbpyWxQ3WMIt9Q=="
       },
+      "Microsoft.CodeAnalysis.BannedApiAnalyzers": {
+        "type": "Direct",
+        "requested": "[5.6.0, )",
+        "resolved": "5.6.0",
+        "contentHash": "Kcobt3pnOdO0A+6CKiMHZdTEluJpsfxiV20axtZdmfBQnDmiWTKPJADlgAfdTuKNAnVarrkJa0UEGwuOo91muw=="
+      },
       "Roslynator.Analyzers": {
         "type": "Direct",
         "requested": "[5.0.1, )",

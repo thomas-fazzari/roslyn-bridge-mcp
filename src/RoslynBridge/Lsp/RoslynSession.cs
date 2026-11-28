@@ -19,6 +19,7 @@ internal sealed partial class RoslynSession(
     SettingsMonitor settings,
     WorkspacePaths paths,
     RoslynLauncher launcher,
+    TimeProvider time,
     ILogger<RoslynSession> logger
 ) : IAsyncDisposable
 {
@@ -132,7 +133,11 @@ internal sealed partial class RoslynSession(
             ?? throw new InvalidOperationException("The Roslyn session is not started.");
         try
         {
-            return await startup.WaitAsync(settings.CurrentValue.StartupTimeout, cancellationToken);
+            return await startup.WaitAsync(
+                settings.CurrentValue.StartupTimeout,
+                time,
+                cancellationToken
+            );
         }
         catch (TimeoutException)
         {
@@ -277,6 +282,7 @@ internal sealed partial class RoslynSession(
             options,
             paths,
             new ClientCallbacks(paths, logger),
+            time,
             logger
         );
         Advance(cancellation, load => new Initializing(load, connection));

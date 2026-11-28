@@ -30,7 +30,7 @@ hooks {
   ["pre-push"] {
     steps = (linters) {
       ["build"] {
-        glob = List(dotnet, "global.json", "**/.editorconfig", "eng/*.globalconfig", "**/packages.lock.json")
+        glob = List(dotnet, "global.json", "**/.editorconfig", "eng/*.globalconfig", "eng/BannedSymbols.txt", "**/packages.lock.json")
         check = "mise run build"
       }
       ["docs-build"] {

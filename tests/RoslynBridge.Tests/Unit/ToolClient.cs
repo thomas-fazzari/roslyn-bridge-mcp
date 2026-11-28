@@ -18,10 +18,14 @@ namespace RoslynBridge.Tests.Unit;
 /// <summary>
 /// Calls the tool that owns a request's action, with the services of the bridge around the given session.
 /// </summary>
-internal sealed class ToolClient(string root, RoslynSession session, SettingsMonitor settings)
-    : IDisposable
+internal sealed class ToolClient(
+    string root,
+    RoslynSession session,
+    SettingsMonitor settings,
+    TimeProvider time
+) : IDisposable
 {
-    private readonly ServiceProvider _services = Services(root, session, settings)
+    private readonly ServiceProvider _services = Services(root, session, settings, time)
         .BuildServiceProvider();
 
     /// <summary>
@@ -30,12 +34,14 @@ internal sealed class ToolClient(string root, RoslynSession session, SettingsMon
     public static IServiceCollection Services(
         string root,
         RoslynSession session,
-        SettingsMonitor settings
+        SettingsMonitor settings,
+        TimeProvider time
     ) =>
         new ServiceCollection()
             .AddLogging()
             .AddRoslynBridge(settings)
             .Replace(ServiceDescriptor.Singleton(session))
+            .Replace(ServiceDescriptor.Singleton(time))
             .Replace(ServiceDescriptor.Singleton(new WorkspacePaths(root)));
 
     public Task<CallToolResult> ExecuteAsync(

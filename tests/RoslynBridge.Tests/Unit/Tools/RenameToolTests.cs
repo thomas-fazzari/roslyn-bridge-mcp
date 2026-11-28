@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Thomas Fazzari
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+using Microsoft.Extensions.Time.Testing;
 using RoslynBridge.Changes;
 using RoslynBridge.Lsp;
 using RoslynBridge.Lsp.Protocol;
@@ -68,6 +69,28 @@ public sealed class RenameToolTests : TempWorkspaceTests
             var response = await tool.ExecuteAsync(ProposalRequest(proposal), TestCt);
             response.Should().BeSuccessful();
         }
+    }
+
+    [Fact]
+    public async Task ProposalExpiresAfterItsLifetimeAsync()
+    {
+        var source = await WriteFileAsync(Root, SOURCE_FILE, SOURCE_TEXT);
+        await using var session = CreateSession(Root, RenamingServer());
+        var time = new FakeTimeProvider();
+        using var tool = CreateTool(Root, session, time: time);
+        var preview = await tool.ExecuteAsync(RenameRequest(), TestCt);
+
+        time.Advance(ProposalStore.ProposalLifetime + TimeSpan.FromSeconds(1));
+        var applied = await tool.ExecuteAsync(
+            ProposalRequest(ResultLines.ProposalId(ResponseText(preview))) with
+            {
+                Apply = true,
+            },
+            TestCt
+        );
+
+        applied.Should().BeError(ErrorCodes.INVALID_REQUEST);
+        await AssertFileTextAsync(source, SOURCE_TEXT);
     }
 
     [Fact]

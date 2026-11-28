@@ -173,7 +173,7 @@ internal static class BridgeTelemetry
         TagList tags
     )
     {
-        duration.Record(Stopwatch.GetElapsedTime(started).TotalSeconds, tags);
+        duration.Record(TimeProvider.System.GetElapsedTime(started).TotalSeconds, tags);
         if (activity is null)
             return;
 
@@ -204,7 +204,7 @@ internal static class BridgeTelemetry
     )
     {
         using var activity = Source.StartActivity(name, kind);
-        var started = Stopwatch.GetTimestamp();
+        var started = TimeProvider.System.GetTimestamp();
         try
         {
             var result = await operation();

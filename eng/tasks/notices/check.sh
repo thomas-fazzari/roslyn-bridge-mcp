@@ -9,7 +9,8 @@ json=$(dotnet list src/RoslynBridge package --include-transitive --format json)
 
 # Only packages have an "id" property. Analyzers run at build time and are not part of the package
 shipped=$(grep -o '"id": "[^"]*"' <<<"$json" | cut -d '"' -f 4 |
-  grep -vxF -e Meziantou.Analyzer -e Roslynator.Analyzers | sort -u) || true
+  grep -vxF -e Meziantou.Analyzer -e Roslynator.Analyzers -e Microsoft.CodeAnalysis.BannedApiAnalyzers |
+  sort -u) || true
 
 # Each package is a "- `Id`: ..." line under the "NuGet packages" heading
 listed=$(awk '

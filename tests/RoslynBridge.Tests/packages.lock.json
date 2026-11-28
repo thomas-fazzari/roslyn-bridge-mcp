@@ -14,6 +14,12 @@
         "resolved": "3.0.338",
         "contentHash": "r/Fewzmrhd8asC+IQquc/7X2ixt0MhHvK7ShQVJZlQVhchWKYqPV2HitQftYSBl1KZ50yF+iBbpyWxQ3WMIt9Q=="
       },
+      "Microsoft.Extensions.TimeProvider.Testing": {
+        "type": "Direct",
+        "requested": "[11.0.1, )",
+        "resolved": "11.0.1",
+        "contentHash": "2lLxpcMnu31ZrNwJ3ypqNKlavMvkJ8LhSn9YMgSTxfuyXxJGCvDHdGEyAtlc9NrXVLDA7lcIDqv0T+RnWc4nsg=="
+      },
       "Microsoft.Testing.Extensions.HangDump": {
         "type": "Direct",
         "requested": "[2.5.3, )",

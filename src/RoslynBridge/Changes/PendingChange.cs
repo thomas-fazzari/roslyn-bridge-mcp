@@ -9,11 +9,8 @@ namespace RoslynBridge.Changes;
 /// <summary>
 /// A change computed against <paramref name="Snapshot"/>, which a later call previews or applies.
 /// </summary>
-[DebuggerDisplay("{Action} created {CreatedAt}, {Snapshot.Files.Count} files")]
-internal closed record PendingChange(LspAction Action, WorkspaceSnapshot Snapshot)
-{
-    public DateTimeOffset CreatedAt { get; } = DateTimeOffset.UtcNow;
-}
+[DebuggerDisplay("{Action}, {Snapshot.Files.Count} files")]
+internal closed record PendingChange(LspAction Action, WorkspaceSnapshot Snapshot);
 
 /// <summary>
 /// An edit that Roslyn computed, with the command that completes it.

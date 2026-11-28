@@ -20,6 +20,7 @@ internal sealed partial class RoslynConnection(
     BridgeOptions launched,
     WorkspacePaths paths,
     ClientCallbacks callbacks,
+    TimeProvider time,
     ILogger logger
 ) : IAsyncDisposable
 {
@@ -145,8 +146,11 @@ internal sealed partial class RoslynConnection(
     )
     {
         var rpc = Rpc;
-        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeout.CancelAfter(launched.RequestTimeout);
+        using var deadline = new CancellationTokenSource(launched.RequestTimeout, time);
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(
+            cancellationToken,
+            deadline.Token
+        );
         try
         {
             return await rpc.InvokeWithParameterObjectAsync<JsonNode?>(
@@ -198,7 +202,7 @@ internal sealed partial class RoslynConnection(
             // The pipe closes when Roslyn exits, so its last lines arrive shortly after
             try
             {
-                await stderr.WaitAsync(_shutdownTimeout, cancellationToken);
+                await stderr.WaitAsync(_shutdownTimeout, time, cancellationToken);
             }
             catch (TimeoutException)
             {
@@ -358,7 +362,7 @@ internal sealed partial class RoslynConnection(
         if (server.HasExited)
             return;
 
-        using var timeout = new CancellationTokenSource(_shutdownTimeout);
+        using var timeout = new CancellationTokenSource(_shutdownTimeout, time);
         try
         {
             if (_rpc is { IsDisposed: false } rpc)
