@@ -11,6 +11,7 @@ namespace RoslynBridge.Tests.Unit.Lsp;
 public sealed class SessionDocumentTests : TempWorkspaceTests
 {
     private const string CHANGED_TEXT = "class B {}";
+    private const int FILE_CREATED = 1;
     private const int FILE_DELETED = 3;
 
     [Fact]
@@ -50,12 +51,20 @@ public sealed class SessionDocumentTests : TempWorkspaceTests
         (await session.OpenDocumentAsync(Resolved(Root, path), TestCt)).Succeeded();
         (await session.SynchronizeWorkspaceAsync(TestCt)).Succeeded();
 
-        (await ReceivedAsync(session, servers[0], LspMethods.TEXT_DOCUMENT_DID_OPEN))
+        // The macOS watcher can report the write made before it started, which opens and closes the file once
+        var opened = await ReceivedAsync(session, servers[0], LspMethods.TEXT_DOCUMENT_DID_OPEN);
+        var closed = await ReceivedAsync(session, servers[0], LspMethods.TEXT_DOCUMENT_DID_CLOSE);
+        (opened.Count - closed.Count).Should().Be(1);
+        var watched = await ReceivedAsync(
+            session,
+            servers[0],
+            LspMethods.WORKSPACE_DID_CHANGE_WATCHED_FILES
+        );
+        watched
+            .SelectMany(parameters => parameters!["changes"]!.AsArray())
+            .Select(change => change!["type"]!.GetValue<int>())
             .Should()
-            .ContainSingle();
-        (await ReceivedAsync(session, servers[0], LspMethods.WORKSPACE_DID_CHANGE_WATCHED_FILES))
-            .Should()
-            .BeEmpty();
+            .NotContain(FILE_CREATED);
     }
 
     [Fact]
