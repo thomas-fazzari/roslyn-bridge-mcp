@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Thomas Fazzari
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+using System.Buffers;
+using System.Collections.Concurrent;
 using System.Collections.Frozen;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -110,6 +112,9 @@ internal static class ImplicitScans
         (ImplicitScan.ImplicitIndex, ["^", ".."]),
     ];
 
+    private static readonly ConcurrentDictionary<ImplicitScan, SearchValues<string>?> _searches =
+        new();
+
     /// <param name="target">A method or a property, as <see cref="CallWalker.Normalize"/> returns it.</param>
     public static ImplicitScan For(ISymbol target)
     {
@@ -168,17 +173,9 @@ internal static class ImplicitScans
 
     extension(ImplicitScan scans)
     {
-        public bool MayOccurIn(SourceText text)
-        {
-            var selected = _markers.Where(marker => scans.HasFlag(marker.Scan)).ToList();
-            if (selected.Any(marker => marker.Markers.Length == 0))
-                return true;
-
-            var source = text.ToString();
-            return selected.Any(marker =>
-                marker.Markers.Any(word => source.Contains(word, StringComparison.Ordinal))
-            );
-        }
+        public bool MayOccurIn(SourceText text) =>
+            _searches.GetOrAdd(scans, Markers) is not { } markers
+            || text.ToString().AsSpan().ContainsAny(markers);
 
         public bool IsCandidate(SyntaxNode node) =>
             node switch
@@ -266,6 +263,18 @@ internal static class ImplicitScans
                 || type.AllInterfaces.Any(contract =>
                     contract.Name is "INotifyCompletion" or "ICriticalNotifyCompletion"
                 )
+            );
+    }
+
+    // Null when a selected scan has no marker
+    private static SearchValues<string>? Markers(ImplicitScan scans)
+    {
+        var selected = _markers.Where(marker => scans.HasFlag(marker.Scan)).ToList();
+        return selected.Exists(marker => marker.Markers.Length == 0)
+            ? null
+            : SearchValues.Create(
+                [.. selected.SelectMany(marker => marker.Markers).Distinct(StringComparer.Ordinal)],
+                StringComparison.Ordinal
             );
     }
 
