@@ -415,16 +415,18 @@ internal sealed partial class RoslynConnection(
                 if (count == 0)
                     return;
 
-                var message = new string(buffer, 0, count);
                 lock (_stderrLock)
                 {
-                    _stderrTail.Append(message);
+                    _stderrTail.Append(buffer, 0, count);
                     if (_stderrTail.Length > STDERR_TAIL_CHARACTERS)
                         _stderrTail.Remove(0, _stderrTail.Length - STDERR_TAIL_CHARACTERS);
                 }
 
                 if (logger.IsEnabled(LogLevel.Debug))
+                {
+                    var message = new string(buffer, 0, count);
                     LogStderr(logger, message);
+                }
             }
         }
         catch (Exception exception)

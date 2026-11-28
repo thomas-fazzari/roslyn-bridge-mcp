@@ -187,10 +187,11 @@ internal sealed partial class SymbolResolver
         CancellationToken cancellationToken
     )
     {
-        var close = Nearest(preferred, name, byWords: false).ToList();
+        var requested = new RequestedName(name);
+        var close = Nearest(preferred, requested, byWords: false).ToList();
         // Shared words help only when no member is close in spelling
-        var nearest = (close.Count > 0 ? close : Nearest(preferred, name, byWords: true))
-            .Concat(Nearest(matches, name, byWords: false))
+        var nearest = (close.Count > 0 ? close : Nearest(preferred, requested, byWords: true))
+            .Concat(Nearest(matches, requested, byWords: false))
             .Distinct()
             .Take(MAXIMUM_SUGGESTIONS)
             .ToList();
@@ -207,12 +208,12 @@ internal sealed partial class SymbolResolver
 
     private static IEnumerable<SourceLocation> Nearest(
         IEnumerable<WorkspaceMatch> matches,
-        string name,
+        RequestedName requested,
         bool byWords
     ) =>
         matches
             .DistinctBy(match => match.Location)
-            .Select(match => match.Resembling(name, byWords))
+            .Select(match => match.Resembling(requested, byWords))
             .OfType<Suggestion>()
             .Order(Suggestion.Nearest)
             .Select(suggestion => suggestion.Match.Location);
@@ -245,35 +246,41 @@ internal sealed partial class SymbolResolver
         /// <param name="byWords">
         /// Also accepts a name that shares most words, such as OnPlaybackStart for ReportPlaybackStart.
         /// </param>
-        public Suggestion? Resembling(string requested, bool byWords)
+        public Suggestion? Resembling(RequestedName requested, bool byWords)
         {
-            var distance = Levenshtein.Distance(
-                requested.ToLowerInvariant(),
-                Name.ToLowerInvariant()
-            );
-            if (string.Equals(Name, requested, StringComparison.OrdinalIgnoreCase))
+            var distance = requested.Lowercase.DistanceFrom(Name.ToLowerInvariant());
+            if (string.Equals(Name, requested.Name, StringComparison.OrdinalIgnoreCase))
                 return new Suggestion(this, NameResemblance.SameName, distance);
 
-            if (Name.Contains(requested, StringComparison.OrdinalIgnoreCase))
+            if (Name.Contains(requested.Name, StringComparison.OrdinalIgnoreCase))
                 return new Suggestion(this, NameResemblance.ContainsName, distance);
 
-            if (distance <= Math.Min(MAXIMUM_TYPO_DISTANCE, requested.Length / 3))
+            if (distance <= Math.Min(MAXIMUM_TYPO_DISTANCE, requested.Name.Length / 3))
                 return new Suggestion(this, NameResemblance.Typo, distance);
 
-            return byWords && SharesMostWords(requested, Name)
+            return byWords && SharesMostWords(requested.Words, Name)
                 ? new Suggestion(this, NameResemblance.SharedWords, distance)
                 : null;
         }
 
-        private static bool SharesMostWords(string requested, string name)
+        private static bool SharesMostWords(HashSet<string> words, string name)
         {
-            var words = Words(requested);
-            var shared = words.Count(Words(name).Contains);
+            var shared = words.Count(RequestedName.WordsOf(name).Contains);
             return shared >= MINIMUM_SHARED_WORDS && shared * 2 >= words.Count;
         }
+    }
+
+    // Computed once per lookup, as every candidate is compared with it
+    private sealed class RequestedName(string name)
+    {
+        public string Name => name;
+
+        public Levenshtein Lowercase { get; } = new(name.ToLowerInvariant());
+
+        public HashSet<string> Words { get; } = WordsOf(name);
 
         // PascalCase words
-        private static HashSet<string> Words(string name)
+        public static HashSet<string> WordsOf(string name)
         {
             var words = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var start = 0;

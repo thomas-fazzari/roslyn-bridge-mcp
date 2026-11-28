@@ -245,7 +245,10 @@ internal sealed partial class RoslynConnection
                 Encoding.UTF8,
                 detectEncodingFromByteOrderMarks: true
             );
-            var builder = new StringBuilder();
+            // A file never holds more UTF-16 code units than bytes
+            var builder = new StringBuilder(
+                (int)Math.Min(stream.Length, MAXIMUM_DOCUMENT_CHARACTERS)
+            );
             var buffer = new char[DOCUMENT_READ_BUFFER_CHARACTERS];
             while (true)
             {
