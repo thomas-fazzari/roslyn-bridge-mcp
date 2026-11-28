@@ -23,6 +23,12 @@
     <GlobalAnalyzerConfigFiles Include="$(MSBuildThisFileDirectory)eng/Analyzers.globalconfig" />
   </ItemGroup>
 
+  <!-- Production code reads the clock through TimeProvider and builds regexes with [GeneratedRegex] -->
+  <ItemGroup Condition="$(MSBuildProjectDirectory.StartsWith('$(MSBuildThisFileDirectory)src'))">
+    <PackageReference Include="Microsoft.CodeAnalysis.BannedApiAnalyzers" PrivateAssets="all" />
+    <AdditionalFiles Include="$(MSBuildThisFileDirectory)eng/BannedSymbols.txt" />
+  </ItemGroup>
+
   <PropertyGroup Condition="'$(IsTestProject)' == 'true'">
     <OutputType>Exe</OutputType>
     <IsPublishable>false</IsPublishable>
@@ -33,6 +39,7 @@
     <Using Include="AwesomeAssertions" />
     <Using Include="Xunit" />
     <PackageReference Include="AwesomeAssertions" />
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
     <PackageReference Include="Microsoft.Testing.Extensions.HangDump" />
     <PackageReference Include="xunit.v3.mtp-v2" />
   </ItemGroup>

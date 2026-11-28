@@ -1,0 +1,29 @@
+P:System.DateTime.Now;Use TimeProvider.GetLocalNow()
+P:System.DateTime.Today;Use TimeProvider.GetLocalNow()
+P:System.DateTime.UtcNow;Use TimeProvider.GetUtcNow()
+P:System.DateTimeOffset.Now;Use TimeProvider.GetLocalNow()
+P:System.DateTimeOffset.UtcNow;Use TimeProvider.GetUtcNow()
+M:System.Guid.CreateVersion7;Use Guid.CreateVersion7(DateTimeOffset) with TimeProvider.GetUtcNow()
+T:System.Diagnostics.Stopwatch;Use TimeProvider.GetTimestamp() and TimeProvider.GetElapsedTime()
+P:System.Environment.TickCount;Use TimeProvider.GetTimestamp()
+P:System.Environment.TickCount64;Use TimeProvider.GetTimestamp()
+M:System.Threading.Tasks.Task.Delay(System.Int32);Use Task.Delay(TimeSpan, TimeProvider, CancellationToken)
+M:System.Threading.Tasks.Task.Delay(System.Int32,System.Threading.CancellationToken);Use Task.Delay(TimeSpan, TimeProvider, CancellationToken)
+M:System.Threading.Tasks.Task.Delay(System.TimeSpan);Use Task.Delay(TimeSpan, TimeProvider, CancellationToken)
+M:System.Threading.Tasks.Task.Delay(System.TimeSpan,System.Threading.CancellationToken);Use Task.Delay(TimeSpan, TimeProvider, CancellationToken)
+M:System.Threading.Tasks.Task.WaitAsync(System.TimeSpan);Use the TimeProvider overload
+M:System.Threading.Tasks.Task.WaitAsync(System.TimeSpan,System.Threading.CancellationToken);Use the TimeProvider overload
+M:System.Threading.Tasks.Task`1.WaitAsync(System.TimeSpan);Use the TimeProvider overload
+M:System.Threading.Tasks.Task`1.WaitAsync(System.TimeSpan,System.Threading.CancellationToken);Use the TimeProvider overload
+M:System.Threading.PeriodicTimer.#ctor(System.TimeSpan);Use the TimeProvider overload
+M:System.Threading.CancellationTokenSource.#ctor(System.Int32);Use the TimeProvider overload
+M:System.Threading.CancellationTokenSource.#ctor(System.TimeSpan);Use the TimeProvider overload
+M:System.Threading.CancellationTokenSource.CancelAfter(System.Int32);Create the source with a TimeProvider and a delay
+M:System.Threading.CancellationTokenSource.CancelAfter(System.TimeSpan);Create the source with a TimeProvider and a delay
+M:System.Threading.Thread.Sleep(System.Int32);Await a TimeProvider delay
+M:System.Threading.Thread.Sleep(System.TimeSpan);Await a TimeProvider delay
+T:System.Threading.Timer;Use TimeProvider.CreateTimer
+T:System.Timers.Timer;Use TimeProvider.CreateTimer
+M:System.Text.RegularExpressions.Regex.#ctor(System.String);Use [GeneratedRegex] with NonBacktracking or a match timeout
+M:System.Text.RegularExpressions.Regex.#ctor(System.String,System.Text.RegularExpressions.RegexOptions);Use [GeneratedRegex] with NonBacktracking or a match timeout
+M:System.Text.RegularExpressions.Regex.#ctor(System.String,System.Text.RegularExpressions.RegexOptions,System.TimeSpan);Use [GeneratedRegex] with NonBacktracking or a match timeout

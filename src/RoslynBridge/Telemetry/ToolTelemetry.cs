@@ -31,7 +31,7 @@ internal static class ToolTelemetry
             using var activity = BridgeTelemetry.Source.StartActivity($"{EXECUTE_TOOL} {name}");
             activity?.SetTag(OPERATION_NAME, EXECUTE_TOOL);
             var tags = new TagList { { TOOL_NAME, name } };
-            var started = Stopwatch.GetTimestamp();
+            var started = TimeProvider.System.GetTimestamp();
             try
             {
                 var result = await next(context, cancellationToken);

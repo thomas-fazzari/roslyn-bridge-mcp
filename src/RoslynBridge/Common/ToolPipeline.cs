@@ -15,6 +15,7 @@ internal sealed partial class ToolPipeline(
     SettingsMonitor settings,
     WorkspacePaths paths,
     RoslynSession session,
+    TimeProvider time,
     ILogger<ToolPipeline> logger
 ) : IDisposable
 {
@@ -62,19 +63,21 @@ internal sealed partial class ToolPipeline(
                 : value.ToResponse();
         }
 
-        var queued = Stopwatch.GetTimestamp();
+        var queued = time.GetTimestamp();
         await _gate.WaitAsync(cancellationToken);
-        var started = Stopwatch.GetTimestamp();
-        BridgeTelemetry.QueueDuration.Record(
-            Stopwatch.GetElapsedTime(queued, started).TotalSeconds
-        );
+        var started = time.GetTimestamp();
+        BridgeTelemetry.QueueDuration.Record(time.GetElapsedTime(queued, started).TotalSeconds);
         try
         {
-            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            timeout.CancelAfter(
+            using var deadline = new CancellationTokenSource(
                 session.IsReady && !policy.MayRestart
                     ? settings.CurrentValue.RequestTimeout
-                    : settings.CurrentValue.StartupTimeout + settings.CurrentValue.RequestTimeout
+                    : settings.CurrentValue.StartupTimeout + settings.CurrentValue.RequestTimeout,
+                time
+            );
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(
+                cancellationToken,
+                deadline.Token
             );
             var resolution = await ResolveFilesAsync(request, timeout.Token);
             if (resolution.IsError(out var fileError, out var resolved))
@@ -90,7 +93,7 @@ internal sealed partial class ToolPipeline(
 
             if (logger.IsEnabled(LogLevel.Debug))
             {
-                var elapsedMilliseconds = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
+                var elapsedMilliseconds = time.GetElapsedTime(started).TotalMilliseconds;
                 OperationCompleted(logger, policy.Action, elapsedMilliseconds);
             }
 

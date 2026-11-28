@@ -23,6 +23,7 @@ internal static class TestHelpers
             Monitor(options ?? new BridgeOptions { WorkspaceRoot = root }),
             new WorkspacePaths(root),
             launcher,
+            TimeProvider.System,
             NullLogger<RoslynSession>.Instance
         );
 
@@ -32,11 +33,12 @@ internal static class TestHelpers
         string root,
         RoslynSession session,
         BridgeOptions? options = null,
-        SettingsMonitor? settings = null
+        SettingsMonitor? settings = null,
+        TimeProvider? time = null
     )
     {
         settings ??= Monitor(options ?? new BridgeOptions { WorkspaceRoot = root });
-        return new ToolClient(root, session, settings);
+        return new ToolClient(root, session, settings, time ?? TimeProvider.System);
     }
 
     public static WorkspaceSnapshot Snapshot(string root) =>

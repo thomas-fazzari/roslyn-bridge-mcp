@@ -42,6 +42,7 @@ internal static class BridgeServices
             paths.Exclude(options.Exclude);
             return services
                 .AddSingleton(settings)
+                .AddSingleton(TimeProvider.System)
                 .AddSingleton(paths)
                 .AddSingleton<RoslynLauncher>(RoslynProcess.Start)
                 .AddSingleton<RoslynSession>()

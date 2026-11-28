@@ -37,7 +37,7 @@ internal sealed partial class RoslynConnection
 
         var pending = files.Zip(uris).ToList();
         var outside = new HashSet<WorkspaceFilePath>();
-        var started = Stopwatch.GetTimestamp();
+        var started = time.GetTimestamp();
         while (true)
         {
             var states = await Task.WhenAll(
@@ -61,7 +61,7 @@ internal sealed partial class RoslynConnection
 
             pending = waiting;
 
-            if (pending.Count == 0 || Stopwatch.GetElapsedTime(started) >= ProjectAttachTimeout)
+            if (pending.Count == 0 || time.GetElapsedTime(started) >= ProjectAttachTimeout)
             {
                 // A created file that no project picks up is waited for only once
                 foreach (var (path, _) in pending)
@@ -73,7 +73,7 @@ internal sealed partial class RoslynConnection
                 return outside;
             }
 
-            await Task.Delay(_projectAttachPollInterval, cancellationToken);
+            await Task.Delay(_projectAttachPollInterval, time, cancellationToken);
         }
     }
 
