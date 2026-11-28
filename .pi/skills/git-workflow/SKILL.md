@@ -1,6 +1,6 @@
 ---
 name: git-workflow
-description: Use before you create a branch, write a commit message, title a pull request or split a change into stacked pull requests. Covers branch names, gh stack and the Conventional Commits type to pick.
+description: Load at the first git operation of the session, before you create a branch, write a commit message, title a pull request or split a change into stacked pull requests. Covers branch names, gh stack and the Conventional Commits type to pick.
 ---
 
 # Git workflow

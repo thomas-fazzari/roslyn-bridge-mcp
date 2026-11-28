@@ -3,12 +3,18 @@ min_version = "2026.9.0"
 [settings]
 idiomatic_version_file_enable_tools = ["dotnet"]
 
+[env]
+DOTNET_CLI_TELEMETRY_OPTOUT = "true"
+DOTNET_NOLOGO = "true"
+DO_NOT_TRACK = "1"
+
 [tools]
 "dotnet:csharpier" = "1.4.0"
 bun = "1.4.5"
 hk = "2.13.0"
 rumdl = "v0.3.5"
 shellcheck = "0.11.0"
+shfmt = "3.14.1"
 
 [task_config]
 includes = ["eng/tasks"]
