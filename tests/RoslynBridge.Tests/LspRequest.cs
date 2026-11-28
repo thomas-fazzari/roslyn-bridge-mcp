@@ -65,7 +65,7 @@ internal sealed record LspRequest
 
     public bool Summary { get; init; }
 
-    public int Limit { get; init; } = Paging.DefaultLimit;
+    public int Limit { get; init; } = Paging.DEFAULT_LIMIT;
 
     public int Offset { get; init; }
 

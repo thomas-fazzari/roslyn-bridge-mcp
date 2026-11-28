@@ -5,8 +5,8 @@ namespace RoslynBridge.Settings;
 
 internal sealed record BridgeOptions
 {
-    internal const int DefaultStartupTimeoutSeconds = 120;
-    internal const int DefaultRequestTimeoutSeconds = 60;
+    internal const int DEFAULT_STARTUP_TIMEOUT_SECONDS = 120;
+    internal const int DEFAULT_REQUEST_TIMEOUT_SECONDS = 60;
 
     public string WorkspaceRoot { get; init; } = Directory.GetCurrentDirectory();
 
@@ -21,10 +21,10 @@ internal sealed record BridgeOptions
     public string? DotnetRoot { get; init; }
 
     public TimeSpan StartupTimeout { get; init; } =
-        TimeSpan.FromSeconds(DefaultStartupTimeoutSeconds);
+        TimeSpan.FromSeconds(DEFAULT_STARTUP_TIMEOUT_SECONDS);
 
     public TimeSpan RequestTimeout { get; init; } =
-        TimeSpan.FromSeconds(DefaultRequestTimeoutSeconds);
+        TimeSpan.FromSeconds(DEFAULT_REQUEST_TIMEOUT_SECONDS);
 
     /// <summary>
     /// Folder names left out in addition to the built-in list.
@@ -57,10 +57,10 @@ internal sealed record BridgeOptions
             DotnetRoot = arguments.DotnetRoot,
             StartupTimeout = arguments.StartupTimeout
                 ?? Seconds(settings.StartupTimeout)
-                ?? TimeSpan.FromSeconds(DefaultStartupTimeoutSeconds),
+                ?? TimeSpan.FromSeconds(DEFAULT_STARTUP_TIMEOUT_SECONDS),
             RequestTimeout = arguments.RequestTimeout
                 ?? Seconds(settings.RequestTimeout)
-                ?? TimeSpan.FromSeconds(DefaultRequestTimeoutSeconds),
+                ?? TimeSpan.FromSeconds(DEFAULT_REQUEST_TIMEOUT_SECONDS),
             Exclude = (settings.Exclude ?? [])
                 .Concat(arguments.Exclude)
                 .ToFrozenSet(StringComparer.Ordinal),

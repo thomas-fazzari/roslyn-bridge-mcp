@@ -7,10 +7,10 @@ namespace RoslynBridge.Workspace;
 
 internal sealed class FileSelection(WorkspacePaths paths)
 {
-    internal const int MaximumFiles = 1000;
+    internal const int MAXIMUM_FILES = 1000;
 
     /// <summary>
-    /// Selects the files of <paramref name="file"/>, or fails when they are more than <see cref="MaximumFiles"/>.
+    /// Selects the files of <paramref name="file"/>, or fails when they are more than <see cref="MAXIMUM_FILES"/>.
     /// </summary>
     /// <param name="tool">The tool named in the error, such as Diagnostics.</param>
     public Result<WorkspaceFilePath[]> SelectAtMost(
@@ -22,10 +22,10 @@ internal sealed class FileSelection(WorkspacePaths paths)
         if (SelectFiles(file, cancellationToken).IsError(out var error, out var selected))
             return error;
 
-        var files = selected.Take(MaximumFiles + 1).ToArray();
-        return files.Length > MaximumFiles
+        var files = selected.Take(MAXIMUM_FILES + 1).ToArray();
+        return files.Length > MAXIMUM_FILES
             ? ToolError.InvalidRequest(
-                $"{tool} accepts at most {MaximumFiles} files. Use a narrower glob."
+                $"{tool} accepts at most {MAXIMUM_FILES} files. Use a narrower glob."
             )
             : files;
     }

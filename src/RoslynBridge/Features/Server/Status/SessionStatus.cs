@@ -20,9 +20,9 @@ internal sealed record SessionStatus(
     string? WatcherFailure = null
 ) : ToolResult
 {
-    private const int MaximumIssueLines = 10;
-    private const string ProjectErrorLabel = "project not loaded";
-    private const string ProjectWarningLabel = "project warning";
+    private const int MAXIMUM_ISSUE_LINES = 10;
+    private const string PROJECT_ERROR_LABEL = "project not loaded";
+    private const string PROJECT_WARNING_LABEL = "project warning";
 
     internal override void Write(StringBuilder text, int budget)
     {
@@ -38,8 +38,8 @@ internal sealed record SessionStatus(
         if (Server is { } server)
             text.Append("server: ").Append(server).Append('\n');
 
-        AppendIssues(text, ProjectErrorLabel, ProjectErrors);
-        AppendIssues(text, ProjectWarningLabel, ProjectWarnings);
+        AppendIssues(text, PROJECT_ERROR_LABEL, ProjectErrors);
+        AppendIssues(text, PROJECT_WARNING_LABEL, ProjectWarnings);
         if (WatcherFailure is { } failure)
         {
             text.Append("watcher failed (full rescan before each call): ")
@@ -53,15 +53,15 @@ internal sealed record SessionStatus(
         if (lines.IsDefaultOrEmpty)
             return;
 
-        foreach (var line in lines.Take(MaximumIssueLines))
+        foreach (var line in lines.Take(MAXIMUM_ISSUE_LINES))
         {
             text.Append(label).Append(": ").Append(line).Append('\n');
         }
 
-        if (lines.Length > MaximumIssueLines)
+        if (lines.Length > MAXIMUM_ISSUE_LINES)
         {
             text.Append("truncated: ")
-                .Append(lines.Length - MaximumIssueLines)
+                .Append(lines.Length - MAXIMUM_ISSUE_LINES)
                 .Append(" more ")
                 .Append(label)
                 .Append(" lines not shown\n");

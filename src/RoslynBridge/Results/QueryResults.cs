@@ -42,7 +42,7 @@ internal sealed record DiagnosticReport(
             text.Append(file.File).Append('\n');
             foreach (var diagnostic in file.Diagnostics)
             {
-                text.Append(Indent)
+                text.Append(INDENT)
                     .Append(Position(diagnostic.Start))
                     .Append(' ')
                     .Append(diagnostic.Severity.ToString().ToLowerInvariant());

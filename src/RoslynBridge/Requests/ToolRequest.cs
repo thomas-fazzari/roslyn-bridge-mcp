@@ -18,8 +18,8 @@ internal closed record ToolRequest
     public Result Validate() =>
         Page switch
         {
-            { Limit: < 1 or > Paging.MaximumLimit } => ToolError.InvalidRequest(
-                $"Limit must be between 1 and {Paging.MaximumLimit}."
+            { Limit: < 1 or > Paging.MAXIMUM_LIMIT } => ToolError.InvalidRequest(
+                $"Limit must be between 1 and {Paging.MAXIMUM_LIMIT}."
             ),
             { Offset: < 0 } => ToolError.InvalidRequest("Offset must not be negative."),
             _ => Result.Success,
@@ -72,13 +72,13 @@ internal enum FileScope
 
 internal sealed record Paging(int Limit, int Offset)
 {
-    internal const int DefaultLimit = 50;
-    internal const int MaximumLimit = 250;
-    internal const string LimitDescription =
+    internal const int DEFAULT_LIMIT = 50;
+    internal const int MAXIMUM_LIMIT = 250;
+    internal const string LIMIT_DESCRIPTION =
         "Maximum returned results, from 1 to 250. Truncation is explicit.";
-    internal const string OffsetDescription = "Results to skip, for paging.";
+    internal const string OFFSET_DESCRIPTION = "Results to skip, for paging.";
 
-    public static Paging Default { get; } = new(DefaultLimit, 0);
+    public static Paging Default { get; } = new(DEFAULT_LIMIT, 0);
 
     public IEnumerable<T> Slice<T>(IEnumerable<T> items) => items.Skip(Offset).Take(Limit);
 

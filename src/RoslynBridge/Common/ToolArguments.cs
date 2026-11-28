@@ -13,7 +13,7 @@ namespace RoslynBridge.Common;
 /// </summary>
 internal static class ToolArguments
 {
-    private const int MaximumTypoDistance = 2;
+    private const int MAXIMUM_TYPO_DISTANCE = 2;
 
     public static McpRequestHandler<CallToolRequestParams, CallToolResult> Validate(
         McpRequestHandler<CallToolRequestParams, CallToolResult> next
@@ -129,7 +129,7 @@ internal static class ToolArguments
         foreach (var candidate in candidates)
         {
             var distance = Levenshtein.Distance(lowerName, candidate.ToLowerInvariant());
-            if (distance > MaximumTypoDistance)
+            if (distance > MAXIMUM_TYPO_DISTANCE)
                 continue;
 
             if (distance < best)

@@ -9,11 +9,11 @@ namespace RoslynBridge.Editing;
 
 internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
 {
-    internal const int MaximumFileBytes = 8 * BytesPerMebibyte;
+    internal const int MAXIMUM_FILE_BYTES = 8 * BYTES_PER_MEBIBYTE;
 
-    private const int BytesPerMebibyte = 1024 * 1024;
-    private const int MaximumEditBytes = 64 * BytesPerMebibyte;
-    private const int MaximumEditedFiles = 256;
+    private const int BYTES_PER_MEBIBYTE = 1024 * 1024;
+    private const int MAXIMUM_EDIT_BYTES = 64 * BYTES_PER_MEBIBYTE;
+    private const int MAXIMUM_EDITED_FILES = 256;
 
     /// <summary>
     /// The returned snapshot has the fingerprints of the files the edit reads.
@@ -579,9 +579,9 @@ internal sealed partial class WorkspaceEditService(WorkspacePaths paths)
                     : document.Content?.Length ?? 0
             )
         );
-        return documents.Count > MaximumEditedFiles || total > MaximumEditBytes
+        return documents.Count > MAXIMUM_EDITED_FILES || total > MAXIMUM_EDIT_BYTES
             ? ToolError.InvalidRequest(
-                $"The workspace edit exceeds {MaximumEditedFiles} files or {MaximumEditBytes / BytesPerMebibyte} MiB."
+                $"The workspace edit exceeds {MAXIMUM_EDITED_FILES} files or {MAXIMUM_EDIT_BYTES / BYTES_PER_MEBIBYTE} MiB."
             )
             : Result.Success;
     }

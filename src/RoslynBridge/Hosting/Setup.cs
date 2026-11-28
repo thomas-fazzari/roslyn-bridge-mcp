@@ -8,9 +8,9 @@ namespace RoslynBridge.Hosting;
 
 internal static class Setup
 {
-    internal const string Command = "setup";
-    internal const string McpServerName = "roslyn";
-    internal const string PackageId = "ThomasFazzari.RoslynBridge";
+    internal const string COMMAND = "setup";
+    internal const string MCP_SERVER_NAME = "roslyn";
+    internal const string PACKAGE_ID = "ThomasFazzari.RoslynBridge";
 
     internal static readonly string ServerVersion = typeof(Setup)
         .Assembly.GetCustomAttributes<AssemblyMetadataAttribute>()
@@ -91,7 +91,7 @@ internal static class Setup
         {
             // The dnx script runs the dotnet beside it, so its full path needs no DOTNET_ROOT
             var dnx = unix ? Quote(Path.Combine(dotnetRoot, "dnx")) : "dnx";
-            return $"{dnx} {PackageId}@{BridgeVersion.Current} --yes";
+            return $"{dnx} {PACKAGE_ID}@{BridgeVersion.Current} --yes";
         }
 
         var launcher = Quote(processPath);
@@ -169,7 +169,7 @@ internal static class Setup
                     "tool",
                     "update",
                     "--global",
-                    RoslynLocator.ServerName,
+                    RoslynLocator.SERVER_NAME,
                     "--version",
                     ServerVersion,
                     "--allow-downgrade",
@@ -194,7 +194,7 @@ internal static class Setup
     // The .NET SDK keeps each installed version in .store/ID/VERSION on every platform
     private static string? GlobalToolVersion(string tools)
     {
-        var store = Path.Combine(tools, ".store", RoslynLocator.ServerName);
+        var store = Path.Combine(tools, ".store", RoslynLocator.SERVER_NAME);
         if (!Directory.Exists(store))
             return null;
 
@@ -244,6 +244,6 @@ internal static class Setup
     internal sealed record Agent(string Name, string Executable, string Template)
     {
         public string Registration(string bridgeCommand) =>
-            string.Format(CultureInfo.InvariantCulture, Template, McpServerName, bridgeCommand);
+            string.Format(CultureInfo.InvariantCulture, Template, MCP_SERVER_NAME, bridgeCommand);
     }
 }

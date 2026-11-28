@@ -31,7 +31,7 @@ public sealed class SessionStartupTests : TempWorkspaceTests
 
         var started = await session.EnsureStartedAsync(TestCt);
 
-        started.ErrorCode().Should().Be(ErrorCodes.Io);
+        started.ErrorCode().Should().Be(ErrorCodes.IO);
         (started is ToolError error ? error.Message : null).Should().Contain("install .NET");
     }
 
@@ -44,14 +44,14 @@ public sealed class SessionStartupTests : TempWorkspaceTests
 
         notifications
             .Should()
-            .ContainSingle(notification => notification.Method == LspMethods.SolutionOpen)
+            .ContainSingle(notification => notification.Method == LspMethods.SOLUTION_OPEN)
             .Which.Parameters!["solution"]!
             .GetValue<string>()
             .Should()
             .Be(new Uri(solution).AbsoluteUri);
         notifications
             .Should()
-            .NotContain(notification => notification.Method == LspMethods.ProjectOpen);
+            .NotContain(notification => notification.Method == LspMethods.PROJECT_OPEN);
     }
 
     [Fact]
@@ -64,7 +64,7 @@ public sealed class SessionStartupTests : TempWorkspaceTests
 
         notifications
             .Should()
-            .ContainSingle(notification => notification.Method == LspMethods.ProjectOpen)
+            .ContainSingle(notification => notification.Method == LspMethods.PROJECT_OPEN)
             .Which.Parameters!["projects"]!
             .AsArray()
             .Select(project => project!.GetValue<string>())
@@ -96,7 +96,7 @@ public sealed class SessionStartupTests : TempWorkspaceTests
 
         await session.EnsureStartedAsync(TestCt);
         // The answer to a request proves that the server has read the notifications before it
-        await session.RequestAsync(LspMethods.WorkspaceSymbol, new JsonObject(), TestCt);
+        await session.RequestAsync(LspMethods.WORKSPACE_SYMBOL, new JsonObject(), TestCt);
 
         return [.. fake!.Notifications];
     }

@@ -7,7 +7,7 @@ namespace RoslynBridge.Symbols;
 
 internal static class LspResultsExtensions
 {
-    private const string SourceGeneratedScheme = "roslyn-source-generated:";
+    private const string SOURCE_GENERATED_SCHEME = "roslyn-source-generated:";
 
     extension(LspCall[] calls)
     {
@@ -48,7 +48,8 @@ internal static class LspResultsExtensions
                 }
 
                 if (
-                    skipGenerated && uri.StartsWith(SourceGeneratedScheme, StringComparison.Ordinal)
+                    skipGenerated
+                    && uri.StartsWith(SOURCE_GENERATED_SCHEME, StringComparison.Ordinal)
                 )
                 {
                     generated++;

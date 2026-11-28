@@ -57,8 +57,8 @@ internal sealed record ExpressionFacts(
         if (Symbol is { } symbol)
         {
             AppendSymbol(text, symbol, indent: string.Empty);
-            AppendFact(text, "instantiation", Instantiation, Indent);
-            AppendFact(text, "doc", Documentation, Indent);
+            AppendFact(text, "instantiation", Instantiation, INDENT);
+            AppendFact(text, "doc", Documentation, INDENT);
         }
 
         if (UnboundReason is null)
@@ -67,7 +67,7 @@ internal sealed record ExpressionFacts(
         text.Append("no symbol: ").Append(UnboundReason).Append('\n');
         foreach (var candidate in Candidates)
         {
-            AppendSymbol(text, candidate, Indent);
+            AppendSymbol(text, candidate, INDENT);
         }
     }
 
@@ -254,7 +254,7 @@ internal sealed record TypeMembers(
                 text.Append(file?.Text).Append('\n');
             }
 
-            text.Append(Indent)
+            text.Append(INDENT)
                 .Append(Position(member.Position!.Value))
                 .Append(' ')
                 .Append(member.Kind)

@@ -4,7 +4,7 @@
 namespace RoslynBridge.Settings;
 
 internal sealed class InvalidSettingsException(IReadOnlyList<string> faults)
-    : Exception($"{ProjectSettings.FileName} is invalid:\n- {string.Join("\n- ", faults)}")
+    : Exception($"{ProjectSettings.FILE_NAME} is invalid:\n- {string.Join("\n- ", faults)}")
 {
     public IReadOnlyList<string> Faults { get; } = faults;
 }

@@ -8,10 +8,10 @@ namespace RoslynBridge.Lsp;
 
 internal sealed partial class RoslynConnection
 {
-    internal const int MaximumOpenDocuments = 1000;
-    private const int MaximumDocumentCharacters = 1024 * 1024;
-    private const int DocumentReadBufferCharacters = 4096;
-    private const int InitialDocumentVersion = 1;
+    internal const int MAXIMUM_OPEN_DOCUMENTS = 1000;
+    private const int MAXIMUM_DOCUMENT_CHARACTERS = 1024 * 1024;
+    private const int DOCUMENT_READ_BUFFER_CHARACTERS = 4096;
+    private const int INITIAL_DOCUMENT_VERSION = 1;
     private static readonly ToolError _oversizedDocument = ToolError.InvalidRequest(
         "The file exceeds the one million UTF-16 code unit limit."
     );
@@ -168,7 +168,7 @@ internal sealed partial class RoslynConnection
             return uri;
         }
 
-        if (_documents.Count >= MaximumOpenDocuments)
+        if (_documents.Count >= MAXIMUM_OPEN_DOCUMENTS)
         {
             var closed = await CloseDocumentAsync(_openedOrder.First!.Value, cancellationToken);
             if (closed is ToolError closeError)
@@ -186,14 +186,14 @@ internal sealed partial class RoslynConnection
         }
 
         var opened = await NotifyAsync(
-            LspMethods.TextDocumentDidOpen,
+            LspMethods.TEXT_DOCUMENT_DID_OPEN,
             new JsonObject
             {
                 ["textDocument"] = new JsonObject
                 {
                     ["uri"] = uri,
                     ["languageId"] = "csharp",
-                    ["version"] = InitialDocumentVersion,
+                    ["version"] = INITIAL_DOCUMENT_VERSION,
                     ["text"] = text,
                 },
             },
@@ -204,7 +204,7 @@ internal sealed partial class RoslynConnection
 
         _documents.Add(
             path,
-            new OpenDocument(text, InitialDocumentVersion, _openedOrder.AddLast(path), stamp)
+            new OpenDocument(text, INITIAL_DOCUMENT_VERSION, _openedOrder.AddLast(path), stamp)
         );
 
         return uri;
@@ -246,14 +246,14 @@ internal sealed partial class RoslynConnection
                 detectEncodingFromByteOrderMarks: true
             );
             var builder = new StringBuilder();
-            var buffer = new char[DocumentReadBufferCharacters];
+            var buffer = new char[DOCUMENT_READ_BUFFER_CHARACTERS];
             while (true)
             {
                 var count = await reader.ReadAsync(buffer, cancellationToken);
                 if (count == 0)
                     return builder.ToString();
 
-                if (builder.Length + count > MaximumDocumentCharacters)
+                if (builder.Length + count > MAXIMUM_DOCUMENT_CHARACTERS)
                     return _oversizedDocument;
 
                 builder.Append(buffer, 0, count);
@@ -300,7 +300,7 @@ internal sealed partial class RoslynConnection
 
         var version = document.Version + 1;
         var changed = await NotifyAsync(
-            LspMethods.TextDocumentDidChange,
+            LspMethods.TEXT_DOCUMENT_DID_CHANGE,
             new JsonObject
             {
                 ["textDocument"] = new JsonObject { ["uri"] = path.ToUri(), ["version"] = version },
@@ -342,7 +342,7 @@ internal sealed partial class RoslynConnection
     )
     {
         var closed = await NotifyAsync(
-            LspMethods.TextDocumentDidClose,
+            LspMethods.TEXT_DOCUMENT_DID_CLOSE,
             new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = path.ToUri() } },
             cancellationToken
         );

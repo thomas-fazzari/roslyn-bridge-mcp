@@ -24,24 +24,24 @@ public sealed partial class RoslynMcpTests
     /// </summary>
     private static async Task StartRoslynAsync(RoslynTestWorkspace workspace) =>
         await workspace.CallAsync(
-            new LspRequest { Action = LspAction.Diagnostics, File = ConsumerTestFile }
+            new LspRequest { Action = LspAction.Diagnostics, File = CONSUMER_TEST_FILE }
         );
 
     private static async Task WriteImplicitCallsAsync(RoslynTestWorkspace workspace)
     {
         await StartRoslynAsync(workspace);
-        await workspace.WriteFileAsync(ImplicitCallsTestFile, ImplicitCallsSource);
+        await workspace.WriteFileAsync(IMPLICIT_CALLS_TEST_FILE, IMPLICIT_CALLS_SOURCE);
         await workspace.CallAsync(
-            new LspRequest { Action = LspAction.Diagnostics, File = ImplicitCallsTestFile }
+            new LspRequest { Action = LspAction.Diagnostics, File = IMPLICIT_CALLS_TEST_FILE }
         );
     }
 
     private static async Task WriteExpressionsAsync(RoslynTestWorkspace workspace)
     {
         await StartRoslynAsync(workspace);
-        await workspace.WriteFileAsync(ExpressionsTestFile, ExpressionsSource);
+        await workspace.WriteFileAsync(EXPRESSIONS_TEST_FILE, EXPRESSIONS_SOURCE);
         await workspace.CallAsync(
-            new LspRequest { Action = LspAction.Diagnostics, File = ExpressionsTestFile }
+            new LspRequest { Action = LspAction.Diagnostics, File = EXPRESSIONS_TEST_FILE }
         );
     }
 
@@ -49,7 +49,7 @@ public sealed partial class RoslynMcpTests
         RoslynTestWorkspace workspace,
         string marker,
         int cursorOffset = 0,
-        string file = ExpressionsTestFile
+        string file = EXPRESSIONS_TEST_FILE
     )
     {
         var request = await workspace.AtAsync(LspAction.Expression, file, marker);
@@ -64,7 +64,7 @@ public sealed partial class RoslynMcpTests
     private static async Task<Diagnostic[]> DiagnosticsAsync(RoslynTestWorkspace workspace) =>
         Diagnostics(
             await workspace.CallAsync(
-                new LspRequest { Action = LspAction.Diagnostics, File = ProblemsTestFile }
+                new LspRequest { Action = LspAction.Diagnostics, File = PROBLEMS_TEST_FILE }
             )
         );
 
@@ -108,14 +108,14 @@ public sealed partial class RoslynMcpTests
     // The offset after a truncated page, or -1 on the last page
     private static int NextOffset(string[] page)
     {
-        const string marker = "next offset: ";
+        const string MARKER = "next offset: ";
         var line = page.SingleOrDefault(line =>
             line.StartsWith("truncated:", StringComparison.Ordinal)
         );
         if (line is null)
             return -1;
 
-        var start = line.IndexOf(marker, StringComparison.Ordinal) + marker.Length;
+        var start = line.IndexOf(MARKER, StringComparison.Ordinal) + MARKER.Length;
         return int.Parse(
             line[start..line.IndexOf('.', start, StringComparison.Ordinal)],
             CultureInfo.InvariantCulture
@@ -182,21 +182,21 @@ public sealed partial class RoslynMcpTests
     [GeneratedRegex(
         @"^proposal (?<id>\w+)",
         RegexOptions.ExplicitCapture,
-        RegexTimeoutMilliseconds
+        REGEX_TIMEOUT_MILLISECONDS
     )]
     private static partial Regex ProposalPattern();
 
     [GeneratedRegex(
         @"^(?:change|create|delete) (?<path>.+)$|^rename .+ -> (?<path>.+)$",
         RegexOptions.None,
-        RegexTimeoutMilliseconds
+        REGEX_TIMEOUT_MILLISECONDS
     )]
     private static partial Regex OperationPattern();
 
     [GeneratedRegex(
         @"^  \d+:\d+ (?<severity>\w+) (?<code>\S+) ",
         RegexOptions.ExplicitCapture,
-        RegexTimeoutMilliseconds
+        REGEX_TIMEOUT_MILLISECONDS
     )]
     private static partial Regex DiagnosticPattern();
 

@@ -23,11 +23,11 @@ public sealed class SessionLifecycleTests : TempWorkspaceTests
         };
 
         var failure = await session.RequestAsync(
-            LspMethods.WorkspaceSymbol,
+            LspMethods.WORKSPACE_SYMBOL,
             new JsonObject { ["query"] = "Greeter" },
             TestCt
         );
-        failure.ErrorCode().Should().Be(ErrorCodes.Io);
+        failure.ErrorCode().Should().Be(ErrorCodes.IO);
         (failure is ToolError error ? error.Message : null).Should().Contain("out of memory");
         session.IsRunning.Should().BeFalse();
 

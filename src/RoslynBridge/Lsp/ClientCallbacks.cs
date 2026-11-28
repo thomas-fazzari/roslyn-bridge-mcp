@@ -20,14 +20,14 @@ internal delegate Task<ApplyWorkspaceEditResult> WorkspaceEditHandler(
 /// </summary>
 internal sealed partial class ClientCallbacks(WorkspacePaths paths, ILogger logger)
 {
-    private const int MaximumLogMessageCharacters = 2048;
-    private const string ProgressBegin = "begin";
-    private const string ProgressReport = "report";
-    private const string ProgressEnd = "end";
-    private const string ErrorMarker = "Error while loading ";
-    private const string WarningMarker = "Warning while loading ";
-    private const string PathEnd = ": ";
-    private const string ProjectExtensionSuffix = "proj";
+    private const int MAXIMUM_LOG_MESSAGE_CHARACTERS = 2048;
+    private const string PROGRESS_BEGIN = "begin";
+    private const string PROGRESS_REPORT = "report";
+    private const string PROGRESS_END = "end";
+    private const string ERROR_MARKER = "Error while loading ";
+    private const string WARNING_MARKER = "Warning while loading ";
+    private const string PATH_END = ": ";
+    private const string PROJECT_EXTENSION_SUFFIX = "proj";
 
     private readonly TaskCompletionSource _initialized = new(
         TaskCreationOptions.RunContinuationsAsynchronously
@@ -77,16 +77,16 @@ internal sealed partial class ClientCallbacks(WorkspacePaths paths, ILogger logg
     }
 
     [JsonRpcMethod(
-        LspMethods.WorkspaceConfiguration,
+        LspMethods.WORKSPACE_CONFIGURATION,
         UseSingleObjectParameterDeserialization = true
     )]
     public static object?[] Configuration(ConfigurationParams parameters) =>
         new object?[parameters.Items.Length];
 
-    [JsonRpcMethod(LspMethods.WorkspaceWorkspaceFolders)]
+    [JsonRpcMethod(LspMethods.WORKSPACE_WORKSPACE_FOLDERS)]
     public JsonArray WorkspaceFolders() => ClientCapabilities.WorkspaceFolders(paths);
 
-    [JsonRpcMethod(LspMethods.WorkspaceApplyEdit, UseSingleObjectParameterDeserialization = true)]
+    [JsonRpcMethod(LspMethods.WORKSPACE_APPLY_EDIT, UseSingleObjectParameterDeserialization = true)]
     public Task<ApplyWorkspaceEditResult> ApplyEditAsync(
         ApplyWorkspaceEditParams parameters,
         CancellationToken cancellationToken
@@ -101,7 +101,7 @@ internal sealed partial class ClientCallbacks(WorkspacePaths paths, ILogger logg
             );
 
     [JsonRpcMethod(
-        LspMethods.ClientRegisterCapability,
+        LspMethods.CLIENT_REGISTER_CAPABILITY,
         UseSingleObjectParameterDeserialization = true
     )]
     public void RegisterCapability(RegistrationParams parameters)
@@ -111,7 +111,7 @@ internal sealed partial class ClientCallbacks(WorkspacePaths paths, ILogger logg
             if (
                 string.Equals(
                     registration.Method,
-                    LspMethods.WorkspaceDidChangeWatchedFiles,
+                    LspMethods.WORKSPACE_DID_CHANGE_WATCHED_FILES,
                     StringComparison.Ordinal
                 )
             )
@@ -122,7 +122,7 @@ internal sealed partial class ClientCallbacks(WorkspacePaths paths, ILogger logg
     }
 
     [JsonRpcMethod(
-        LspMethods.ClientUnregisterCapability,
+        LspMethods.CLIENT_UNREGISTER_CAPABILITY,
         UseSingleObjectParameterDeserialization = true
     )]
     public void UnregisterCapability(UnregistrationParams parameters)
@@ -133,17 +133,17 @@ internal sealed partial class ClientCallbacks(WorkspacePaths paths, ILogger logg
         }
     }
 
-    [JsonRpcMethod(LspMethods.WorkspaceProjectInitializationComplete)]
+    [JsonRpcMethod(LspMethods.WORKSPACE_PROJECT_INITIALIZATION_COMPLETE)]
     public void InitializationComplete() => _initialized.TrySetResult();
 
     // Roslyn waits for this answer before it reports progress
     [JsonRpcMethod(
-        LspMethods.WindowWorkDoneProgressCreate,
+        LspMethods.WINDOW_WORK_DONE_PROGRESS_CREATE,
         UseSingleObjectParameterDeserialization = true
     )]
     public static void CreateProgress(JsonObject _) { }
 
-    [JsonRpcMethod(LspMethods.Progress, UseSingleObjectParameterDeserialization = true)]
+    [JsonRpcMethod(LspMethods.PROGRESS, UseSingleObjectParameterDeserialization = true)]
     public void ReportProgress(ProgressParams parameters)
     {
         var token = parameters.Token.ToString();
@@ -152,7 +152,7 @@ internal sealed partial class ClientCallbacks(WorkspacePaths paths, ILogger logg
         );
     }
 
-    [JsonRpcMethod(LspMethods.WindowLogMessage, UseSingleObjectParameterDeserialization = true)]
+    [JsonRpcMethod(LspMethods.WINDOW_LOG_MESSAGE, UseSingleObjectParameterDeserialization = true)]
     public void LogMessage(MessageParams parameters)
     {
         RecordProjectIssue(parameters.Message);
@@ -161,12 +161,12 @@ internal sealed partial class ClientCallbacks(WorkspacePaths paths, ILogger logg
 
         var message = parameters.Message;
         var boundedMessage = message
-            .AsSpan(0, Math.Min(message.Length, MaximumLogMessageCharacters))
+            .AsSpan(0, Math.Min(message.Length, MAXIMUM_LOG_MESSAGE_CHARACTERS))
             .ToString();
         LogRoslynMessage(logger, boundedMessage);
     }
 
-    [JsonRpcMethod(LspMethods.WindowShowMessage, UseSingleObjectParameterDeserialization = true)]
+    [JsonRpcMethod(LspMethods.WINDOW_SHOW_MESSAGE, UseSingleObjectParameterDeserialization = true)]
     public void ShowMessage(MessageParams parameters) => LogMessage(parameters);
 
     // An error stays over a later warning of the same project, otherwise the latest issue wins
@@ -187,7 +187,7 @@ internal sealed partial class ClientCallbacks(WorkspacePaths paths, ILogger logg
     /// </summary>
     private ProjectIssue? ParseProjectIssue(string message)
     {
-        var text = message.AsSpan(0, Math.Min(message.Length, MaximumLogMessageCharacters));
+        var text = message.AsSpan(0, Math.Min(message.Length, MAXIMUM_LOG_MESSAGE_CHARACTERS));
         var lineEnd = text.IndexOfAny('\r', '\n');
         if (lineEnd >= 0)
             text = text[..lineEnd];
@@ -202,15 +202,15 @@ internal sealed partial class ClientCallbacks(WorkspacePaths paths, ILogger logg
         }
 
         ProjectIssueKind kind;
-        if (text.StartsWith(ErrorMarker, StringComparison.Ordinal))
+        if (text.StartsWith(ERROR_MARKER, StringComparison.Ordinal))
         {
             kind = ProjectIssueKind.Error;
-            text = text[ErrorMarker.Length..];
+            text = text[ERROR_MARKER.Length..];
         }
-        else if (text.StartsWith(WarningMarker, StringComparison.Ordinal))
+        else if (text.StartsWith(WARNING_MARKER, StringComparison.Ordinal))
         {
             kind = ProjectIssueKind.Warning;
-            text = text[WarningMarker.Length..];
+            text = text[WARNING_MARKER.Length..];
         }
         else
         {
@@ -225,7 +225,7 @@ internal sealed partial class ClientCallbacks(WorkspacePaths paths, ILogger logg
             ? new ProjectIssue(
                 paths.LocationOf(uri.AbsoluteUri),
                 kind,
-                text[(pathEnd + PathEnd.Length)..].Trim().ToString()
+                text[(pathEnd + PATH_END.Length)..].Trim().ToString()
             )
             : null;
     }
@@ -236,13 +236,13 @@ internal sealed partial class ClientCallbacks(WorkspacePaths paths, ILogger logg
         var offset = 0;
         while (offset < text.Length)
         {
-            var index = text[offset..].IndexOf(PathEnd, StringComparison.Ordinal);
+            var index = text[offset..].IndexOf(PATH_END, StringComparison.Ordinal);
             if (index < 0)
                 return -1;
 
             index += offset;
             var extension = Path.GetExtension(text[..index]);
-            if (extension.EndsWith(ProjectExtensionSuffix, StringComparison.OrdinalIgnoreCase))
+            if (extension.EndsWith(PROJECT_EXTENSION_SUFFIX, StringComparison.OrdinalIgnoreCase))
                 return index;
 
             offset = index + 1;
@@ -266,11 +266,11 @@ internal sealed partial class ClientCallbacks(WorkspacePaths paths, ILogger logg
         var percentage = value.Percentage;
         switch (value.Kind)
         {
-            case ProgressBegin:
+            case PROGRESS_BEGIN:
                 var begun = new TrackedProgress(token, new LoadProgress(Title(value), percentage));
                 return (index < 0 ? tracked : tracked.RemoveAt(index)).Add(begun);
 
-            case ProgressReport when index >= 0:
+            case PROGRESS_REPORT when index >= 0:
                 var current = tracked[index];
                 return tracked.SetItem(
                     index,
@@ -283,7 +283,7 @@ internal sealed partial class ClientCallbacks(WorkspacePaths paths, ILogger logg
                     }
                 );
 
-            case ProgressEnd when index >= 0:
+            case PROGRESS_END when index >= 0:
                 return tracked.RemoveAt(index);
 
             default:

@@ -12,7 +12,7 @@ namespace RoslynBridge.Tests.Unit.Tools;
 
 public sealed class ToolArgumentTests : IAsyncDisposable
 {
-    private const string SourceFile = "Source.cs";
+    private const string SOURCE_FILE = "Source.cs";
 
     private readonly string _root = Directory
         .CreateTempSubdirectory("roslyn-tool-arguments-")
@@ -44,7 +44,7 @@ public sealed class ToolArgumentTests : IAsyncDisposable
             cancellationToken: cancellationToken
         );
 
-        response.Should().BeError(ErrorCodes.InvalidRequest);
+        response.Should().BeError(ErrorCodes.INVALID_REQUEST);
         QuotedNames(response)
             .Should()
             .Equal(suggestion is null ? [argument] : [argument, suggestion]);
@@ -69,7 +69,7 @@ public sealed class ToolArgumentTests : IAsyncDisposable
             cancellationToken: cancellationToken
         );
 
-        response.Should().BeError(ErrorCodes.InvalidRequest);
+        response.Should().BeError(ErrorCodes.INVALID_REQUEST);
         ResponseText(response).Should().Contain("'action'");
         _launches.Should().Be(0);
     }
@@ -78,7 +78,7 @@ public sealed class ToolArgumentTests : IAsyncDisposable
     public async Task QueriesSentAsAJsonStringAreParsedAsAnArrayAsync()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        await WriteFileAsync(_root, SourceFile, "class A {}\n");
+        await WriteFileAsync(_root, SOURCE_FILE, "class A {}\n");
         await using var server = await ToolServer.StartAsync(_root, _session, cancellationToken);
 
         var response = await server.Client.CallToolAsync(
@@ -86,13 +86,13 @@ public sealed class ToolArgumentTests : IAsyncDisposable
             new Dictionary<string, object?>(StringComparer.Ordinal)
             {
                 ["queries"] =
-                    $$"""[{"action":"references","file":"{{SourceFile}}","line":1,"character":1}]""",
+                    $$"""[{"action":"references","file":"{{SOURCE_FILE}}","line":1,"character":1}]""",
             },
             cancellationToken: cancellationToken
         );
 
         response.Should().BeSuccessful();
-        ResponseText(response).Should().Be($"## 1 references {SourceFile}:1:1: none");
+        ResponseText(response).Should().Be($"## 1 references {SOURCE_FILE}:1:1: none");
         _launches.Should().Be(1);
     }
 
@@ -110,7 +110,7 @@ public sealed class ToolArgumentTests : IAsyncDisposable
             cancellationToken: cancellationToken
         );
 
-        response.Should().BeError(ErrorCodes.InvalidRequest);
+        response.Should().BeError(ErrorCodes.INVALID_REQUEST);
         ResponseText(response).Should().Contain("'queries'");
         _launches.Should().Be(0);
     }
@@ -119,7 +119,7 @@ public sealed class ToolArgumentTests : IAsyncDisposable
     public async Task UnknownKeyInABulkQueryIsRejectedWithoutRunningTheToolAsync()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        await WriteFileAsync(_root, SourceFile, "class A {}\n");
+        await WriteFileAsync(_root, SOURCE_FILE, "class A {}\n");
         await using var server = await ToolServer.StartAsync(_root, _session, cancellationToken);
 
         var response = await server.Client.CallToolAsync(
@@ -130,7 +130,7 @@ public sealed class ToolArgumentTests : IAsyncDisposable
                     new JsonObject
                     {
                         ["action"] = "references",
-                        ["file"] = SourceFile,
+                        ["file"] = SOURCE_FILE,
                         ["bogus"] = 1,
                     }
                 ),
@@ -138,7 +138,7 @@ public sealed class ToolArgumentTests : IAsyncDisposable
             cancellationToken: cancellationToken
         );
 
-        response.Should().BeError(ErrorCodes.InvalidRequest);
+        response.Should().BeError(ErrorCodes.INVALID_REQUEST);
         ResponseText(response).Should().Contain("'bogus'");
         _launches.Should().Be(0);
     }

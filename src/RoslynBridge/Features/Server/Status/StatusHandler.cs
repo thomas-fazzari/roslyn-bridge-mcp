@@ -10,8 +10,8 @@ namespace RoslynBridge.Features.Server.Status;
 internal sealed class StatusHandler(SettingsMonitor settings, RoslynSession session)
     : IToolHandler<StatusRequest, SessionStatus>
 {
-    private const int MaximumMessageCharacters = 300;
-    private const string Ellipsis = "...";
+    private const int MAXIMUM_MESSAGE_CHARACTERS = 300;
+    private const string ELLIPSIS = "...";
 
     public Task<Result<SessionStatus>> HandleAsync(
         StatusRequest request,
@@ -57,8 +57,8 @@ internal sealed class StatusHandler(SettingsMonitor settings, RoslynSession sess
         if (lineEnd >= 0)
             line = line[..lineEnd].TrimEnd();
 
-        return line.Length <= MaximumMessageCharacters
+        return line.Length <= MAXIMUM_MESSAGE_CHARACTERS
             ? line.ToString()
-            : string.Concat(line[..MaximumMessageCharacters], Ellipsis);
+            : string.Concat(line[..MAXIMUM_MESSAGE_CHARACTERS], ELLIPSIS);
     }
 }

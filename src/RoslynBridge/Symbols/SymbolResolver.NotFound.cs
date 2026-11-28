@@ -9,11 +9,11 @@ namespace RoslynBridge.Symbols;
 // Explains a name that matches no declaration, with the nearest candidates
 internal sealed partial class SymbolResolver
 {
-    private const int MaximumSuggestions = 10;
-    private const int MaximumTypoDistance = 3;
+    private const int MAXIMUM_SUGGESTIONS = 10;
+    private const int MAXIMUM_TYPO_DISTANCE = 3;
 
     // One shared word, such as Get, matches too many members
-    private const int MinimumSharedWords = 2;
+    private const int MINIMUM_SHARED_WORDS = 2;
 
     private static readonly Result<ContainerLookup?> _noContainer = (ContainerLookup?)null;
 
@@ -21,8 +21,8 @@ internal sealed partial class SymbolResolver
     // A failed Roslyn request has an RPC code, so it reaches the caller
     private static bool IsUnreadable(ToolError error) =>
         error
-            is { Code: ErrorCodes.Io or ErrorCodes.InvalidRequest }
-                or { Code: ErrorCodes.Lsp, RpcCode: null };
+            is { Code: ErrorCodes.IO or ErrorCodes.INVALID_REQUEST }
+                or { Code: ErrorCodes.LSP, RpcCode: null };
 
     /// <summary>
     /// Returns the error of a failed Roslyn request in place of the missing symbol.
@@ -64,7 +64,7 @@ internal sealed partial class SymbolResolver
             if (typeExists && !container.Members.Exists(member => IsNamed(member, name)))
             {
                 return new ToolError(
-                    ErrorCodes.SymbolNotFound,
+                    ErrorCodes.SYMBOL_NOT_FOUND,
                     suggestions.Count == 0
                         ? $"No declaration matches '{text}' because '{display}' has no member '{name}'. Use members to list its members."
                         : $"No declaration matches '{text}' because '{display}' has no member '{name}'. Send one candidate symbol instead.",
@@ -83,14 +83,14 @@ internal sealed partial class SymbolResolver
                         ? string.Empty
                         : $" Similar types: {string.Join(", ", similar.Select(type => type.Name).Distinct(StringComparer.Ordinal))}.";
                 return new ToolError(
-                    ErrorCodes.SymbolNotFound,
+                    ErrorCodes.SYMBOL_NOT_FOUND,
                     $"No declaration matches '{text}' because no type matches '{display}'.{types} Use symbols to search by name."
                 );
             }
         }
 
         return new ToolError(
-            ErrorCodes.SymbolNotFound,
+            ErrorCodes.SYMBOL_NOT_FOUND,
             suggestions.Count == 0
                 ? $"No declaration matches '{text}'. Use symbols to search by name."
                 : $"No declaration matches '{text}'. Send one candidate symbol instead.",
@@ -192,7 +192,7 @@ internal sealed partial class SymbolResolver
         var nearest = (close.Count > 0 ? close : Nearest(preferred, name, byWords: true))
             .Concat(Nearest(matches, name, byWords: false))
             .Distinct()
-            .Take(MaximumSuggestions)
+            .Take(MAXIMUM_SUGGESTIONS)
             .ToList();
         var lookup = await DeclarationsAtAsync(nearest, cancellationToken);
         if (lookup.IsError(out var error, out var declarations))
@@ -257,7 +257,7 @@ internal sealed partial class SymbolResolver
             if (Name.Contains(requested, StringComparison.OrdinalIgnoreCase))
                 return new Suggestion(this, NameResemblance.ContainsName, distance);
 
-            if (distance <= Math.Min(MaximumTypoDistance, requested.Length / 3))
+            if (distance <= Math.Min(MAXIMUM_TYPO_DISTANCE, requested.Length / 3))
                 return new Suggestion(this, NameResemblance.Typo, distance);
 
             return byWords && SharesMostWords(requested, Name)
@@ -269,7 +269,7 @@ internal sealed partial class SymbolResolver
         {
             var words = Words(requested);
             var shared = words.Count(Words(name).Contains);
-            return shared >= MinimumSharedWords && shared * 2 >= words.Count;
+            return shared >= MINIMUM_SHARED_WORDS && shared * 2 >= words.Count;
         }
 
         // PascalCase words

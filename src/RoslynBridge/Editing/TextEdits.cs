@@ -7,14 +7,14 @@ namespace RoslynBridge.Editing;
 
 internal static class TextEdits
 {
-    internal const int MaximumTextEditCount = 10_000;
+    internal const int MAXIMUM_TEXT_EDIT_COUNT = 10_000;
 
     public static Result<string> Apply(string source, IReadOnlyList<TextEdit> edits)
     {
-        if (edits.Count > MaximumTextEditCount)
+        if (edits.Count > MAXIMUM_TEXT_EDIT_COUNT)
         {
             return ToolError.InvalidRequest(
-                $"The edit exceeds {MaximumTextEditCount} text changes."
+                $"The edit exceeds {MAXIMUM_TEXT_EDIT_COUNT} text changes."
             );
         }
 
@@ -36,7 +36,7 @@ internal static class TextEdits
 
             result.Append(source, offset, change.Start - offset).Append(change.Text);
             offset = change.End;
-            if (result.Length > WorkspaceEditService.MaximumFileBytes)
+            if (result.Length > WorkspaceEditService.MAXIMUM_FILE_BYTES)
                 return ToolError.InvalidRequest("The edited document exceeds the size limit.");
         }
 

@@ -98,7 +98,7 @@ internal sealed class FakeRoslynServer : IRoslynServer
         CancellationToken cancellationToken
     ) =>
         NotifyClientAsync(
-            LspMethods.Progress,
+            LspMethods.PROGRESS,
             new JsonObject { ["token"] = token, ["value"] = value },
             cancellationToken
         );
@@ -108,7 +108,7 @@ internal sealed class FakeRoslynServer : IRoslynServer
     /// </summary>
     public Task LogMessageAsync(string message, CancellationToken cancellationToken) =>
         NotifyClientAsync(
-            LspMethods.WindowLogMessage,
+            LspMethods.WINDOW_LOG_MESSAGE,
             new JsonObject { ["type"] = 1, ["message"] = message },
             cancellationToken
         );
@@ -146,14 +146,14 @@ internal sealed class FakeRoslynServer : IRoslynServer
     {
         await _rpc.NotifyWithParameterObjectAsync(method, parameters);
         await _rpc.InvokeWithCancellationAsync<JsonNode?>(
-            LspMethods.WorkspaceWorkspaceFolders,
+            LspMethods.WORKSPACE_WORKSPACE_FOLDERS,
             cancellationToken: cancellationToken
         );
     }
 
     private sealed class Target(FakeRoslynServer server)
     {
-        [JsonRpcMethod(LspMethods.Initialize, UseSingleObjectParameterDeserialization = true)]
+        [JsonRpcMethod(LspMethods.INITIALIZE, UseSingleObjectParameterDeserialization = true)]
         public JsonObject Initialize(JsonObject parameters)
         {
             _ = parameters;
@@ -161,106 +161,108 @@ internal sealed class FakeRoslynServer : IRoslynServer
         }
 
         // Roslyn reports the project load after the handshake
-        [JsonRpcMethod(LspMethods.Initialized, UseSingleObjectParameterDeserialization = true)]
+        [JsonRpcMethod(LspMethods.INITIALIZED, UseSingleObjectParameterDeserialization = true)]
         public async Task InitializedAsync(JsonObject parameters)
         {
             _ = parameters;
             await server.ProjectLoad;
-            await server._rpc.NotifyAsync(LspMethods.WorkspaceProjectInitializationComplete);
+            await server._rpc.NotifyAsync(LspMethods.WORKSPACE_PROJECT_INITIALIZATION_COMPLETE);
         }
 
-        [JsonRpcMethod(LspMethods.SolutionOpen, UseSingleObjectParameterDeserialization = true)]
+        [JsonRpcMethod(LspMethods.SOLUTION_OPEN, UseSingleObjectParameterDeserialization = true)]
         public void SolutionOpen(JsonNode? parameters) =>
-            server._notifications.Enqueue((LspMethods.SolutionOpen, parameters));
+            server._notifications.Enqueue((LspMethods.SOLUTION_OPEN, parameters));
 
-        [JsonRpcMethod(LspMethods.ProjectOpen, UseSingleObjectParameterDeserialization = true)]
+        [JsonRpcMethod(LspMethods.PROJECT_OPEN, UseSingleObjectParameterDeserialization = true)]
         public void ProjectOpen(JsonNode? parameters) =>
-            server._notifications.Enqueue((LspMethods.ProjectOpen, parameters));
+            server._notifications.Enqueue((LspMethods.PROJECT_OPEN, parameters));
 
         [JsonRpcMethod(
-            LspMethods.TextDocumentDidClose,
+            LspMethods.TEXT_DOCUMENT_DID_CLOSE,
             UseSingleObjectParameterDeserialization = true
         )]
         public void DidClose(JsonNode? parameters) =>
-            server._notifications.Enqueue((LspMethods.TextDocumentDidClose, parameters));
+            server._notifications.Enqueue((LspMethods.TEXT_DOCUMENT_DID_CLOSE, parameters));
 
         [JsonRpcMethod(
-            LspMethods.WorkspaceDidChangeWatchedFiles,
+            LspMethods.WORKSPACE_DID_CHANGE_WATCHED_FILES,
             UseSingleObjectParameterDeserialization = true
         )]
         public void DidChangeWatchedFiles(JsonNode? parameters) =>
-            server._notifications.Enqueue((LspMethods.WorkspaceDidChangeWatchedFiles, parameters));
+            server._notifications.Enqueue(
+                (LspMethods.WORKSPACE_DID_CHANGE_WATCHED_FILES, parameters)
+            );
 
         [JsonRpcMethod(
-            LspMethods.TextDocumentDidOpen,
+            LspMethods.TEXT_DOCUMENT_DID_OPEN,
             UseSingleObjectParameterDeserialization = true
         )]
         public void DidOpen(JsonNode? parameters) =>
-            server._notifications.Enqueue((LspMethods.TextDocumentDidOpen, parameters));
+            server._notifications.Enqueue((LspMethods.TEXT_DOCUMENT_DID_OPEN, parameters));
 
         [JsonRpcMethod(
-            LspMethods.TextDocumentDidChange,
+            LspMethods.TEXT_DOCUMENT_DID_CHANGE,
             UseSingleObjectParameterDeserialization = true
         )]
         public void DidChange(JsonNode? parameters) =>
-            server._notifications.Enqueue((LspMethods.TextDocumentDidChange, parameters));
+            server._notifications.Enqueue((LspMethods.TEXT_DOCUMENT_DID_CHANGE, parameters));
 
         // Roslyn answers an object, so a handler that ignores the method leaves the extension inactive
         [JsonRpcMethod(
-            LspMethods.ServerActivateExtension,
+            LspMethods.SERVER_ACTIVATE_EXTENSION,
             UseSingleObjectParameterDeserialization = true
         )]
         public async Task<JsonNode?> ActivateExtensionAsync(JsonNode? parameters) =>
-            await server.Handle(LspMethods.ServerActivateExtension, parameters) as JsonObject;
+            await server.Handle(LspMethods.SERVER_ACTIVATE_EXTENSION, parameters) as JsonObject;
 
         [JsonRpcMethod(
-            LspMethods.TextDocumentDispatchExtensionMessage,
+            LspMethods.TEXT_DOCUMENT_DISPATCH_EXTENSION_MESSAGE,
             UseSingleObjectParameterDeserialization = true
         )]
         public Task<JsonNode?> DispatchExtensionMessageAsync(JsonNode? parameters) =>
-            server.Handle(LspMethods.TextDocumentDispatchExtensionMessage, parameters);
+            server.Handle(LspMethods.TEXT_DOCUMENT_DISPATCH_EXTENSION_MESSAGE, parameters);
 
         [JsonRpcMethod(
-            LspMethods.TextDocumentRename,
+            LspMethods.TEXT_DOCUMENT_RENAME,
             UseSingleObjectParameterDeserialization = true
         )]
         public Task<JsonNode?> RenameAsync(JsonNode? parameters) =>
-            server.Handle(LspMethods.TextDocumentRename, parameters);
+            server.Handle(LspMethods.TEXT_DOCUMENT_RENAME, parameters);
 
         [JsonRpcMethod(
-            LspMethods.WorkspaceWillRenameFiles,
+            LspMethods.WORKSPACE_WILL_RENAME_FILES,
             UseSingleObjectParameterDeserialization = true
         )]
         public Task<JsonNode?> WillRenameFilesAsync(JsonNode? parameters) =>
-            server.Handle(LspMethods.WorkspaceWillRenameFiles, parameters);
+            server.Handle(LspMethods.WORKSPACE_WILL_RENAME_FILES, parameters);
 
-        [JsonRpcMethod(LspMethods.WorkspaceSymbol, UseSingleObjectParameterDeserialization = true)]
+        [JsonRpcMethod(LspMethods.WORKSPACE_SYMBOL, UseSingleObjectParameterDeserialization = true)]
         public Task<JsonNode?> WorkspaceSymbolAsync(JsonNode? parameters) =>
-            server.Handle(LspMethods.WorkspaceSymbol, parameters);
+            server.Handle(LspMethods.WORKSPACE_SYMBOL, parameters);
 
         [JsonRpcMethod(
-            LspMethods.TextDocumentDocumentSymbol,
+            LspMethods.TEXT_DOCUMENT_DOCUMENT_SYMBOL,
             UseSingleObjectParameterDeserialization = true
         )]
         public Task<JsonNode?> DocumentSymbolAsync(JsonNode? parameters) =>
-            server.Handle(LspMethods.TextDocumentDocumentSymbol, parameters);
+            server.Handle(LspMethods.TEXT_DOCUMENT_DOCUMENT_SYMBOL, parameters);
 
         [JsonRpcMethod(
-            LspMethods.TextDocumentDefinition,
+            LspMethods.TEXT_DOCUMENT_DEFINITION,
             UseSingleObjectParameterDeserialization = true
         )]
         public Task<JsonNode?> DefinitionAsync(JsonNode? parameters) =>
-            server.Handle(LspMethods.TextDocumentDefinition, parameters);
+            server.Handle(LspMethods.TEXT_DOCUMENT_DEFINITION, parameters);
 
         [JsonRpcMethod(
-            LspMethods.TextDocumentImplementation,
+            LspMethods.TEXT_DOCUMENT_IMPLEMENTATION,
             UseSingleObjectParameterDeserialization = true
         )]
         public Task<JsonNode?> ImplementationAsync(JsonNode? parameters) =>
-            server.Handle(LspMethods.TextDocumentImplementation, parameters);
+            server.Handle(LspMethods.TEXT_DOCUMENT_IMPLEMENTATION, parameters);
 
         [JsonRpcMethod(
-            LspMethods.TextDocumentReferences,
+            LspMethods.TEXT_DOCUMENT_REFERENCES,
             UseSingleObjectParameterDeserialization = true
         )]
         public Task<JsonNode?> ReferencesAsync(
@@ -268,11 +270,11 @@ internal sealed class FakeRoslynServer : IRoslynServer
             CancellationToken cancellationToken
         ) =>
             server
-                .Handle(LspMethods.TextDocumentReferences, parameters)
+                .Handle(LspMethods.TEXT_DOCUMENT_REFERENCES, parameters)
                 .WaitAsync(cancellationToken);
 
         [JsonRpcMethod(
-            LspMethods.TextDocumentHover,
+            LspMethods.TEXT_DOCUMENT_HOVER,
             UseSingleObjectParameterDeserialization = true
         )]
         public JsonObject Hover(JsonNode? parameters)
@@ -282,21 +284,21 @@ internal sealed class FakeRoslynServer : IRoslynServer
         }
 
         [JsonRpcMethod(
-            LspMethods.TextDocumentDocumentHighlight,
+            LspMethods.TEXT_DOCUMENT_DOCUMENT_HIGHLIGHT,
             UseSingleObjectParameterDeserialization = true
         )]
         public Task<JsonNode?> DocumentHighlightAsync(JsonNode? parameters) =>
-            server.Handle(LspMethods.TextDocumentDocumentHighlight, parameters);
+            server.Handle(LspMethods.TEXT_DOCUMENT_DOCUMENT_HIGHLIGHT, parameters);
 
         [JsonRpcMethod(
-            LspMethods.TextDocumentDiagnostic,
+            LspMethods.TEXT_DOCUMENT_DIAGNOSTIC,
             UseSingleObjectParameterDeserialization = true
         )]
         public Task<JsonNode?> DiagnosticAsync(JsonNode? parameters) =>
-            server.Handle(LspMethods.TextDocumentDiagnostic, parameters);
+            server.Handle(LspMethods.TEXT_DOCUMENT_DIAGNOSTIC, parameters);
 
         [JsonRpcMethod(
-            LspMethods.TextDocumentGetProjectContexts,
+            LspMethods.TEXT_DOCUMENT_GET_PROJECT_CONTEXTS,
             UseSingleObjectParameterDeserialization = true
         )]
         public Task<JsonNode?> ProjectContextsAsync(
@@ -304,76 +306,76 @@ internal sealed class FakeRoslynServer : IRoslynServer
             CancellationToken cancellationToken
         ) =>
             server
-                .Handle(LspMethods.TextDocumentGetProjectContexts, parameters)
+                .Handle(LspMethods.TEXT_DOCUMENT_GET_PROJECT_CONTEXTS, parameters)
                 .WaitAsync(cancellationToken);
 
         [JsonRpcMethod(
-            LspMethods.TextDocumentCodeAction,
+            LspMethods.TEXT_DOCUMENT_CODE_ACTION,
             UseSingleObjectParameterDeserialization = true
         )]
         public Task<JsonNode?> CodeActionAsync(JsonNode? parameters) =>
-            server.Handle(LspMethods.TextDocumentCodeAction, parameters);
+            server.Handle(LspMethods.TEXT_DOCUMENT_CODE_ACTION, parameters);
 
         [JsonRpcMethod(
-            LspMethods.TextDocumentPrepareCallHierarchy,
+            LspMethods.TEXT_DOCUMENT_PREPARE_CALL_HIERARCHY,
             UseSingleObjectParameterDeserialization = true
         )]
         public Task<JsonNode?> PrepareCallHierarchyAsync(JsonNode? parameters) =>
-            server.Handle(LspMethods.TextDocumentPrepareCallHierarchy, parameters);
+            server.Handle(LspMethods.TEXT_DOCUMENT_PREPARE_CALL_HIERARCHY, parameters);
 
         [JsonRpcMethod(
-            LspMethods.CallHierarchyIncomingCalls,
+            LspMethods.CALL_HIERARCHY_INCOMING_CALLS,
             UseSingleObjectParameterDeserialization = true
         )]
         public Task<JsonNode?> IncomingCallsAsync(JsonNode? parameters) =>
-            server.Handle(LspMethods.CallHierarchyIncomingCalls, parameters);
+            server.Handle(LspMethods.CALL_HIERARCHY_INCOMING_CALLS, parameters);
 
         [JsonRpcMethod(
-            LspMethods.CallHierarchyOutgoingCalls,
+            LspMethods.CALL_HIERARCHY_OUTGOING_CALLS,
             UseSingleObjectParameterDeserialization = true
         )]
         public Task<JsonNode?> OutgoingCallsAsync(JsonNode? parameters) =>
-            server.Handle(LspMethods.CallHierarchyOutgoingCalls, parameters);
+            server.Handle(LspMethods.CALL_HIERARCHY_OUTGOING_CALLS, parameters);
 
         [JsonRpcMethod(
-            LspMethods.TextDocumentPrepareTypeHierarchy,
+            LspMethods.TEXT_DOCUMENT_PREPARE_TYPE_HIERARCHY,
             UseSingleObjectParameterDeserialization = true
         )]
         public Task<JsonNode?> PrepareTypeHierarchyAsync(JsonNode? parameters) =>
-            server.Handle(LspMethods.TextDocumentPrepareTypeHierarchy, parameters);
+            server.Handle(LspMethods.TEXT_DOCUMENT_PREPARE_TYPE_HIERARCHY, parameters);
 
         [JsonRpcMethod(
-            LspMethods.TypeHierarchySupertypes,
+            LspMethods.TYPE_HIERARCHY_SUPERTYPES,
             UseSingleObjectParameterDeserialization = true
         )]
         public Task<JsonNode?> SupertypesAsync(JsonNode? parameters) =>
-            server.Handle(LspMethods.TypeHierarchySupertypes, parameters);
+            server.Handle(LspMethods.TYPE_HIERARCHY_SUPERTYPES, parameters);
 
         [JsonRpcMethod(
-            LspMethods.TypeHierarchySubtypes,
+            LspMethods.TYPE_HIERARCHY_SUBTYPES,
             UseSingleObjectParameterDeserialization = true
         )]
         public Task<JsonNode?> SubtypesAsync(JsonNode? parameters) =>
-            server.Handle(LspMethods.TypeHierarchySubtypes, parameters);
+            server.Handle(LspMethods.TYPE_HIERARCHY_SUBTYPES, parameters);
 
         [JsonRpcMethod(
-            LspMethods.CodeActionResolveFixAll,
+            LspMethods.CODE_ACTION_RESOLVE_FIX_ALL,
             UseSingleObjectParameterDeserialization = true
         )]
         public Task<JsonNode?> ResolveFixAllAsync(JsonNode? parameters) =>
-            server.Handle(LspMethods.CodeActionResolveFixAll, parameters);
+            server.Handle(LspMethods.CODE_ACTION_RESOLVE_FIX_ALL, parameters);
 
         [JsonRpcMethod(
-            LspMethods.WorkspaceExecuteCommand,
+            LspMethods.WORKSPACE_EXECUTE_COMMAND,
             UseSingleObjectParameterDeserialization = true
         )]
         public Task<JsonNode?> WorkspaceExecuteCommandAsync(JsonNode? parameters) =>
-            server.Handle(LspMethods.WorkspaceExecuteCommand, parameters);
+            server.Handle(LspMethods.WORKSPACE_EXECUTE_COMMAND, parameters);
 
-        [JsonRpcMethod(LspMethods.Shutdown)]
+        [JsonRpcMethod(LspMethods.SHUTDOWN)]
         public Task ShutdownAsync() => server.OnShutdown();
 
-        [JsonRpcMethod(LspMethods.Exit)]
+        [JsonRpcMethod(LspMethods.EXIT)]
         public void Exit() => server.Crash();
     }
 }

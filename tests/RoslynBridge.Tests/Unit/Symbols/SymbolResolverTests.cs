@@ -9,9 +9,9 @@ namespace RoslynBridge.Tests.Unit.Symbols;
 
 public sealed class SymbolResolverTests
 {
-    private const string Root = "/workspace";
+    private const string ROOT = "/workspace";
 
-    private static readonly WorkspaceFilePath _file = TestHelpers.Resolved(Root, "Shapes.cs");
+    private static readonly WorkspaceFilePath _file = TestHelpers.Resolved(ROOT, "Shapes.cs");
 
     // Document symbols in the shape Roslyn returns them
     private static readonly JsonArray _documentSymbols =
@@ -110,8 +110,8 @@ public sealed class SymbolResolverTests
         int expected
     )
     {
-        var app = TestHelpers.Resolved(Root, "App/Program.cs");
-        var lib = TestHelpers.Resolved(Root, "Lib/Program.cs");
+        var app = TestHelpers.Resolved(ROOT, "App/Program.cs");
+        var lib = TestHelpers.Resolved(ROOT, "Lib/Program.cs");
         var declarations = new[]
         {
             new SymbolDeclaration("Program", "Program", LspSymbolKind.Class, app, 1, 1, 1, 9),

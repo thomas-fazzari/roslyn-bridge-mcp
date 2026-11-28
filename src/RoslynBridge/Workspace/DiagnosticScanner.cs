@@ -33,7 +33,7 @@ internal sealed class DiagnosticScanner(RoslynSession session)
             return error;
 
         var scanned = new List<ScannedFile>(files.Count);
-        foreach (var batch in files.Chunk(RoslynConnection.MaximumOpenDocuments))
+        foreach (var batch in files.Chunk(RoslynConnection.MAXIMUM_OPEN_DOCUMENTS))
         {
             var batchScan = await ScanBatchAsync(batch, cancellationToken);
             if (batchScan.IsError(out var scanError, out var batchFiles))

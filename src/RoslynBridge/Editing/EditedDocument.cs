@@ -11,7 +11,7 @@ namespace RoslynBridge.Editing;
 )]
 internal sealed class EditedDocument(WorkspaceFilePath path, byte[]? original)
 {
-    internal const int MaximumPreviewCharacters = 2_000;
+    internal const int MAXIMUM_PREVIEW_CHARACTERS = 2_000;
 
     private static readonly Encoding _utf8 = new UTF8Encoding(
         encoderShouldEmitUTF8Identifier: true,
@@ -68,7 +68,7 @@ internal sealed class EditedDocument(WorkspaceFilePath path, byte[]? original)
             return editError;
 
         var length = encoding.GetByteCount(edited);
-        if (length + preamble > WorkspaceEditService.MaximumFileBytes)
+        if (length + preamble > WorkspaceEditService.MAXIMUM_FILE_BYTES)
         {
             return ToolError.InvalidRequest(
                 $"The edited file exceeds the size limit: {Path.FullPath}"

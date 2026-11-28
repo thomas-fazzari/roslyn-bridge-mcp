@@ -21,7 +21,7 @@ public class StartupBenchmarks : IAsyncDisposable
     public Task Load()
     {
         _session = new BridgeSession();
-        return _session.StartAsync(JellyfinBenchmarks.RepositoryName);
+        return _session.StartAsync(JellyfinBenchmarks.REPOSITORY_NAME);
     }
 
     // BenchmarkDotNet only runs a synchronous iteration cleanup

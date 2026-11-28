@@ -10,8 +10,9 @@ namespace RoslynBridge.Extension;
 
 internal static partial class SymbolExtensions
 {
-    private const string DebuggerDisplayName = "System.Diagnostics.DebuggerDisplayAttribute";
-    private const string StructLayoutName = "System.Runtime.InteropServices.StructLayoutAttribute";
+    private const string DEBUGGER_DISPLAY_NAME = "System.Diagnostics.DebuggerDisplayAttribute";
+    private const string STRUCT_LAYOUT_NAME =
+        "System.Runtime.InteropServices.StructLayoutAttribute";
 
     // Any other attribute may be how a framework finds the declaration, as test and serializer attributes are
     private static readonly FrozenSet<string> _neutralAttributes = new[]
@@ -30,7 +31,7 @@ internal static partial class SymbolExtensions
         "System.Diagnostics.ConditionalAttribute",
         "System.Diagnostics.Contracts.PureAttribute",
         "System.Diagnostics.DebuggerBrowsableAttribute",
-        DebuggerDisplayName,
+        DEBUGGER_DISPLAY_NAME,
         "System.Diagnostics.DebuggerHiddenAttribute",
         "System.Diagnostics.DebuggerNonUserCodeAttribute",
         "System.Diagnostics.DebuggerStepThroughAttribute",
@@ -41,7 +42,7 @@ internal static partial class SymbolExtensions
         "System.Runtime.CompilerServices.MethodImplAttribute",
         "System.Runtime.CompilerServices.OverloadResolutionPriorityAttribute",
         "System.Runtime.CompilerServices.SkipLocalsInitAttribute",
-        StructLayoutName,
+        STRUCT_LAYOUT_NAME,
     }.ToFrozenSet(StringComparer.Ordinal);
 
     extension(INamedTypeSymbol type)
@@ -184,7 +185,7 @@ internal static partial class SymbolExtensions
             && symbol.ContainingType is { } type
             && type.GetAttributes()
                 .Any(attribute =>
-                    attribute.AttributeClass?.ToDisplayString() is StructLayoutName
+                    attribute.AttributeClass?.ToDisplayString() is STRUCT_LAYOUT_NAME
                     && attribute.ConstructorArguments
                         is [{ Value: (int)LayoutKind.Sequential or (int)LayoutKind.Explicit }, ..]
                 );
@@ -194,7 +195,7 @@ internal static partial class SymbolExtensions
             && symbol.ContainingType is { } type
             && type.GetAttributes()
                 .Where(attribute =>
-                    attribute.AttributeClass?.ToDisplayString() is DebuggerDisplayName
+                    attribute.AttributeClass?.ToDisplayString() is DEBUGGER_DISPLAY_NAME
                 )
                 .SelectMany(DisplayedNames)
                 .Contains(symbol.Name, StringComparer.Ordinal);

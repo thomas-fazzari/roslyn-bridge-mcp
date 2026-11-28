@@ -11,7 +11,7 @@ namespace RoslynBridge.Symbols;
 /// </summary>
 internal sealed partial class SymbolResolver(RoslynSession session, WorkspacePaths paths)
 {
-    internal const int MaximumCandidates = 20;
+    internal const int MAXIMUM_CANDIDATES = 20;
 
     /// <summary>
     /// A partial type has one declaration per part, and the first is where navigation starts.
@@ -79,9 +79,9 @@ internal sealed partial class SymbolResolver(RoslynSession session, WorkspacePat
 
         var advice = AmbiguityAdvice(symbols);
         return new ToolError(
-            ErrorCodes.AmbiguousSymbol,
-            symbols.Count > MaximumCandidates
-                ? $"'{text}' matches {symbols.Count} symbols. The first {MaximumCandidates} are listed. {advice}"
+            ErrorCodes.AMBIGUOUS_SYMBOL,
+            symbols.Count > MAXIMUM_CANDIDATES
+                ? $"'{text}' matches {symbols.Count} symbols. The first {MAXIMUM_CANDIDATES} are listed. {advice}"
                 : $"'{text}' matches {symbols.Count} symbols. {advice}",
             Candidates(symbols)
         );
@@ -328,7 +328,7 @@ internal sealed partial class SymbolResolver(RoslynSession session, WorkspacePat
     {
         var documents = new List<(WorkspaceFilePath File, LspSymbol[] Symbols)>();
         // Batches stay within the open documents the session keeps
-        foreach (var batch in files.Chunk(RoslynConnection.MaximumOpenDocuments))
+        foreach (var batch in files.Chunk(RoslynConnection.MAXIMUM_OPEN_DOCUMENTS))
         {
             if (
                 (await session.OpenDocumentsAsync(batch, cancellationToken)).IsError(
@@ -550,7 +550,7 @@ internal sealed partial class SymbolResolver(RoslynSession session, WorkspacePat
             .. declarations
                 .OrderBy(declaration => declaration.Name, StringComparer.Ordinal)
                 .ThenBy(declaration => declaration.File, WorkspaceFilePath.Order)
-                .Take(MaximumCandidates)
+                .Take(MAXIMUM_CANDIDATES)
                 .Select(declaration => declaration.ToItem()),
         ];
 

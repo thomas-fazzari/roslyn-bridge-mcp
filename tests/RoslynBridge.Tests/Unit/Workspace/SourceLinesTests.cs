@@ -69,11 +69,11 @@ public sealed class SourceLinesTests : TempWorkspaceTests
     [Fact]
     public void ShortensLongLines()
     {
-        Write("Long.cs", new string('x', SourceLines.MaximumLineCharacters + 10));
+        Write("Long.cs", new string('x', SourceLines.MAXIMUM_LINE_CHARACTERS + 10));
 
         var lines = Lines("Long.cs", new SourcePosition(1, 1));
 
-        lines![1].Should().HaveLength(SourceLines.MaximumLineCharacters + 1).And.EndWith("…");
+        lines![1].Should().HaveLength(SourceLines.MAXIMUM_LINE_CHARACTERS + 1).And.EndWith("…");
     }
 
     private void Write(string file, string text) =>

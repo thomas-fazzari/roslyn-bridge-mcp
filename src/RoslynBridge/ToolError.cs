@@ -13,25 +13,25 @@ internal record ToolError(
 )
 {
     public static ToolError InvalidRequest(string message) =>
-        new(ErrorCodes.InvalidRequest, message);
+        new(ErrorCodes.INVALID_REQUEST, message);
 
-    public static ToolError InvalidLspData(string message) => new(ErrorCodes.Lsp, message);
+    public static ToolError InvalidLspData(string message) => new(ErrorCodes.LSP, message);
 
-    public static ToolError StaleEdit(string message) => new(ErrorCodes.StaleEdit, message);
+    public static ToolError StaleEdit(string message) => new(ErrorCodes.STALE_EDIT, message);
 
-    public static ToolError Io(string message) => new(ErrorCodes.Io, message);
+    public static ToolError Io(string message) => new(ErrorCodes.IO, message);
 
     /// <summary>
     /// A cancellation that reaches a step which must report the files it already wrote.
     /// </summary>
     public static ToolError Cancelled(OperationCanceledException exception) =>
-        new(ErrorCodes.Cancelled, exception.Message);
+        new(ErrorCodes.CANCELLED, exception.Message);
 
     /// <summary>
     /// Whether Roslyn, the file system or a timeout failed, as opposed to a request that is wrong.
     /// </summary>
     public bool IsInfrastructureFailure =>
-        Code is ErrorCodes.Lsp or ErrorCodes.Io or ErrorCodes.Timeout;
+        Code is ErrorCodes.LSP or ErrorCodes.IO or ErrorCodes.TIMEOUT;
 
     /// <summary>
     /// Whether a file system call failed for a reason outside the bridge, such as a locked or unreadable file.
@@ -165,17 +165,17 @@ internal static class ResultExtensions
 
 internal static class ErrorCodes
 {
-    internal const string InvalidRequest = "invalid_request";
-    internal const string InvalidSettings = "invalid_settings";
-    internal const string StaleEdit = "stale_edit";
-    internal const string Loading = "loading";
-    internal const string Timeout = "timeout";
-    internal const string Cancelled = "cancelled";
-    internal const string Lsp = "lsp_error";
-    internal const string Io = "io_error";
-    internal const string ResultTooLarge = "result_too_large";
-    internal const string Internal = "internal_error";
-    internal const string SymbolNotFound = "symbol_not_found";
-    internal const string AmbiguousSymbol = "ambiguous_symbol";
-    internal const string AmbiguousFile = "ambiguous_file";
+    internal const string INVALID_REQUEST = "invalid_request";
+    internal const string INVALID_SETTINGS = "invalid_settings";
+    internal const string STALE_EDIT = "stale_edit";
+    internal const string LOADING = "loading";
+    internal const string TIMEOUT = "timeout";
+    internal const string CANCELLED = "cancelled";
+    internal const string LSP = "lsp_error";
+    internal const string IO = "io_error";
+    internal const string RESULT_TOO_LARGE = "result_too_large";
+    internal const string INTERNAL = "internal_error";
+    internal const string SYMBOL_NOT_FOUND = "symbol_not_found";
+    internal const string AMBIGUOUS_SYMBOL = "ambiguous_symbol";
+    internal const string AMBIGUOUS_FILE = "ambiguous_file";
 }

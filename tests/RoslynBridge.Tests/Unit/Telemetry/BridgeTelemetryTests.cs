@@ -8,8 +8,8 @@ namespace RoslynBridge.Tests.Unit.Telemetry;
 
 public sealed class BridgeTelemetryTests
 {
-    private const string Endpoint = "OTEL_EXPORTER_OTLP_ENDPOINT";
-    private const string Disabled = "OTEL_SDK_DISABLED";
+    private const string ENDPOINT = "OTEL_EXPORTER_OTLP_ENDPOINT";
+    private const string DISABLED = "OTEL_SDK_DISABLED";
 
     [Theory]
     [InlineData(null, null, false)]
@@ -26,9 +26,9 @@ public sealed class BridgeTelemetryTests
         // An endpoint inherited from the MCP client must not be enough
         var environment = new Hashtable(StringComparer.Ordinal)
         {
-            [Endpoint] = "http://localhost:4318",
-            [BridgeTelemetry.EnableVariable] = enable,
-            [Disabled] = disable,
+            [ENDPOINT] = "http://localhost:4318",
+            [BridgeTelemetry.ENABLE_VARIABLE] = enable,
+            [DISABLED] = disable,
         };
 
         BridgeTelemetry.IsEnabled(environment).Should().Be(expected);

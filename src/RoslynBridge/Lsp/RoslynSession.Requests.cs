@@ -16,7 +16,7 @@ internal sealed partial class RoslynSession
     ) =>
         (
             await RequestAsync(
-                LspMethods.TextDocumentDefinition,
+                LspMethods.TEXT_DOCUMENT_DEFINITION,
                 LspParameters.At(position),
                 cancellationToken
             )
@@ -28,7 +28,7 @@ internal sealed partial class RoslynSession
     ) =>
         (
             await RequestAsync(
-                LspMethods.TextDocumentTypeDefinition,
+                LspMethods.TEXT_DOCUMENT_TYPE_DEFINITION,
                 LspParameters.At(position),
                 cancellationToken
             )
@@ -40,7 +40,7 @@ internal sealed partial class RoslynSession
     ) =>
         (
             await RequestAsync(
-                LspMethods.TextDocumentImplementation,
+                LspMethods.TEXT_DOCUMENT_IMPLEMENTATION,
                 LspParameters.At(position),
                 cancellationToken
             )
@@ -55,7 +55,7 @@ internal sealed partial class RoslynSession
         var parameters = LspParameters.At(position);
         parameters["context"] = new JsonObject { ["includeDeclaration"] = includeDeclaration };
         return (
-            await RequestAsync(LspMethods.TextDocumentReferences, parameters, cancellationToken)
+            await RequestAsync(LspMethods.TEXT_DOCUMENT_REFERENCES, parameters, cancellationToken)
         ).Bind(LspAnswers.ReadLocations);
     }
 
@@ -65,7 +65,7 @@ internal sealed partial class RoslynSession
     ) =>
         (
             await RequestAsync(
-                LspMethods.TextDocumentDocumentHighlight,
+                LspMethods.TEXT_DOCUMENT_DOCUMENT_HIGHLIGHT,
                 LspParameters.At(position),
                 cancellationToken
             )
@@ -80,7 +80,7 @@ internal sealed partial class RoslynSession
     ) =>
         (
             await RequestAsync(
-                LspMethods.TextDocumentHover,
+                LspMethods.TEXT_DOCUMENT_HOVER,
                 LspParameters.At(position),
                 cancellationToken
             )
@@ -92,7 +92,7 @@ internal sealed partial class RoslynSession
     ) =>
         (
             await RequestAsync(
-                LspMethods.TextDocumentDocumentSymbol,
+                LspMethods.TEXT_DOCUMENT_DOCUMENT_SYMBOL,
                 LspParameters.Document(uri),
                 cancellationToken
             )
@@ -104,7 +104,7 @@ internal sealed partial class RoslynSession
     ) =>
         (
             await RequestAsync(
-                LspMethods.WorkspaceSymbol,
+                LspMethods.WORKSPACE_SYMBOL,
                 new JsonObject { ["query"] = query },
                 cancellationToken
             )
@@ -116,7 +116,7 @@ internal sealed partial class RoslynSession
     ) =>
         (
             await RequestAsync(
-                LspMethods.TextDocumentPrepareCallHierarchy,
+                LspMethods.TEXT_DOCUMENT_PREPARE_CALL_HIERARCHY,
                 LspParameters.At(position),
                 cancellationToken
             )
@@ -128,7 +128,7 @@ internal sealed partial class RoslynSession
     ) =>
         (
             await RequestAsync(
-                LspMethods.TextDocumentPrepareTypeHierarchy,
+                LspMethods.TEXT_DOCUMENT_PREPARE_TYPE_HIERARCHY,
                 LspParameters.At(position),
                 cancellationToken
             )
@@ -140,7 +140,7 @@ internal sealed partial class RoslynSession
     ) =>
         (
             await RequestAsync(
-                LspMethods.CallHierarchyIncomingCalls,
+                LspMethods.CALL_HIERARCHY_INCOMING_CALLS,
                 LspParameters.Item(item),
                 cancellationToken
             )
@@ -152,7 +152,7 @@ internal sealed partial class RoslynSession
     ) =>
         (
             await RequestAsync(
-                LspMethods.CallHierarchyOutgoingCalls,
+                LspMethods.CALL_HIERARCHY_OUTGOING_CALLS,
                 LspParameters.Item(item),
                 cancellationToken
             )
@@ -164,7 +164,7 @@ internal sealed partial class RoslynSession
     ) =>
         (
             await RequestAsync(
-                LspMethods.TypeHierarchySupertypes,
+                LspMethods.TYPE_HIERARCHY_SUPERTYPES,
                 LspParameters.Item(item),
                 cancellationToken
             )
@@ -176,7 +176,7 @@ internal sealed partial class RoslynSession
     ) =>
         (
             await RequestAsync(
-                LspMethods.TypeHierarchySubtypes,
+                LspMethods.TYPE_HIERARCHY_SUBTYPES,
                 LspParameters.Item(item),
                 cancellationToken
             )
@@ -191,7 +191,7 @@ internal sealed partial class RoslynSession
     ) =>
         (
             await RequestAsync(
-                LspMethods.TextDocumentPrepareRename,
+                LspMethods.TEXT_DOCUMENT_PREPARE_RENAME,
                 LspParameters.At(position),
                 cancellationToken
             )
@@ -209,7 +209,7 @@ internal sealed partial class RoslynSession
         var parameters = LspParameters.At(position);
         parameters["newName"] = newName;
         var renamed = await RequestAsync(
-            LspMethods.TextDocumentRename,
+            LspMethods.TEXT_DOCUMENT_RENAME,
             parameters,
             cancellationToken
         );
@@ -232,7 +232,7 @@ internal sealed partial class RoslynSession
             ["files"] = new JsonArray(new JsonObject { ["oldUri"] = oldUri, ["newUri"] = newUri }),
         };
         var renamed = await RequestAsync(
-            LspMethods.WorkspaceWillRenameFiles,
+            LspMethods.WORKSPACE_WILL_RENAME_FILES,
             parameters,
             cancellationToken
         );
@@ -250,7 +250,7 @@ internal sealed partial class RoslynSession
         // Roslyn computes the diagnostics in the range itself, so the context stays empty
         parameters["context"] = new JsonObject { ["diagnostics"] = new JsonArray() };
         var listed = await RequestAsync(
-            LspMethods.TextDocumentCodeAction,
+            LspMethods.TEXT_DOCUMENT_CODE_ACTION,
             parameters,
             cancellationToken
         );
@@ -266,7 +266,7 @@ internal sealed partial class RoslynSession
         var resolution = (codeAction.Scope, action["data"]) switch
         {
             ({ } scope, _) => await RequestAsync(
-                LspMethods.CodeActionResolveFixAll,
+                LspMethods.CODE_ACTION_RESOLVE_FIX_ALL,
                 new JsonObject
                 {
                     ["title"] = action["title"]?.DeepClone(),
@@ -276,7 +276,7 @@ internal sealed partial class RoslynSession
                 cancellationToken
             ),
             (null, not null) => await RequestAsync(
-                LspMethods.CodeActionResolve,
+                LspMethods.CODE_ACTION_RESOLVE,
                 action,
                 cancellationToken
             ),

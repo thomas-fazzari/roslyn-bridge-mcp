@@ -8,9 +8,9 @@ namespace RoslynBridge.Editing;
 
 internal static class TextPreview
 {
-    internal const int MaximumDiffCharacters = 32_000;
-    internal const int MaximumDiffLines = 2_000;
-    private const int ContextCharacters = 80;
+    internal const int MAXIMUM_DIFF_CHARACTERS = 32_000;
+    internal const int MAXIMUM_DIFF_LINES = 2_000;
+    private const int CONTEXT_CHARACTERS = 80;
 
     public static (List<TextChange> Changes, bool Truncated) Create(string before, string after)
     {
@@ -22,7 +22,7 @@ internal static class TextPreview
         var oldText = before[window.Start..window.BeforeEnd];
         var newText = after[window.Start..window.AfterEnd];
         var origin = PositionAt(before, window.Start);
-        var remaining = EditedDocument.MaximumPreviewCharacters * 2;
+        var remaining = EditedDocument.MAXIMUM_PREVIEW_CHARACTERS * 2;
 
         var blocks = CanCompareLines(oldText, newText)
             ? DiffLines(oldText, newText)
@@ -65,8 +65,8 @@ internal static class TextPreview
     }
 
     private static bool CanCompareLines(string before, string after) =>
-        before.Length + after.Length <= MaximumDiffCharacters
-        && CountLines(before) + CountLines(after) <= MaximumDiffLines;
+        before.Length + after.Length <= MAXIMUM_DIFF_CHARACTERS
+        && CountLines(before) + CountLines(after) <= MAXIMUM_DIFF_LINES;
 
     private static int CountLines(string text) => PositionAt(text, text.Length).Line;
 
@@ -185,14 +185,14 @@ internal static class TextPreview
             suffix++;
         }
 
-        var start = SafeLength(before, Math.Max(0, prefix - ContextCharacters));
+        var start = SafeLength(before, Math.Max(0, prefix - CONTEXT_CHARACTERS));
         var beforeEnd = SafeLength(
             before,
-            Math.Min(before.Length, before.Length - suffix + ContextCharacters)
+            Math.Min(before.Length, before.Length - suffix + CONTEXT_CHARACTERS)
         );
         var afterEnd = SafeLength(
             after,
-            Math.Min(after.Length, after.Length - suffix + ContextCharacters)
+            Math.Min(after.Length, after.Length - suffix + CONTEXT_CHARACTERS)
         );
         return (start, beforeEnd, afterEnd);
     }

@@ -33,10 +33,10 @@ internal sealed class DiagnosticsTool(
             DiagnosticSeverity? severity = null,
         [Description("Only these diagnostic codes, such as CS0246.")] string[]? ids = null,
         [Description("One line per code with count and example.")] bool summary = false,
-        [Description(Paging.LimitDescription)]
-        [Range(1, Paging.MaximumLimit)]
-            int limit = Paging.DefaultLimit,
-        [Description(Paging.OffsetDescription)] [Range(0, int.MaxValue)] int offset = 0,
+        [Description(Paging.LIMIT_DESCRIPTION)]
+        [Range(1, Paging.MAXIMUM_LIMIT)]
+            int limit = Paging.DEFAULT_LIMIT,
+        [Description(Paging.OFFSET_DESCRIPTION)] [Range(0, int.MaxValue)] int offset = 0,
         CancellationToken cancellationToken = default
     ) =>
         pipeline.RunAsync(

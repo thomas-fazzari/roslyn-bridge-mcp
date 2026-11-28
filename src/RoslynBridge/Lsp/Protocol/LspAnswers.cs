@@ -9,7 +9,7 @@ namespace RoslynBridge.Lsp.Protocol;
 internal static class LspAnswers
 {
     // VS Code implements these commands itself, so the server has no handler for them
-    private const string ClientCommandPrefix = "roslyn.client.";
+    private const string CLIENT_COMMAND_PREFIX = "roslyn.client.";
 
     // A location result is null, one location or an array of them
     public static Result<LspLocation[]> ReadLocations(JsonNode? answer) =>
@@ -66,5 +66,5 @@ internal static class LspAnswers
 
     private static bool IsClientCommand(JsonObject? command) =>
         command?["command"].AsString() is { } name
-        && name.StartsWith(ClientCommandPrefix, StringComparison.Ordinal);
+        && name.StartsWith(CLIENT_COMMAND_PREFIX, StringComparison.Ordinal);
 }

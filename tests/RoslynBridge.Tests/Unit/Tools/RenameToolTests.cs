@@ -13,12 +13,12 @@ namespace RoslynBridge.Tests.Unit.Tools;
 
 public sealed class RenameToolTests : TempWorkspaceTests
 {
-    private const string SourceText = "class A {}\n";
+    private const string SOURCE_TEXT = "class A {}\n";
 
     [Fact]
     public async Task RenamePreviewShowsTheChangedLinesAndApplyingItWritesTheFileAsync()
     {
-        var source = await WriteFileAsync(Root, SourceFile, SourceText);
+        var source = await WriteFileAsync(Root, SOURCE_FILE, SOURCE_TEXT);
         await using var session = CreateSession(Root, RenamingServer());
         using var tool = CreateTool(Root, session);
 
@@ -32,7 +32,7 @@ public sealed class RenameToolTests : TempWorkspaceTests
             .Contain("change Source.cs")
             .And.Contain("- class A {}")
             .And.Contain("+ class B {}");
-        await AssertFileTextAsync(source, SourceText);
+        await AssertFileTextAsync(source, SOURCE_TEXT);
 
         var applied = await tool.ExecuteAsync(
             ProposalRequest(ResultLines.ProposalId(ResponseText(preview))) with
@@ -49,21 +49,21 @@ public sealed class RenameToolTests : TempWorkspaceTests
     [Fact]
     public async Task EvictionKeepsTheNewestProposalsAsync()
     {
-        await WriteFileAsync(Root, SourceFile, SourceText);
+        await WriteFileAsync(Root, SOURCE_FILE, SOURCE_TEXT);
         await using var session = CreateSession(Root, RenamingServer());
         using var tool = CreateTool(Root, session);
         var proposals = new List<string>();
-        for (var index = 0; index < 2 * ProposalStore.MaximumPendingProposals; index++)
+        for (var index = 0; index < 2 * ProposalStore.MAXIMUM_PENDING_PROPOSALS; index++)
         {
             var preview = await tool.ExecuteAsync(RenameRequest(), TestCt);
             proposals.Add(ResultLines.ProposalId(ResponseText(preview)));
         }
 
         var oldest = await tool.ExecuteAsync(ProposalRequest(proposals[0]), TestCt);
-        oldest.Should().BeError(ErrorCodes.InvalidRequest);
+        oldest.Should().BeError(ErrorCodes.INVALID_REQUEST);
 
         // Each use remembers a new preview, which evicts the oldest remaining proposal
-        foreach (var proposal in proposals[^ProposalStore.MaximumPendingProposals..])
+        foreach (var proposal in proposals[^ProposalStore.MAXIMUM_PENDING_PROPOSALS..])
         {
             var response = await tool.ExecuteAsync(ProposalRequest(proposal), TestCt);
             response.Should().BeSuccessful();
@@ -73,7 +73,7 @@ public sealed class RenameToolTests : TempWorkspaceTests
     [Fact]
     public async Task ProposalCannotBeUsedForAnotherActionAsync()
     {
-        await WriteFileAsync(Root, SourceFile, SourceText);
+        await WriteFileAsync(Root, SOURCE_FILE, SOURCE_TEXT);
         await using var session = CreateSession(Root, RenamingServer());
         using var tool = CreateTool(Root, session);
         var preview = await tool.ExecuteAsync(RenameRequest(), TestCt);
@@ -86,19 +86,19 @@ public sealed class RenameToolTests : TempWorkspaceTests
             TestCt
         );
 
-        response.Should().BeError(ErrorCodes.InvalidRequest);
+        response.Should().BeError(ErrorCodes.INVALID_REQUEST);
     }
 
     [Theory]
     [InlineData(nameof(LspAction.Rename), 0)]
-    [InlineData(nameof(LspAction.Rename), Paging.MaximumLimit + 1)]
+    [InlineData(nameof(LspAction.Rename), Paging.MAXIMUM_LIMIT + 1)]
     [InlineData(nameof(LspAction.RenameFile), 0)]
-    [InlineData(nameof(LspAction.RenameFile), Paging.MaximumLimit + 1)]
+    [InlineData(nameof(LspAction.RenameFile), Paging.MAXIMUM_LIMIT + 1)]
     [InlineData(nameof(LspAction.CodeActions), 0)]
-    [InlineData(nameof(LspAction.CodeActions), Paging.MaximumLimit + 1)]
+    [InlineData(nameof(LspAction.CodeActions), Paging.MAXIMUM_LIMIT + 1)]
     public async Task EditRejectsALimitOutsideTheAllowedRangeAsync(string action, int limit)
     {
-        await WriteFileAsync(Root, SourceFile, SourceText);
+        await WriteFileAsync(Root, SOURCE_FILE, SOURCE_TEXT);
         await using var session = CreateSession(Root, RenamingServer());
         using var tool = CreateTool(Root, session);
 
@@ -111,25 +111,25 @@ public sealed class RenameToolTests : TempWorkspaceTests
             TestCt
         );
 
-        response.Should().BeError(ErrorCodes.InvalidRequest);
+        response.Should().BeError(ErrorCodes.INVALID_REQUEST);
     }
 
     [Fact]
     public async Task RenameFileIsRefusedWithoutTheWillRenameCapabilityAsync()
     {
-        await WriteFileAsync(Root, SourceFile, SourceText);
+        await WriteFileAsync(Root, SOURCE_FILE, SOURCE_TEXT);
         await using var session = CreateSession(Root, FakeServer());
         using var tool = CreateTool(Root, session);
 
         var response = await tool.ExecuteAsync(RenameFileRequest(), TestCt);
 
-        response.Should().BeError(ErrorCodes.InvalidRequest);
+        response.Should().BeError(ErrorCodes.INVALID_REQUEST);
     }
 
     [Fact]
     public async Task RenameFilePreviewMovesTheFileAsync()
     {
-        await WriteFileAsync(Root, SourceFile, SourceText);
+        await WriteFileAsync(Root, SOURCE_FILE, SOURCE_TEXT);
         await using var session = CreateSession(
             Root,
             FakeServer(server => server.Capabilities = LspCapabilityJson.WillRenameFiles())
@@ -142,22 +142,22 @@ public sealed class RenameToolTests : TempWorkspaceTests
         ResultLines
             .Lines(ResponseText(response))
             .Should()
-            .Contain($"delete {SourceFile}")
-            .And.Contain($"create {RenamedFile}");
-        File.Exists(Path.Combine(Root, RenamedFile)).Should().BeFalse();
+            .Contain($"delete {SOURCE_FILE}")
+            .And.Contain($"create {RENAMED_FILE}");
+        File.Exists(Path.Combine(Root, RENAMED_FILE)).Should().BeFalse();
     }
 
     [Fact]
     public async Task RenameFileCanChangeOnlyTheCaseOfTheNameAsync()
     {
         SkipOnCaseSensitiveFileSystem();
-        await WriteFileAsync(Root, SourceFile, SourceText);
+        await WriteFileAsync(Root, SOURCE_FILE, SOURCE_TEXT);
         await using var session = CreateSession(
             Root,
             FakeServer(server => server.Capabilities = LspCapabilityJson.WillRenameFiles())
         );
         using var tool = CreateTool(Root, session);
-        var lowerCase = SourceFile.ToLowerInvariant();
+        var lowerCase = SOURCE_FILE.ToLowerInvariant();
 
         var response = await tool.ExecuteAsync(
             RenameFileRequest() with
@@ -175,7 +175,7 @@ public sealed class RenameToolTests : TempWorkspaceTests
     [Fact]
     public async Task RoslynExitAfterTheWriteReportsTheMovedFileAsync()
     {
-        var source = await WriteFileAsync(Root, SourceFile, SourceText);
+        var source = await WriteFileAsync(Root, SOURCE_FILE, SOURCE_TEXT);
         await using var session = CreateSession(
             Root,
             FakeServer(server =>
@@ -184,7 +184,7 @@ public sealed class RenameToolTests : TempWorkspaceTests
                 // The bridge asks for the project contexts only after it wrote the files
                 server.Handle = (method, _) =>
                 {
-                    if (method is LspMethods.TextDocumentGetProjectContexts)
+                    if (method is LspMethods.TEXT_DOCUMENT_GET_PROJECT_CONTEXTS)
                         server.Crash();
 
                     return Task.FromResult<JsonNode?>(null);
@@ -195,22 +195,22 @@ public sealed class RenameToolTests : TempWorkspaceTests
 
         var response = await tool.ExecuteAsync(RenameFileRequest() with { Apply = true }, TestCt);
 
-        response.Should().BeError(ErrorCodes.Io);
+        response.Should().BeError(ErrorCodes.IO);
         ResultLines
             .Lines(ResponseText(response))
             .Should()
             .Contain("failed step: synchronize")
             .And.Contain("applied: 2 files, 2 operations, Roslyn not synchronized")
-            .And.Contain($"create {RenamedFile}")
-            .And.Contain($"delete {SourceFile}");
+            .And.Contain($"create {RENAMED_FILE}")
+            .And.Contain($"delete {SOURCE_FILE}");
         File.Exists(source).Should().BeFalse();
-        await AssertFileTextAsync(Path.Combine(Root, RenamedFile), SourceText);
+        await AssertFileTextAsync(Path.Combine(Root, RENAMED_FILE), SOURCE_TEXT);
     }
 
     [Fact]
     public async Task RoslynCrashDiscardsThePendingProposalsAsync()
     {
-        var source = await WriteFileAsync(Root, SourceFile, SourceText);
+        var source = await WriteFileAsync(Root, SOURCE_FILE, SOURCE_TEXT);
         var renaming = RenamingServer();
         var servers = new List<FakeRoslynServer>();
         await using var session = CreateSession(Root, (options, paths) =>
@@ -231,18 +231,18 @@ public sealed class RenameToolTests : TempWorkspaceTests
             TestCt
         );
 
-        applied.Should().BeError(ErrorCodes.InvalidRequest);
+        applied.Should().BeError(ErrorCodes.INVALID_REQUEST);
         servers.Should().HaveCount(2);
-        await AssertFileTextAsync(source, SourceText);
+        await AssertFileTextAsync(source, SOURCE_TEXT);
     }
 
     private RoslynLauncher RenamingServer() =>
         FakeServer(server =>
             server.Handle = (method, _) =>
                 Task.FromResult<JsonNode?>(
-                    method is LspMethods.TextDocumentRename
+                    method is LspMethods.TEXT_DOCUMENT_RENAME
                         ? WorkspaceChanges(
-                            Path.Combine(Root, SourceFile),
+                            Path.Combine(Root, SOURCE_FILE),
                             TextEdit(0, 6, 0, 7, "B")
                         )
                         : null
@@ -253,7 +253,7 @@ public sealed class RenameToolTests : TempWorkspaceTests
         new()
         {
             Action = LspAction.Rename,
-            File = SourceFile,
+            File = SOURCE_FILE,
             Line = 1,
             Character = 7,
             NewName = "B",
@@ -266,7 +266,7 @@ public sealed class RenameToolTests : TempWorkspaceTests
         new()
         {
             Action = LspAction.RenameFile,
-            File = SourceFile,
-            NewName = RenamedFile,
+            File = SOURCE_FILE,
+            NewName = RENAMED_FILE,
         };
 }

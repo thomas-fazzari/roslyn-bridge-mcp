@@ -8,17 +8,17 @@ namespace RoslynBridge.Tests.Unit.Settings;
 
 public sealed class ProjectSettingsReaderTests : TempWorkspaceTests
 {
-    private const string Solution = "App.slnx";
-    private const string Project = "App.csproj";
-    private const string Notes = "notes.txt";
-    private const string Samples = "samples";
-    private const string Vendor = "vendor";
-    private const int StartupSeconds = 300;
-    private const int RequestSeconds = 90;
+    private const string SOLUTION = "App.slnx";
+    private const string PROJECT = "App.csproj";
+    private const string NOTES = "notes.txt";
+    private const string SAMPLES = "samples";
+    private const string VENDOR = "vendor";
+    private const int STARTUP_SECONDS = 300;
+    private const int REQUEST_SECONDS = 90;
 
     public ProjectSettingsReaderTests()
     {
-        foreach (var file in new[] { Solution, Project, Notes })
+        foreach (var file in new[] { SOLUTION, PROJECT, NOTES })
         {
             File.WriteAllText(Path.Combine(Root, file), string.Empty);
         }
@@ -35,10 +35,10 @@ public sealed class ProjectSettingsReaderTests : TempWorkspaceTests
             $$"""
             {
               // folders the bridge leaves out
-              "exclude": ["{{Samples}}", "{{Vendor}}",],
-              "startupTimeout": {{StartupSeconds}},
-              "requestTimeout": {{RequestSeconds}},
-              "solution": "{{Solution}}",
+              "exclude": ["{{SAMPLES}}", "{{VENDOR}}",],
+              "startupTimeout": {{STARTUP_SECONDS}},
+              "requestTimeout": {{REQUEST_SECONDS}},
+              "solution": "{{SOLUTION}}",
               "diagnostics": { "severity": "information" },
             }
             """
@@ -46,10 +46,10 @@ public sealed class ProjectSettingsReaderTests : TempWorkspaceTests
 
         var settings = ProjectSettingsReader.Read(Root);
 
-        settings.Exclude.Should().Equal(Samples, Vendor);
-        settings.StartupTimeout.Should().Be(StartupSeconds);
-        settings.RequestTimeout.Should().Be(RequestSeconds);
-        settings.Solution.Should().Be(Solution);
+        settings.Exclude.Should().Equal(SAMPLES, VENDOR);
+        settings.StartupTimeout.Should().Be(STARTUP_SECONDS);
+        settings.RequestTimeout.Should().Be(REQUEST_SECONDS);
+        settings.Solution.Should().Be(SOLUTION);
         settings.Projects.Should().BeNull();
         settings.Diagnostics!.Severity.Should().Be(DiagnosticSeverity.Information);
     }
@@ -57,11 +57,11 @@ public sealed class ProjectSettingsReaderTests : TempWorkspaceTests
     [Fact]
     public async Task ReadsTheProjectsAsync()
     {
-        await WriteSettingsAsync($$"""{ "projects": ["{{Project}}"] }""");
+        await WriteSettingsAsync($$"""{ "projects": ["{{PROJECT}}"] }""");
 
         var settings = ProjectSettingsReader.Read(Root);
 
-        settings.Projects.Should().Equal(Project);
+        settings.Projects.Should().Equal(PROJECT);
         settings.Solution.Should().BeNull();
     }
 
@@ -75,7 +75,7 @@ public sealed class ProjectSettingsReaderTests : TempWorkspaceTests
     [InlineData("\"exclude\": [\"a/b\"]", "a/b")]
     [InlineData("\"exclude\": [\"\"]", "exclude")]
     [InlineData("\"solution\": \"Missing.slnx\"", "Missing.slnx")]
-    [InlineData("\"solution\": \"notes.txt\"", Notes)]
+    [InlineData("\"solution\": \"notes.txt\"", NOTES)]
     [InlineData("\"solution\": \"../Outside.slnx\"", "Outside.slnx")]
     [InlineData("\"projects\": [\"Missing.csproj\"]", "Missing.csproj")]
     [InlineData("\"diagnostics\": { \"severity\": \"loud\" }", "severity")]
@@ -98,7 +98,7 @@ public sealed class ProjectSettingsReaderTests : TempWorkspaceTests
     public async Task ReportsEveryFaultAtOnceAsync()
     {
         await WriteSettingsAsync(
-            $$"""{ "startupTimeout": 0, "solution": "{{Solution}}", "projects": ["{{Project}}"] }"""
+            $$"""{ "startupTimeout": 0, "solution": "{{SOLUTION}}", "projects": ["{{PROJECT}}"] }"""
         );
 
         var exception = FluentActions
@@ -125,5 +125,5 @@ public sealed class ProjectSettingsReaderTests : TempWorkspaceTests
     }
 
     private Task WriteSettingsAsync(string content) =>
-        File.WriteAllTextAsync(Path.Combine(Root, ProjectSettings.FileName), content, TestCt);
+        File.WriteAllTextAsync(Path.Combine(Root, ProjectSettings.FILE_NAME), content, TestCt);
 }

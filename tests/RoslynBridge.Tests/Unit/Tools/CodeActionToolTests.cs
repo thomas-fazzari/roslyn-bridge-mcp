@@ -10,22 +10,22 @@ namespace RoslynBridge.Tests.Unit.Tools;
 
 public sealed class CodeActionToolTests : TempWorkspaceTests
 {
-    private const string BothFields = "both";
-    private const string NullOperation = "null-operation";
-    private const string RenameWithoutNewUri = "rename-without-new-uri";
-    private const string NullTextEdit = "null-text-edit";
+    private const string BOTH_FIELDS = "both";
+    private const string NULL_OPERATION = "null-operation";
+    private const string RENAME_WITHOUT_NEW_URI = "rename-without-new-uri";
+    private const string NULL_TEXT_EDIT = "null-text-edit";
 
     [Fact]
     public async Task ListingFlattensNestedActionsAndResolvesFixAllByScopeAsync()
     {
-        var path = await WriteFileAsync(Root, SourceFile, "class A {}");
+        var path = await WriteFileAsync(Root, SOURCE_FILE, "class A {}");
         JsonNode? fixAll = null;
         await using var session = CreateSession(
             Root,
             FakeServer(server =>
                 server.Handle = (method, parameters) =>
                 {
-                    if (method is LspMethods.CodeActionResolveFixAll)
+                    if (method is LspMethods.CODE_ACTION_RESOLVE_FIX_ALL)
                     {
                         fixAll = parameters;
                         return Task.FromResult<JsonNode?>(
@@ -37,7 +37,7 @@ public sealed class CodeActionToolTests : TempWorkspaceTests
                     }
 
                     return Task.FromResult<JsonNode?>(
-                        method is LspMethods.TextDocumentCodeAction
+                        method is LspMethods.TEXT_DOCUMENT_CODE_ACTION
                             ? NestedAndFixAllActions()
                             : null
                     );
@@ -75,7 +75,7 @@ public sealed class CodeActionToolTests : TempWorkspaceTests
     [Fact]
     public async Task FailedCommandWithoutWritesReportsOnlyTheLspErrorAsync()
     {
-        await WriteFileAsync(Root, SourceFile, "class A {}");
+        await WriteFileAsync(Root, SOURCE_FILE, "class A {}");
         var actions = new JsonArray(
             new JsonObject
             {
@@ -88,10 +88,12 @@ public sealed class CodeActionToolTests : TempWorkspaceTests
             FakeServer(server =>
                 server.Handle = (method, _) =>
                 {
-                    return method is LspMethods.WorkspaceExecuteCommand
+                    return method is LspMethods.WORKSPACE_EXECUTE_COMMAND
                         ? throw new LocalRpcException("Unknown command.")
                         : Task.FromResult<JsonNode?>(
-                            method is LspMethods.TextDocumentCodeAction ? actions.DeepClone() : null
+                            method is LspMethods.TEXT_DOCUMENT_CODE_ACTION
+                                ? actions.DeepClone()
+                                : null
                         );
                 }
             )
@@ -107,14 +109,14 @@ public sealed class CodeActionToolTests : TempWorkspaceTests
             TestCt
         );
 
-        response.Should().BeError(ErrorCodes.Lsp);
+        response.Should().BeError(ErrorCodes.LSP);
         ResultLines.Lines(ResponseText(response)).Should().ContainSingle();
     }
 
     [Fact]
     public async Task ActionWithACommandSynchronizesTheFileItsEditCreatesAsync()
     {
-        await WriteFileAsync(Root, SourceFile, "class A {}");
+        await WriteFileAsync(Root, SOURCE_FILE, "class A {}");
         var actions = new JsonArray(
             new JsonObject
             {
@@ -129,11 +131,11 @@ public sealed class CodeActionToolTests : TempWorkspaceTests
                 server.Handle = (method, _) =>
                 {
                     // A crash while synchronizing fails the call, while the diagnostics after it ignore one
-                    if (method is LspMethods.TextDocumentGetProjectContexts)
+                    if (method is LspMethods.TEXT_DOCUMENT_GET_PROJECT_CONTEXTS)
                         server.Crash();
 
                     return Task.FromResult<JsonNode?>(
-                        method is LspMethods.TextDocumentCodeAction ? actions.DeepClone() : null
+                        method is LspMethods.TEXT_DOCUMENT_CODE_ACTION ? actions.DeepClone() : null
                     );
                 }
             )
@@ -149,18 +151,18 @@ public sealed class CodeActionToolTests : TempWorkspaceTests
             TestCt
         );
 
-        response.Should().BeError(ErrorCodes.Io);
+        response.Should().BeError(ErrorCodes.IO);
         ResultLines.Lines(ResponseText(response)).Should().Contain("failed step: synchronize");
     }
 
     [Theory]
-    [InlineData(BothFields)]
-    [InlineData(NullOperation)]
-    [InlineData(RenameWithoutNewUri)]
-    [InlineData(NullTextEdit)]
+    [InlineData(BOTH_FIELDS)]
+    [InlineData(NULL_OPERATION)]
+    [InlineData(RENAME_WITHOUT_NEW_URI)]
+    [InlineData(NULL_TEXT_EDIT)]
     public async Task ActionWithAMalformedEditWritesNothingAsync(string fault)
     {
-        var path = await WriteFileAsync(Root, SourceFile, "class A {}");
+        var path = await WriteFileAsync(Root, SOURCE_FILE, "class A {}");
         var actions = new JsonArray(
             new JsonObject { ["title"] = "Broken", ["edit"] = MalformedEdit(fault, path) }
         );
@@ -169,7 +171,7 @@ public sealed class CodeActionToolTests : TempWorkspaceTests
             FakeServer(server =>
                 server.Handle = (method, _) =>
                     Task.FromResult<JsonNode?>(
-                        method is LspMethods.TextDocumentCodeAction ? actions.DeepClone() : null
+                        method is LspMethods.TEXT_DOCUMENT_CODE_ACTION ? actions.DeepClone() : null
                     )
             )
         );
@@ -184,7 +186,7 @@ public sealed class CodeActionToolTests : TempWorkspaceTests
             TestCt
         );
 
-        response.Should().BeError(ErrorCodes.Lsp);
+        response.Should().BeError(ErrorCodes.LSP);
         await AssertFileTextAsync(path, "class A {}");
     }
 
@@ -195,20 +197,20 @@ public sealed class CodeActionToolTests : TempWorkspaceTests
         var uri = new Uri(path).AbsoluteUri;
         return fault switch
         {
-            BothFields => new JsonObject
+            BOTH_FIELDS => new JsonObject
             {
                 ["changes"] = new JsonObject { [uri] = new JsonArray(valid) },
                 ["documentChanges"] = new JsonArray(),
             },
-            NullOperation => new JsonObject
+            NULL_OPERATION => new JsonObject
             {
                 ["documentChanges"] = new JsonArray(DocumentEdit(path, version: null, valid), null),
             },
-            RenameWithoutNewUri => DocumentChanges(
+            RENAME_WITHOUT_NEW_URI => DocumentChanges(
                 DocumentEdit(path, version: null, valid),
                 new JsonObject { ["kind"] = "rename", ["oldUri"] = uri }
             ),
-            NullTextEdit => new JsonObject
+            NULL_TEXT_EDIT => new JsonObject
             {
                 ["changes"] = new JsonObject { [uri] = new JsonArray(valid, null) },
             },
@@ -220,7 +222,7 @@ public sealed class CodeActionToolTests : TempWorkspaceTests
         new()
         {
             Action = LspAction.CodeActions,
-            File = SourceFile,
+            File = SOURCE_FILE,
             Line = 1,
             Character = 7,
         };

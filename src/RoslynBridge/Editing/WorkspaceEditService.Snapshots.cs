@@ -7,7 +7,7 @@ namespace RoslynBridge.Editing;
 
 internal sealed partial class WorkspaceEditService
 {
-    private const int UnbufferedStreamBufferSize = 1;
+    private const int UNBUFFERED_STREAM_BUFFER_SIZE = 1;
 
     private static readonly FrozenSet<string> _sourceExtensions = new[]
     {
@@ -115,10 +115,10 @@ internal sealed partial class WorkspaceEditService
         if (stamp != expected)
             return ChangedFile(path);
 
-        if (stamp.Length > MaximumFileBytes)
+        if (stamp.Length > MAXIMUM_FILE_BYTES)
         {
             return ToolError.InvalidRequest(
-                $"The source file exceeds {MaximumFileBytes / BytesPerMebibyte} MiB: {path.FullPath}"
+                $"The source file exceeds {MAXIMUM_FILE_BYTES / BYTES_PER_MEBIBYTE} MiB: {path.FullPath}"
             );
         }
 
@@ -131,7 +131,7 @@ internal sealed partial class WorkspaceEditService
                 FileMode.Open,
                 FileAccess.Read,
                 FileShare.ReadWrite,
-                bufferSize: UnbufferedStreamBufferSize,
+                bufferSize: UNBUFFERED_STREAM_BUFFER_SIZE,
                 FileOptions.Asynchronous | FileOptions.SequentialScan
             );
             await stream.ReadExactlyAsync(content, cancellationToken);

@@ -42,7 +42,7 @@ public sealed class SymbolNotFoundTests : TempWorkspaceTests
 
         var response = await CallAsync(server, "ISessionManager.ReportPlaybackStart");
 
-        response.Should().BeError(ErrorCodes.SymbolNotFound);
+        response.Should().BeError(ErrorCodes.SYMBOL_NOT_FOUND);
         ResultLines
             .CandidateNames(ResponseText(response))
             .Should()
@@ -69,7 +69,7 @@ public sealed class SymbolNotFoundTests : TempWorkspaceTests
 
         var response = await CallAsync(server, "Calculator.Add(int)");
 
-        response.Should().BeError(ErrorCodes.SymbolNotFound);
+        response.Should().BeError(ErrorCodes.SYMBOL_NOT_FOUND);
         ResultLines
             .CandidateNames(ResponseText(response))
             .Should()

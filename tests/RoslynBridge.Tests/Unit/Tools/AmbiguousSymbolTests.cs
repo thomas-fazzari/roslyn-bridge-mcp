@@ -10,9 +10,9 @@ namespace RoslynBridge.Tests.Unit.Tools;
 
 public sealed class AmbiguousSymbolTests : TempWorkspaceTests
 {
-    private const int EnumKind = 10;
-    private const int EnumMemberKind = 22;
-    private const int EnumMemberLine = 2;
+    private const int ENUM_KIND = 10;
+    private const int ENUM_MEMBER_KIND = 22;
+    private const int ENUM_MEMBER_LINE = 2;
 
     [Fact]
     public async Task TypeOnlyActionsResolveANameSharedWithAnEnumMemberToTheTypeAsync()
@@ -27,7 +27,7 @@ public sealed class AmbiguousSymbolTests : TempWorkspaceTests
                     ["Folder"] =
                     [
                         WorkspaceSymbol("Folder", folder),
-                        WorkspaceSymbol("Folder", kinds, EnumMemberKind, EnumMemberLine, 4),
+                        WorkspaceSymbol("Folder", kinds, ENUM_MEMBER_KIND, ENUM_MEMBER_LINE, 4),
                     ],
                 },
                 documents: new(StringComparer.Ordinal)
@@ -37,9 +37,9 @@ public sealed class AmbiguousSymbolTests : TempWorkspaceTests
                     [
                         DocumentSymbol(
                             "ItemKind",
-                            EnumKind,
+                            ENUM_KIND,
                             0,
-                            DocumentSymbol("Folder", EnumMemberKind, EnumMemberLine)
+                            DocumentSymbol("Folder", ENUM_MEMBER_KIND, ENUM_MEMBER_LINE)
                         ),
                     ],
                 }
@@ -59,6 +59,6 @@ public sealed class AmbiguousSymbolTests : TempWorkspaceTests
         members.Should().BeSuccessful();
         ResponseText(members).Should().Contain("method Add()");
         // Source reads any declaration, so the enum member stays a candidate
-        source.Should().BeError(ErrorCodes.AmbiguousSymbol);
+        source.Should().BeError(ErrorCodes.AMBIGUOUS_SYMBOL);
     }
 }

@@ -11,39 +11,39 @@ internal sealed record RawRequest(string Method, JsonObject? Parameters, bool Ap
 {
     private static readonly FrozenSet<string> _readOnlyMethods = new[]
     {
-        LspMethods.TextDocumentDefinition,
-        LspMethods.TextDocumentTypeDefinition,
-        LspMethods.TextDocumentImplementation,
-        LspMethods.TextDocumentReferences,
-        LspMethods.TextDocumentHover,
-        LspMethods.TextDocumentDocumentHighlight,
-        LspMethods.TextDocumentSelectionRange,
-        LspMethods.TextDocumentInlayHint,
-        LspMethods.TextDocumentFoldingRange,
-        LspMethods.TextDocumentSemanticTokensFull,
-        LspMethods.TextDocumentSemanticTokensRange,
-        LspMethods.TextDocumentCodeLens,
-        LspMethods.TextDocumentDocumentSymbol,
-        LspMethods.TextDocumentCompletion,
-        LspMethods.CompletionItemResolve,
-        LspMethods.TextDocumentSignatureHelp,
-        LspMethods.TextDocumentCodeAction,
-        LspMethods.CodeActionResolve,
-        LspMethods.CodeActionResolveFixAll,
-        LspMethods.TextDocumentPrepareRename,
-        LspMethods.TextDocumentRename,
-        LspMethods.TextDocumentDiagnostic,
-        LspMethods.TextDocumentGetProjectContexts,
-        LspMethods.WorkspaceDiagnostic,
-        LspMethods.WorkspaceSymbol,
-        LspMethods.TextDocumentPrepareCallHierarchy,
-        LspMethods.CallHierarchyIncomingCalls,
-        LspMethods.CallHierarchyOutgoingCalls,
-        LspMethods.TextDocumentPrepareTypeHierarchy,
-        LspMethods.TypeHierarchySupertypes,
-        LspMethods.TypeHierarchySubtypes,
-        LspMethods.TextDocumentFormatting,
-        LspMethods.TextDocumentRangeFormatting,
+        LspMethods.TEXT_DOCUMENT_DEFINITION,
+        LspMethods.TEXT_DOCUMENT_TYPE_DEFINITION,
+        LspMethods.TEXT_DOCUMENT_IMPLEMENTATION,
+        LspMethods.TEXT_DOCUMENT_REFERENCES,
+        LspMethods.TEXT_DOCUMENT_HOVER,
+        LspMethods.TEXT_DOCUMENT_DOCUMENT_HIGHLIGHT,
+        LspMethods.TEXT_DOCUMENT_SELECTION_RANGE,
+        LspMethods.TEXT_DOCUMENT_INLAY_HINT,
+        LspMethods.TEXT_DOCUMENT_FOLDING_RANGE,
+        LspMethods.TEXT_DOCUMENT_SEMANTIC_TOKENS_FULL,
+        LspMethods.TEXT_DOCUMENT_SEMANTIC_TOKENS_RANGE,
+        LspMethods.TEXT_DOCUMENT_CODE_LENS,
+        LspMethods.TEXT_DOCUMENT_DOCUMENT_SYMBOL,
+        LspMethods.TEXT_DOCUMENT_COMPLETION,
+        LspMethods.COMPLETION_ITEM_RESOLVE,
+        LspMethods.TEXT_DOCUMENT_SIGNATURE_HELP,
+        LspMethods.TEXT_DOCUMENT_CODE_ACTION,
+        LspMethods.CODE_ACTION_RESOLVE,
+        LspMethods.CODE_ACTION_RESOLVE_FIX_ALL,
+        LspMethods.TEXT_DOCUMENT_PREPARE_RENAME,
+        LspMethods.TEXT_DOCUMENT_RENAME,
+        LspMethods.TEXT_DOCUMENT_DIAGNOSTIC,
+        LspMethods.TEXT_DOCUMENT_GET_PROJECT_CONTEXTS,
+        LspMethods.WORKSPACE_DIAGNOSTIC,
+        LspMethods.WORKSPACE_SYMBOL,
+        LspMethods.TEXT_DOCUMENT_PREPARE_CALL_HIERARCHY,
+        LspMethods.CALL_HIERARCHY_INCOMING_CALLS,
+        LspMethods.CALL_HIERARCHY_OUTGOING_CALLS,
+        LspMethods.TEXT_DOCUMENT_PREPARE_TYPE_HIERARCHY,
+        LspMethods.TYPE_HIERARCHY_SUPERTYPES,
+        LspMethods.TYPE_HIERARCHY_SUBTYPES,
+        LspMethods.TEXT_DOCUMENT_FORMATTING,
+        LspMethods.TEXT_DOCUMENT_RANGE_FORMATTING,
     }.ToFrozenSet(StringComparer.Ordinal);
 
     public override CallPolicy Policy => new(LspAction.Request, MayRestart: Apply);
@@ -71,15 +71,15 @@ internal sealed record RawRequest(string Method, JsonObject? Parameters, bool Ap
     {
         var isLifecycle =
             method
-            is LspMethods.Initialize
-                or LspMethods.Initialized
-                or LspMethods.Shutdown
-                or LspMethods.Exit;
+            is LspMethods.INITIALIZE
+                or LspMethods.INITIALIZED
+                or LspMethods.SHUTDOWN
+                or LspMethods.EXIT;
 
         var isSynchronization =
             method.StartsWith("textDocument/did", StringComparison.Ordinal)
             || method.StartsWith("workspace/did", StringComparison.Ordinal);
 
-        return isLifecycle || isSynchronization || method is LspMethods.WorkspaceApplyEdit;
+        return isLifecycle || isSynchronization || method is LspMethods.WORKSPACE_APPLY_EDIT;
     }
 }

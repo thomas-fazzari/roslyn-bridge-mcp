@@ -17,7 +17,7 @@ public sealed class EditedDocumentTests
     public void PreviewPreservesEncodingAndDoesNotSplitSurrogatePairs(string encodingName)
     {
         var encoding = Encoding.GetEncoding(encodingName);
-        var prefix = new string('a', EditedDocument.MaximumPreviewCharacters - 1);
+        var prefix = new string('a', EditedDocument.MAXIMUM_PREVIEW_CHARACTERS - 1);
         byte[] bytes = [.. encoding.GetPreamble(), .. encoding.GetBytes(prefix + "😀tail")];
         var replacement = new string('b', prefix.Length);
         var document = new EditedDocument(Resolved(".", "Source.cs"), bytes)
@@ -37,11 +37,13 @@ public sealed class EditedDocumentTests
     {
         byte[] bytes =
         [
-            .. Encoding.UTF8.GetBytes(new string('a', EditedDocument.MaximumPreviewCharacters + 1)),
+            .. Encoding.UTF8.GetBytes(
+                new string('a', EditedDocument.MAXIMUM_PREVIEW_CHARACTERS + 1)
+            ),
             0xFF,
         ];
         var document = new EditedDocument(Resolved(".", "Source.cs"), bytes);
 
-        document.Describe().ErrorCode().Should().Be(ErrorCodes.InvalidRequest);
+        document.Describe().ErrorCode().Should().Be(ErrorCodes.INVALID_REQUEST);
     }
 }

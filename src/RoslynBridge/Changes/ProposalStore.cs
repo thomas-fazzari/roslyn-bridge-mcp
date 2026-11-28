@@ -11,7 +11,7 @@ namespace RoslynBridge.Changes;
 [DebuggerDisplay("{_pending.Count} pending proposals")]
 internal sealed class ProposalStore(RoslynSession session)
 {
-    internal const int MaximumPendingProposals = 8;
+    internal const int MAXIMUM_PENDING_PROPOSALS = 8;
     private static readonly TimeSpan _proposalLifetime = TimeSpan.FromMinutes(5);
 
     // Insertion order is the creation order, so eviction and expiry start at index 0
@@ -31,7 +31,7 @@ internal sealed class ProposalStore(RoslynSession session)
     {
         while (
             _pending.Count != 0
-            && (_pending.Count >= MaximumPendingProposals || IsExpired(_pending.GetAt(0).Value))
+            && (_pending.Count >= MAXIMUM_PENDING_PROPOSALS || IsExpired(_pending.GetAt(0).Value))
         )
         {
             _pending.RemoveAt(0);

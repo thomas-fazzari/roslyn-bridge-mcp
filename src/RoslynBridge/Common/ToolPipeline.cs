@@ -19,7 +19,7 @@ internal sealed partial class ToolPipeline(
 ) : IDisposable
 {
     private static readonly ToolError _timedOut = new(
-        ErrorCodes.Timeout,
+        ErrorCodes.TIMEOUT,
         "The LSP operation timed out. No successful result is available."
     );
 
@@ -119,13 +119,13 @@ internal sealed partial class ToolPipeline(
         {
             OperationFailed(logger, action, failure.Code, failure.Message);
             return
-                failure.Code is ErrorCodes.Cancelled && !cancellationToken.IsCancellationRequested
-                ? (failure with { Code = ErrorCodes.Timeout }).ToResponse()
+                failure.Code is ErrorCodes.CANCELLED && !cancellationToken.IsCancellationRequested
+                ? (failure with { Code = ErrorCodes.TIMEOUT }).ToResponse()
                 : failure.ToResponse();
         }
 
         // A cancellation without written files ends the call as an exception would
-        if (error.Code is ErrorCodes.Cancelled)
+        if (error.Code is ErrorCodes.CANCELLED)
         {
             cancellationToken.ThrowIfCancellationRequested();
             return _timedOut.ToResponse();

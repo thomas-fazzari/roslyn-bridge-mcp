@@ -15,25 +15,25 @@ using OpenTelemetry.Trace;
 namespace RoslynBridge.Telemetry;
 
 /// <summary>
-/// Exports over OTLP only when <see cref="EnableVariable"/> is set. The OTEL_ variables configure the export.
+/// Exports over OTLP only when <see cref="ENABLE_VARIABLE"/> is set. The OTEL_ variables configure the export.
 /// </summary>
 internal static class BridgeTelemetry
 {
-    internal const string Name = "RoslynBridge";
-    internal const string EnableVariable = "ROSLYN_BRIDGE_TELEMETRY";
-    internal const string ErrorType = "error.type";
+    internal const string NAME = "RoslynBridge";
+    internal const string ENABLE_VARIABLE = "ROSLYN_BRIDGE_TELEMETRY";
+    internal const string ERROR_TYPE = "error.type";
 
-    private const string DisableVariable = "OTEL_SDK_DISABLED";
-    private const string VariablePrefix = "OTEL_";
-    private const string ServiceName = "roslyn-bridge-mcp";
-    private const string McpSdkMeter = "Experimental.ModelContextProtocol";
-    private const string RpcSystem = "rpc.system";
-    private const string RpcMethod = "rpc.method";
-    private const string ReportReused = "roslyn_bridge.report.reused";
+    private const string DISABLE_VARIABLE = "OTEL_SDK_DISABLED";
+    private const string VARIABLE_PREFIX = "OTEL_";
+    private const string SERVICE_NAME = "roslyn-bridge-mcp";
+    private const string MCP_SDK_METER = "Experimental.ModelContextProtocol";
+    private const string RPC_SYSTEM = "rpc.system";
+    private const string RPC_METHOD = "rpc.method";
+    private const string REPORT_REUSED = "roslyn_bridge.report.reused";
 
-    internal static readonly ActivitySource Source = new(Name, BridgeVersion.Current);
+    internal static readonly ActivitySource Source = new(NAME, BridgeVersion.Current);
 
-    private static readonly Meter _meter = new(Name, BridgeVersion.Current);
+    private static readonly Meter _meter = new(NAME, BridgeVersion.Current);
 
     internal static readonly Histogram<double> ToolDuration = _meter.CreateHistogram<double>(
         "roslyn_bridge.tool.duration",
@@ -99,7 +99,7 @@ internal static class BridgeTelemetry
                         KeyValuePair.Create((string)entry.Key, (string?)entry.Value)
                     )
                     .Where(static entry =>
-                        entry.Key.StartsWith(VariablePrefix, StringComparison.Ordinal)
+                        entry.Key.StartsWith(VARIABLE_PREFIX, StringComparison.Ordinal)
                     )
             );
             // Standard output carries the MCP messages, so no OTEL_ variable may route diagnostics to it
@@ -111,12 +111,12 @@ internal static class BridgeTelemetry
                 .ConfigureResource(static resource =>
                     resource
                         .Clear()
-                        .AddService(ServiceName, serviceVersion: BridgeVersion.Current)
+                        .AddService(SERVICE_NAME, serviceVersion: BridgeVersion.Current)
                         .AddTelemetrySdk()
                         .AddEnvironmentVariableDetector()
                 )
-                .WithTracing(static tracing => tracing.AddSource(Name))
-                .WithMetrics(static metrics => metrics.AddMeter(Name, McpSdkMeter))
+                .WithTracing(static tracing => tracing.AddSource(NAME))
+                .WithMetrics(static metrics => metrics.AddMeter(NAME, MCP_SDK_METER))
                 .WithLogging(configureBuilder: null, configureOptions: static logging =>
                     logging.IncludeFormattedMessage = true
                 )
@@ -139,17 +139,17 @@ internal static class BridgeTelemetry
     }
 
     internal static bool IsEnabled(IDictionary environment) =>
-        IsTrue(environment[EnableVariable]) && !IsTrue(environment[DisableVariable]);
+        IsTrue(environment[ENABLE_VARIABLE]) && !IsTrue(environment[DISABLE_VARIABLE]);
 
     public static void CountDiagnosticReport(bool reused) =>
-        _diagnosticReports.Add(1, new KeyValuePair<string, object?>(ReportReused, reused));
+        _diagnosticReports.Add(1, new KeyValuePair<string, object?>(REPORT_REUSED, reused));
 
     public static Task<Result<T>> TraceLspAsync<T>(string method, Func<Task<Result<T>>> request) =>
         TraceAsync(
             method,
             ActivityKind.Client,
             _lspDuration,
-            new TagList { { RpcSystem, "jsonrpc" }, { RpcMethod, method } },
+            new TagList { { RPC_SYSTEM, "jsonrpc" }, { RPC_METHOD, method } },
             request,
             static result => result is ToolError error ? error : null
         );
@@ -164,7 +164,7 @@ internal static class BridgeTelemetry
         );
 
     /// <summary>
-    /// Marks the activity failed when the tags contain an <see cref="ErrorType"/>.
+    /// Marks the activity failed when the tags contain an <see cref="ERROR_TYPE"/>.
     /// </summary>
     public static void Complete(
         Activity? activity,
@@ -180,7 +180,7 @@ internal static class BridgeTelemetry
         foreach (var (key, value) in tags)
         {
             activity.SetTag(key, value);
-            if (string.Equals(key, ErrorType, StringComparison.Ordinal))
+            if (string.Equals(key, ERROR_TYPE, StringComparison.Ordinal))
                 activity.SetStatus(ActivityStatusCode.Error);
         }
     }
@@ -190,7 +190,7 @@ internal static class BridgeTelemetry
 
     public static void MarkFailed(Activity? activity, string errorType)
     {
-        activity?.SetTag(ErrorType, errorType);
+        activity?.SetTag(ERROR_TYPE, errorType);
         activity?.SetStatus(ActivityStatusCode.Error);
     }
 
@@ -209,13 +209,13 @@ internal static class BridgeTelemetry
         {
             var result = await operation();
             if (errorOf(result) is { } error)
-                tags.Add(ErrorType, error.Code);
+                tags.Add(ERROR_TYPE, error.Code);
 
             return result;
         }
         catch (Exception exception)
         {
-            tags.Add(ErrorType, ErrorTypeOf(exception));
+            tags.Add(ERROR_TYPE, ErrorTypeOf(exception));
             throw;
         }
         finally

@@ -23,10 +23,10 @@ internal sealed partial class RoslynConnection(
     ILogger logger
 ) : IAsyncDisposable
 {
-    internal const int MaximumProtocolBytes = 16 * 1024 * 1024;
+    internal const int MAXIMUM_PROTOCOL_BYTES = 16 * 1024 * 1024;
 
-    private const int StderrBufferCharacters = 2048;
-    private const int StderrTailCharacters = 4096;
+    private const int STDERR_BUFFER_CHARACTERS = 2048;
+    private const int STDERR_TAIL_CHARACTERS = 4096;
     private static readonly TimeSpan _shutdownTimeout = TimeSpan.FromSeconds(3);
 
     private readonly StringBuilder _stderrTail = new();
@@ -90,7 +90,7 @@ internal sealed partial class RoslynConnection(
         CancellationToken cancellationToken
     ) =>
         callbacks.RoutingEditsAsync(onEdit, () =>
-            RequestAsync(LspMethods.WorkspaceExecuteCommand, command.Raw, cancellationToken)
+            RequestAsync(LspMethods.WORKSPACE_EXECUTE_COMMAND, command.Raw, cancellationToken)
         );
 
     public async Task<Result> NotifyAsync(
@@ -159,15 +159,15 @@ internal sealed partial class RoslynConnection(
         catch (OperationCanceledException) when (!timeout.IsCancellationRequested)
         {
             return new ToolError(
-                ErrorCodes.Lsp,
+                ErrorCodes.LSP,
                 $"Roslyn cancelled request '{method}'.",
-                RpcCode: RequestCancelledCode
+                RpcCode: REQUEST_CANCELLED_CODE
             );
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
             return new ToolError(
-                ErrorCodes.Timeout,
+                ErrorCodes.TIMEOUT,
                 $"Roslyn request '{method}' exceeded the request timeout."
             );
         }
@@ -188,7 +188,7 @@ internal sealed partial class RoslynConnection(
     // A connection loss is also a RemoteRpcException, callers catch it first
     private static ToolError ProtocolError(Exception exception) =>
         exception is RemoteInvocationException remote
-            ? new ToolError(ErrorCodes.Lsp, remote.Message, RpcCode: remote.ErrorCode)
+            ? new ToolError(ErrorCodes.LSP, remote.Message, RpcCode: remote.ErrorCode)
             : ToolError.InvalidLspData(exception.Message);
 
     private async Task<string> WithStderrAsync(string message, CancellationToken cancellationToken)
@@ -222,7 +222,10 @@ internal sealed partial class RoslynConnection(
     )]
     private void StartRpc()
     {
-        var reader = new BoundedPipeReader(PipeReader.Create(server.Output), MaximumProtocolBytes);
+        var reader = new BoundedPipeReader(
+            PipeReader.Create(server.Output),
+            MAXIMUM_PROTOCOL_BYTES
+        );
         var writer = PipeWriter.Create(server.Input);
         var formatter = new SystemTextJsonFormatter { JsonSerializerOptions = LspJson.Options };
         _rpc = new JsonRpc(new HeaderDelimitedMessageHandler(writer, reader, formatter));
@@ -235,13 +238,13 @@ internal sealed partial class RoslynConnection(
         var rpc = Rpc;
         var initialize = ClientCapabilities.Create(paths);
         var initialized = await BridgeTelemetry.TraceLspAsync<JsonObject?>(
-            LspMethods.Initialize,
+            LspMethods.INITIALIZE,
             async () =>
             {
                 try
                 {
                     return await rpc.InvokeWithParameterObjectAsync<JsonObject?>(
-                        LspMethods.Initialize,
+                        LspMethods.INITIALIZE,
                         initialize,
                         cancellationToken
                     );
@@ -268,7 +271,7 @@ internal sealed partial class RoslynConnection(
         Capabilities = result?["capabilities"]?.AsObject();
 
         if (
-            await NotifyAsync(LspMethods.Initialized, new JsonObject(), cancellationToken)
+            await NotifyAsync(LspMethods.INITIALIZED, new JsonObject(), cancellationToken)
             is ToolError notifyError
         )
         {
@@ -310,7 +313,7 @@ internal sealed partial class RoslynConnection(
         if (launched.Solution is { } solution)
         {
             return await NotifyAsync(
-                LspMethods.SolutionOpen,
+                LspMethods.SOLUTION_OPEN,
                 new JsonObject { ["solution"] = WorkspacePaths.FileUri(solution) },
                 cancellationToken
             );
@@ -318,7 +321,7 @@ internal sealed partial class RoslynConnection(
 
         return launched.Projects.Count > 0
             ? await NotifyAsync(
-                LspMethods.ProjectOpen,
+                LspMethods.PROJECT_OPEN,
                 new JsonObject
                 {
                     ["projects"] = new JsonArray([
@@ -361,7 +364,7 @@ internal sealed partial class RoslynConnection(
             if (_rpc is { IsDisposed: false } rpc)
             {
                 await rpc.InvokeWithCancellationAsync(
-                    LspMethods.Shutdown,
+                    LspMethods.SHUTDOWN,
                     cancellationToken: timeout.Token
                 );
             }
@@ -399,7 +402,7 @@ internal sealed partial class RoslynConnection(
 
     private async Task ReadStderrAsync(StreamReader reader, CancellationToken cancellationToken)
     {
-        var buffer = new char[StderrBufferCharacters];
+        var buffer = new char[STDERR_BUFFER_CHARACTERS];
         try
         {
             while (true)
@@ -412,8 +415,8 @@ internal sealed partial class RoslynConnection(
                 lock (_stderrLock)
                 {
                     _stderrTail.Append(message);
-                    if (_stderrTail.Length > StderrTailCharacters)
-                        _stderrTail.Remove(0, _stderrTail.Length - StderrTailCharacters);
+                    if (_stderrTail.Length > STDERR_TAIL_CHARACTERS)
+                        _stderrTail.Remove(0, _stderrTail.Length - STDERR_TAIL_CHARACTERS);
                 }
 
                 if (logger.IsEnabled(LogLevel.Debug))

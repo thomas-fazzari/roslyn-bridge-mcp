@@ -28,11 +28,11 @@ internal sealed record UnusedSymbols(
             AppendSymbol(text, symbol.Symbol, indent: string.Empty);
             foreach (var user in symbol.Via)
             {
-                text.Append(Indent).Append("via ").Append(user).Append('\n');
+                text.Append(INDENT).Append("via ").Append(user).Append('\n');
             }
 
             if (symbol.TestsOnly)
-                text.Append(Indent).Append("tests only\n");
+                text.Append(INDENT).Append("tests only\n");
         }
 
         text.Append(Count(FilesChecked, "file", "files"))

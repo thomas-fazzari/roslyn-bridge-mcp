@@ -15,8 +15,8 @@ internal sealed class SymbolLocator(
 )
 {
     // Each candidate costs a hover request
-    private const int MaximumNearbyNames = 4;
-    private const string NoNearestHint = " Check the line and character, which start at 1.";
+    private const int MAXIMUM_NEARBY_NAMES = 4;
+    private const string NO_NEAREST_HINT = " Check the line and character, which start at 1.";
 
     public async Task<Result<DocumentPosition>> PositionAsync(
         SymbolTarget target,
@@ -109,7 +109,7 @@ internal sealed class SymbolLocator(
         var nearest = await NearestSymbolHintAsync(uri, file, position, cancellationToken);
         return nearest.IsError(out var hintError, out var hint)
             ? hintError
-            : new ToolError(ErrorCodes.SymbolNotFound, message + hint);
+            : new ToolError(ErrorCodes.SYMBOL_NOT_FOUND, message + hint);
     }
 
     private async Task<Result<SourceLocation>> LocateAtAsync(
@@ -168,12 +168,12 @@ internal sealed class SymbolLocator(
         var lines = SourceLines.TryReadLines(file);
         var oneBasedLine = position.OneBased.Line;
         if (lines?.Contains(oneBasedLine) is not true)
-            return NoNearestHint;
+            return NO_NEAREST_HINT;
 
         var line = lines[oneBasedLine];
         var candidates = Names(line)
             .OrderBy(name => Distance(name, position.Character))
-            .Take(MaximumNearbyNames);
+            .Take(MAXIMUM_NEARBY_NAMES);
         foreach (var (start, length) in candidates)
         {
             var candidate = new DocumentPosition(uri, new LspPosition(position.Line, start));
@@ -191,7 +191,7 @@ internal sealed class SymbolLocator(
             }
         }
 
-        return NoNearestHint;
+        return NO_NEAREST_HINT;
     }
 
     // Keywords and words in comments also match, and the hover check leaves them out

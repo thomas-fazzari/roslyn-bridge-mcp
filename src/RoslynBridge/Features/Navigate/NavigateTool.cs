@@ -15,10 +15,10 @@ internal sealed class NavigateTool(
     IToolHandler<NavigateRequest, ToolResult> handler
 ) : IRoslynTool
 {
-    private const string ActionDescription = "Navigation to perform.";
-    private const string ContextDescription =
+    private const string ACTION_DESCRIPTION = "Navigation to perform.";
+    private const string CONTEXT_DESCRIPTION =
         "Show the trimmed source line of each result position. Uses more tokens.";
-    private const string InheritedDescription =
+    private const string INHERITED_DESCRIPTION =
         "For members, also list the members that base classes in the workspace pass on, after the type's own.";
 
     public static string Name => "navigate";
@@ -29,17 +29,17 @@ internal sealed class NavigateTool(
     public static bool ReadOnly => true;
 
     public Task<CallToolResult> NavigateAsync(
-        [Description(ActionDescription)] NavigationAction action,
-        [Description(SymbolTarget.SymbolDescription)] string? symbol = null,
-        [Description(SymbolTarget.FileDescription)] string? file = null,
-        [Description(SymbolTarget.LineDescription)] int? line = null,
-        [Description(SymbolTarget.CharacterDescription)] int? character = null,
-        [Description(ContextDescription)] bool context = false,
-        [Description(InheritedDescription)] bool inherited = false,
-        [Description(Paging.LimitDescription)]
-        [Range(1, Paging.MaximumLimit)]
-            int limit = Paging.DefaultLimit,
-        [Description(Paging.OffsetDescription)] [Range(0, int.MaxValue)] int offset = 0,
+        [Description(ACTION_DESCRIPTION)] NavigationAction action,
+        [Description(SymbolTarget.SYMBOL_DESCRIPTION)] string? symbol = null,
+        [Description(SymbolTarget.FILE_DESCRIPTION)] string? file = null,
+        [Description(SymbolTarget.LINE_DESCRIPTION)] int? line = null,
+        [Description(SymbolTarget.CHARACTER_DESCRIPTION)] int? character = null,
+        [Description(CONTEXT_DESCRIPTION)] bool context = false,
+        [Description(INHERITED_DESCRIPTION)] bool inherited = false,
+        [Description(Paging.LIMIT_DESCRIPTION)]
+        [Range(1, Paging.MAXIMUM_LIMIT)]
+            int limit = Paging.DEFAULT_LIMIT,
+        [Description(Paging.OFFSET_DESCRIPTION)] [Range(0, int.MaxValue)] int offset = 0,
         CancellationToken cancellationToken = default
     ) =>
         pipeline.RunAsync(

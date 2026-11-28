@@ -20,7 +20,7 @@ public class EditBenchmarks : JellyfinBenchmarks
         Session.CallAsync(
             "edit",
             ("action", "rename"),
-            ("symbol", GetItemById),
+            ("symbol", GET_ITEM_BY_ID),
             ("newName", "FindItemById")
         );
 }

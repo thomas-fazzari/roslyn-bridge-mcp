@@ -20,7 +20,7 @@ public class DiagnosticsBenchmarks : JellyfinBenchmarks
     public Task<string> File() =>
         Session.CallAsync(
             "diagnostics",
-            ("file", EncodingHelperFile),
+            ("file", ENCODING_HELPER_FILE),
             ("severity", "information"),
             ("limit", 100)
         );
@@ -30,7 +30,7 @@ public class DiagnosticsBenchmarks : JellyfinBenchmarks
     public Task<string> ProjectSummary() =>
         Session.CallAsync(
             "diagnostics",
-            ("file", ControllerFiles),
+            ("file", CONTROLLER_FILES),
             ("severity", "hint"),
             ("summary", true)
         );

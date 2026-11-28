@@ -12,7 +12,7 @@ namespace RoslynBridge.Symbols;
 /// </summary>
 internal sealed record SymbolName(ImmutableArray<string> Segments, string? Parameters)
 {
-    private const string OperatorKeyword = "operator";
+    private const string OPERATOR_KEYWORD = "operator";
     private static readonly SearchValues<char> _operatorCharacters = SearchValues.Create(
         "<>=!+-*/%&|^~"
     );
@@ -204,10 +204,15 @@ internal sealed record SymbolName(ImmutableArray<string> Segments, string? Param
             keywordEnd--;
         }
 
-        var keywordStart = keywordEnd - OperatorKeyword.Length;
+        var keywordStart = keywordEnd - OPERATOR_KEYWORD.Length;
         return keywordStart >= 0
-            && string.CompareOrdinal(text, keywordStart, OperatorKeyword, 0, OperatorKeyword.Length)
-                == 0
+            && string.CompareOrdinal(
+                text,
+                keywordStart,
+                OPERATOR_KEYWORD,
+                0,
+                OPERATOR_KEYWORD.Length
+            ) == 0
             && (keywordStart == 0 || !char.IsLetterOrDigit(text[keywordStart - 1]));
     }
 }

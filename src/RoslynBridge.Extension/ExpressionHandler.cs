@@ -20,9 +20,9 @@ namespace RoslynBridge.Extension;
 internal sealed class ExpressionHandler
     : IExtensionDocumentMessageHandler<PositionRequest, ExpressionResponse>
 {
-    private const int MaximumTextCharacters = 200;
-    private const int MaximumDocumentationCharacters = 400;
-    private const string Ellipsis = "...";
+    private const int MAXIMUM_TEXT_CHARACTERS = 200;
+    private const int MAXIMUM_DOCUMENTATION_CHARACTERS = 400;
+    private const string ELLIPSIS = "...";
 
     private static readonly ExpressionResponse _notFound = new(
         Found: false,
@@ -79,7 +79,7 @@ internal sealed class ExpressionHandler
         var constant = model.GetConstantValue(expression, cancellationToken);
         var facts = new ExpressionResponse(
             Found: true,
-            Text: Truncated(Collapsed(expression.ToString()), MaximumTextCharacters),
+            Text: Truncated(Collapsed(expression.ToString()), MAXIMUM_TEXT_CHARACTERS),
             Kind: expression.Kind().ToString(),
             Declaration: false,
             Type: type,
@@ -366,7 +366,7 @@ internal sealed class ExpressionHandler
                 )
                     ?? value.ToString()
                     ?? string.Empty,
-            MaximumTextCharacters
+            MAXIMUM_TEXT_CHARACTERS
         );
 
     private static string? Summary(ISymbol symbol, CancellationToken cancellationToken)
@@ -384,7 +384,7 @@ internal sealed class ExpressionHandler
             var text = summary is null
                 ? string.Empty
                 : Collapsed(string.Concat(summary.Nodes().Select(PlainText)));
-            return text.Length == 0 ? null : Truncated(text, MaximumDocumentationCharacters);
+            return text.Length == 0 ? null : Truncated(text, MAXIMUM_DOCUMENTATION_CHARACTERS);
         }
         catch (XmlException)
         {
@@ -427,6 +427,6 @@ internal sealed class ExpressionHandler
 
         // A cut between the halves of a surrogate pair would leave invalid UTF-16
         var end = char.IsHighSurrogate(text[maximum - 1]) ? maximum - 1 : maximum;
-        return text[..end] + Ellipsis;
+        return text[..end] + ELLIPSIS;
     }
 }

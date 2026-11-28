@@ -33,7 +33,7 @@ public sealed class LoadProgressTests : TempWorkspaceTests
         var server = await launched.Task;
 
         await server.RequestClientAsync(
-            LspMethods.WindowWorkDoneProgressCreate,
+            LspMethods.WINDOW_WORK_DONE_PROGRESS_CREATE,
             new JsonObject { ["token"] = "load" },
             cancellationToken
         );
@@ -49,7 +49,7 @@ public sealed class LoadProgressTests : TempWorkspaceTests
         ResponseText(status)
             .Should()
             .StartWith("running: true\nloading: true\nprogress: Loading Workspace.slnx 40%\n");
-        loading.Should().BeError(ErrorCodes.Loading);
+        loading.Should().BeError(ErrorCodes.LOADING);
         ResponseText(loading).Should().Contain("Loading Workspace.slnx 40%");
     }
 
@@ -133,7 +133,7 @@ public sealed class LoadProgressTests : TempWorkspaceTests
         await first.ReportProgressAsync("load", Begin("Loading Workspace.slnx"), cancellationToken);
         (await StatusAsync(tool)).Should().Contain("progress: Loading Workspace.slnx");
 
-        (await session.ReloadAsync(cancellationToken)).ErrorCode().Should().Be(ErrorCodes.Loading);
+        (await session.ReloadAsync(cancellationToken)).ErrorCode().Should().Be(ErrorCodes.LOADING);
         var status = await StatusAsync(tool);
 
         status.Should().Contain("loading: true").And.NotContain("progress:");
